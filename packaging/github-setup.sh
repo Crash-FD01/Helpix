@@ -5,7 +5,7 @@
 # Pubblica Helpix su GitHub e attiva gli aggiornamenti con apt/dnf/zypper. Va eseguito una volta, sul tuo PC,
 # dalla cartella del progetto:
 #
-#   packaging/github-setup.sh [nome del repository]        (predefinito: helpix)
+#   packaging/github-setup.sh [nome del repository]        (predefinito: quello scritto nel progetto)
 #
 # Serve: git, gh (GitHub CLI, con «gh auth login» già fatto), gpg. Prima di cambiare qualcosa mostra cosa farà
 # e chiede conferma. Si può rieseguire: salta quello che è già fatto.
@@ -20,7 +20,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-REPO_NAME="${1:-helpix}"
+CURRENT="$(sed -n 's|^SPDX-PackageDownloadLocation = "https://github.com/\(.*\)"|\1|p' REUSE.toml)"
+REPO_NAME="${1:-${CURRENT#*/}}"   # predefinito: il nome scritto nel progetto
 DESCRIPTION="Fix your Linux PC with the AI you already use (ChatGPT, Claude, Gemini, Copilot, DeepSeek)"
 TOPICS="linux,ai,troubleshooting,sysadmin,desktop-app,pyside6,qt6,chatgpt,claude,gemini,fedora,ubuntu"
 BACKUP="$HOME/helpix-signing-key-PRIVATE.asc"
@@ -41,7 +42,6 @@ OWNER_LC="${LOGIN,,}"
 if [[ "${REPO_NAME,,}" == "$OWNER_LC.github.io" ]]; then SITE_URL="https://$OWNER_LC.github.io"
 else SITE_URL="https://$OWNER_LC.github.io/$REPO_NAME"; fi
 VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml | head -n1)"
-CURRENT="$(sed -n 's|^SPDX-PackageDownloadLocation = "https://github.com/\(.*\)"|\1|p' REUSE.toml)"
 
 bold "Helpix $VERSION → https://github.com/$REPO"
 echo "  sito e repository dei pacchetti: $SITE_URL"
