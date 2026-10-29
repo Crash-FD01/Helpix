@@ -66,6 +66,10 @@
 `libnspr4.so` anche dentro Firefox. Ora contano solo le cartelle di sistema delle librerie e la build si ferma se
 una dipendenza non è una libreria (`tests/test_packaging.py`). Verificato installando dal repository pubblico.
 
+**v0.15.2** — Su Fedora 44 dnf rifiutava l'.rpm: «nothing provides libc.so.6(GLIBC_2.34)(64bit)». La glibc minima ora
+è richiesta come pacchetto (`Requires: glibc >= 2.34`, 2.38 su ARM), che ha lo stesso nome su Fedora, RHEL e
+openSUSE. Trovato da Crash installando con `setup.sh` sul suo Fedora.
+
 ## 0.1 Prima versione pubblica (v0.14.0)
 
 **Revisione finale prima della pubblicazione**

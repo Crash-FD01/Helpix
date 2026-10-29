@@ -14,7 +14,9 @@ GLIBC_MIN = os.environ.get("GLIBC_MIN", "2.34")  # calcolata da build-packages.s
 def main() -> None:
     arch = sys.argv[2]
     suffix = "()(64bit)" if arch in ("x86_64", "aarch64") else ""
-    lines = [f"Requires:       libc.so.6(GLIBC_{GLIBC_MIN}){suffix}"]
+    # glibc minima come pacchetto: Fedora, RHEL e openSUSE lo chiamano tutti «glibc». (Il simbolo versionato
+    # «libc.so.6(GLIBC_2.34)(64bit)» in 0.15.0 non era fornito da glibc su Fedora 44 e dnf rifiutava il pacchetto.)
+    lines = [f"Requires:       glibc >= {GLIBC_MIN}"]
     for soname in open(sys.argv[1]).read().split():
         lines.append(f"Requires:       {soname}{suffix}")
     print("\n".join(lines))
