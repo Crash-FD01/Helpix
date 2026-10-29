@@ -210,3 +210,7 @@ def helpix_argv(*args: str) -> list[str]:
         if os.path.exists(w):
             exe = w
     return [exe, "-m", "helpix", *args]
+
+
+# indirizzo dei sorgenti (finestra Informazioni, controllo delle nuove versioni)
+SOURCE_URL = "https://github.com/Crash-FD01/Helpix"

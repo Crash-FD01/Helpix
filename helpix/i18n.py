@@ -1242,4 +1242,13 @@ EN: dict[str, str] = {
         "When you copy a command the AI suggests, the \"You copied a command\" bar appears at the bottom: press Run "
         "and the output goes back to the chat by itself. If it's a risky one (Remove-Item -Recurse, diskpart, reg "
         "delete…) I warn you first, and Windows asks for administrator permission, never me.",
+
+    # --- Windows: avviso delle nuove versioni
+    "Avvisami delle nuove versioni": "Tell me about new versions",
+    "Nuova versione di Helpix": "New version of Helpix",
+    "È disponibile Helpix {new} (hai la {cur}).": "Helpix {new} is available (you have {cur}).",
+    "Scarica il programma di installazione e aprilo: aggiorna Helpix mantenendo impostazioni e accessi.":
+        "Download the installer and open it: it updates Helpix and keeps your settings and sign-ins.",
+    "Scarica": "Download",
+    "Salta questa versione": "Skip this version",
 }

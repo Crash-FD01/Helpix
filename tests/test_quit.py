@@ -107,7 +107,10 @@ def test_quick_window_does_not_resurrect_helpix():
     try:
         assert wait(lambda: is_running(quick_socket_path()), 20), "finestra rapida non partita"
         time.sleep(1.5)  # collegata a Helpix
-        os.killpg(main.pid, signal.SIGKILL)
+        if sys.platform == "win32":
+            subprocess.run(["taskkill", "/PID", str(main.pid), "/T", "/F"], capture_output=True)
+        else:
+            os.killpg(main.pid, signal.SIGKILL)
         main.wait(10)
         assert not wait(lambda: is_running(socket_path()), 6), "la finestra rapida ha riaperto Helpix da sola"
         assert quick.poll() is None, "la finestra rapida resta disponibile"

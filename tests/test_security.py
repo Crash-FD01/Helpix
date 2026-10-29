@@ -111,13 +111,14 @@ def test_lock_and_unlock():
     settings = Settings()
     settings.data.update(engine="api", skip_setup=True, lock_enabled=True, lock_minutes=5, quick_shortcut=False)
 
-    # regola polkit sparita (es. dopo un aggiornamento): niente blocco, per non chiudere fuori l'utente
-    security.POLICY_FILE = Path(_tmp) / "assente.policy"
-    probe = MainWindow(settings, SecretStore())
-    assert not probe.lock_enabled and not probe.locked
-    probe.close()
-    probe.deleteLater()
-    pump(100)
+    if sys.platform != "win32":  # su Windows non c'è una regola di sistema da installare
+        # regola polkit sparita (es. dopo un aggiornamento): niente blocco, per non chiudere fuori l'utente
+        security.POLICY_FILE = Path(_tmp) / "assente.policy"
+        probe = MainWindow(settings, SecretStore())
+        assert not probe.lock_enabled and not probe.locked
+        probe.close()
+        probe.deleteLater()
+        pump(100)
 
     security.POLICY_FILE = Path(_tmp) / "helpix.policy"
     security.POLICY_FILE.write_text("<policyconfig/>", encoding="utf-8")

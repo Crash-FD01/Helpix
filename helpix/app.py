@@ -91,6 +91,34 @@ Licenza GPL-3.0-or-later: è software libero, senza alcuna garanzia. Sorgenti: h
 """
 
 
+def _self_test() -> int:
+    """Apre il motore web su una pagina vuota e prova i moduli che dipendono dal sistema; codice 0 se va tutto.
+
+    Lo usa la build (pacchetti Linux e installer di Windows) per controllare il programma pronto, senza toccare
+    impostazioni o accessi dell'utente."""
+    import PySide6.QtWebEngineWidgets  # noqa: F401 - prima della QApplication
+    from PySide6.QtCore import QTimer, QUrl
+    from PySide6.QtWebEngineWidgets import QWebEngineView
+    from PySide6.QtWidgets import QApplication
+    app = QApplication(sys.argv[:1])
+    from . import diagnostics, executor, instance, privacy, pty_process, system  # noqa: F401
+    if system.IS_WINDOWS:
+        from . import global_shortcut, security, winshell  # noqa: F401
+        import winpty  # noqa: F401
+    result = {"ok": False}
+    view = QWebEngineView()
+
+    def loaded(ok):
+        result["ok"] = ok
+        app.quit()
+
+    view.loadFinished.connect(loaded)
+    view.setHtml("<p>Helpix</p>", QUrl("about:blank"))
+    QTimer.singleShot(60000, app.quit)
+    app.exec()
+    return 0 if result["ok"] else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv if argv is None else argv)
     if "--version" in argv:
@@ -99,6 +127,8 @@ def main(argv: list[str] | None = None) -> int:
     if "--help" in argv or "-h" in argv:
         print(USAGE.format(version=__version__))
         return 0
+    if "--self-test" in argv:  # verifica del programma installato: Qt, motore web, moduli di Windows
+        return _self_test()
     if "--test-shortcut" in argv:  # diagnosi della scorciatoia globale: stampa cosa risponde il desktop
         return _test_shortcut()
     if "--quick" in argv:  # finestra rapida (di solito dalla scorciatoia globale)

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # Rilascio: parte quando pubblichi un tag «vX.Y.Z» (uguale alla versione di pyproject.toml).
-#   1. costruisce i pacchetti .deb e .rpm per x86_64 e aarch64 e li prova;
+#   1. costruisce i pacchetti .deb e .rpm per x86_64 e aarch64 e l'installer di Windows, e li prova;
 #   2. li firma con la chiave del secret HELPIX_GPG_PRIVATE_KEY;
 #   3. crea la release della versione con i pacchetti e SHA256SUMS firmato;
 #   4. aggiorna il repository APT (release «repo») e quello RPM + il sito (GitHub Pages).
@@ -89,9 +89,43 @@ jobs:
           compression-level: 0
           retention-days: 7
 
+  windows:
+    name: Installer Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Costruisci Helpix.exe e il programma di installazione
+        shell: pwsh
+        run: packaging\windows\build.ps1
+      - name: Prova il programma installato
+        shell: pwsh
+        run: |
+          $setup = Get-Item dist\packages\Helpix-*-Setup.exe
+          $p = Start-Process $setup.FullName -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER' -Wait -PassThru
+          if ($p.ExitCode) { throw "installazione non riuscita ($($p.ExitCode))" }
+          $exe = "$env:LOCALAPPDATA\Programs\Helpix\Helpix.exe"
+          if (-not (Test-Path $exe)) { throw "Helpix.exe non installato in $exe" }
+          $env:QT_QPA_PLATFORM = 'offscreen'
+          $t = Start-Process $exe -ArgumentList '--self-test' -Wait -PassThru
+          if ($t.ExitCode) { throw "prova del programma installato non riuscita ($($t.ExitCode))" }
+          Write-Host "Helpix installato e funzionante: $exe"
+          $u = Start-Process "$env:LOCALAPPDATA\Programs\Helpix\unins000.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES' -Wait -PassThru
+          if ($u.ExitCode) { throw "disinstallazione non riuscita ($($u.ExitCode))" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-windows
+          path: dist/packages/*.exe
+          compression-level: 0
+          retention-days: 7
+
   publish:
     name: Pubblica release e repository
-    needs: build
+    needs: [build, windows]
     if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     permissions:
@@ -144,14 +178,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cd pkgs
-          sha256sum -- *.deb *.rpm > SHA256SUMS
+          sha256sum -- *.deb *.rpm *.exe > SHA256SUMS
           gpg --batch --yes --local-user "$GPG_KEY_ID" --armor --detach-sign SHA256SUMS
           notes="Installa o aggiorna: $SITE_URL — una volta aggiunto il repository, gli aggiornamenti arrivano con apt, dnf o zypper."
           if gh release view "$TAG" > /dev/null 2>&1; then
-            gh release upload "$TAG" -- *.deb *.rpm SHA256SUMS SHA256SUMS.asc --clobber
+            gh release upload "$TAG" -- *.deb *.rpm *.exe SHA256SUMS SHA256SUMS.asc --clobber
           else
             gh release create "$TAG" --verify-tag --latest --title "Helpix ${TAG#v}" --notes "$notes" --generate-notes \
-              -- *.deb *.rpm SHA256SUMS SHA256SUMS.asc
+              -- *.deb *.rpm *.exe SHA256SUMS SHA256SUMS.asc
           fi
 
       - name: Repository APT (release «repo»)

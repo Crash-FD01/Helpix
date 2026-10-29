@@ -4,7 +4,7 @@
 [![Versione](https://img.shields.io/github/v/release/Crash-FD01/Helpix?label=versione)](https://github.com/Crash-FD01/Helpix/releases/latest)
 [![Licenza: GPL-3.0-or-later](https://img.shields.io/badge/licenza-GPL--3.0--or--later-blue)](LICENSE)
 
-Assistente AI open source per risolvere i problemi del PC Linux con l'account che usi già:
+Assistente AI open source per risolvere i problemi del PC, Linux e Windows, con l'account che usi già:
 ChatGPT, Claude, Gemini, Copilot o DeepSeek. Fai uno screenshot del problema, Helpix lo incolla
 direttamente nella chat; copi il comando che l'IA ti propone, Helpix lo esegue con un clic e ti
 incolla l'output nella chat.
@@ -35,11 +35,15 @@ risposte, quindi valuta tu se usarla (in alternativa copia il riepilogo con il p
 
 ![Helpix con ChatGPT: un comando proposto dall'IA, pronto da eseguire](docs/principale-chiaro.png)
 
-**Installa** (Debian, Ubuntu, Mint, Fedora, RHEL 9+, openSUSE; gli aggiornamenti arrivano con quelli del sistema):
+**Installa su Linux** (Debian, Ubuntu, Mint, Fedora, RHEL 9+, openSUSE; gli aggiornamenti arrivano con quelli del
+sistema):
 
 ```bash
 curl -fsSL https://crash-fd01.github.io/Helpix/setup.sh | sudo sh
 ```
+
+**Installa su Windows** 10 (1809 o più recente) e 11: scarica `Helpix-…-Setup.exe` dall'[ultima
+release](https://github.com/Crash-FD01/Helpix/releases/latest) e aprilo.
 
 Altri modi e dettagli in [Installazione](#installazione).
 
@@ -279,6 +283,30 @@ sistema: `sudo apt upgrade`, `sudo dnf upgrade`, `sudo zypper update`, o il cent
 Se prima lo avevi installato con `install.sh`, toglilo con `./uninstall.sh` (senza `--purge` impostazioni e
 accessi restano e il pacchetto li ritrova).
 
+### Windows
+
+Scarica `Helpix-<versione>-Setup.exe` dall'[ultima release](https://github.com/Crash-FD01/Helpix/releases/latest) e
+aprilo. Si installa per il tuo utente, senza permessi di amministratore (nella prima schermata puoi scegliere di
+installarlo per tutti gli utenti), con la voce nel menu Start e la disinstallazione da *Impostazioni › App*.
+- Serve Windows 10 versione 1809 o più recente, oppure Windows 11, a 64 bit (x64).
+- **SmartScreen:** il programma non è ancora firmato digitalmente, quindi al primo avvio Windows mostra «Windows ha
+  protetto il PC». Premi *Ulteriori informazioni › Esegui comunque*. Puoi controllare il file con `SHA256SUMS`
+  (firmato) della release.
+- **Aggiornamenti:** una volta al giorno Helpix chiede a GitHub qual è l'ultima versione, l'indirizzo pubblico delle
+  release senza inviare nulla di tuo. Se ce n'è una nuova te lo dice e scarichi il nuovo installer, che aggiorna
+  mantenendo impostazioni e accessi. Si disattiva da *Impostazioni › Avvisami delle nuove versioni*.
+
+Cosa cambia rispetto a Linux:
+- I comandi girano in PowerShell (7 se è installato, altrimenti Windows PowerShell 5.1). Quando servono i permessi di
+  amministratore l'IA scrive `sudo` davanti e Windows chiede conferma con il Controllo account utente; gli avvisi
+  coprono anche i comandi rischiosi di Windows (`Remove-Item -Recurse`, `diskpart`, `reg delete`, `bcdedit`,
+  disattivazione di antivirus o firewall…).
+- La scorciatoia Ctrl+Alt+H funziona da qualsiasi programma senza impostare nulla.
+- Il blocco facoltativo usa Windows Hello (PIN, impronta o volto).
+- Gli agenti nel terminale usano ConPTY; Helpix li installa con i comandi ufficiali per Windows (Node.js, per Gemini
+  CLI, con winget).
+- Impostazioni in `%APPDATA%\Helpix`, dati e accessi in `%LOCALAPPDATA%\Helpix`.
+
 ### Dai sorgenti (Arch, sistemi più vecchi, sviluppo)
 
 ```bash
@@ -377,7 +405,12 @@ messa nel repository.
 - Distribuzioni immutabili (Silverblue, Kinoite, SteamOS): la regola polkit per il blocco non si può installare
   in /usr, quindi il blocco non si attiva (l'export cifrato funziona). Se la regola sparisce dopo
   un aggiornamento, Helpix si apre senza blocco invece di chiuderti fuori.
-- Solo Linux per ora: Windows e macOS sono nel piano in `docs/audit-roadmap.md`, rimandati a dopo la versione Linux.
+- Windows: l'installer non è ancora firmato (avviso di SmartScreen al primo avvio). La versione per macOS è nel piano
+  in `docs/audit-roadmap.md`.
+- Windows: il dialogo di Windows Hello aperto da un programma desktop a volte compare dietro le altre finestre;
+  Helpix prova a portarlo davanti, altrimenti lo trovi nella barra delle applicazioni.
+- Windows: un comando eseguito come amministratore non si può fermare da Helpix (è un processo elevato): se serve,
+  chiudilo da Gestione attività.
 - GNOME su Fedora e Debian non ha l'area di notifica: `install.sh` (e Impostazioni › Dipendenze di sistema)
   installa e attiva l'estensione AppIndicator (`gnome-shell-extension-appindicator`). Se è già installata ma
   spenta, la attiva soltanto; al primo avvio Helpix lo propone una volta. GNOME carica le estensioni nuove
@@ -398,7 +431,10 @@ messa nel repository.
 - [x] v0.13 — Giro guidato a nuvolette e consiglio del giorno (disattivabili)
 - [x] v0.14.0 — Prima versione pubblica: licenza GPL-3.0-or-later (conforme REUSE), revisione finale
 - [x] v0.13.4 — Compatibilità con i desktop più usati (Cinnamon, MATE, Xfce, COSMIC, Hyprland/Sway…) e Qt 6.8/6.9 per le distribuzioni con glibc meno recente
-- [ ] Livello di piattaforma e versione Windows, poi macOS (piano in `docs/audit-roadmap.md`, dopo Linux)
+- [x] v0.16 — Versione per Windows: PowerShell con Controllo account utente, scorciatoia globale, agenti con ConPTY,
+  Windows Hello, diagnosi, installer e avviso delle nuove versioni
+- [ ] Firma digitale dell'installer di Windows
+- [ ] Versione per macOS (piano in `docs/audit-roadmap.md`)
 
 ## Licenza
 

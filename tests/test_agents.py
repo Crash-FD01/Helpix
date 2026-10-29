@@ -5,6 +5,11 @@
 L'agente finto gira in un pseudo-terminale vero (modo raw, incolla tra parentesi, Invio) e
 registra in un file quello che riceve.
 """
+import sys as _sys
+if _sys.platform == "win32":
+    print("saltato su Windows: l'agente finto usa il terminale di Linux (ConPTY: test_windows)")
+    raise SystemExit(0)
+
 import json
 import os
 import sys

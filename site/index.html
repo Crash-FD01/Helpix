@@ -6,7 +6,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Helpix</title>
-<meta name="description" content="Helpix: ripara il tuo PC Linux con l'IA che usi già (ChatGPT, Claude, Gemini, Copilot, DeepSeek). Open source, GPL-3.0.">
+<meta name="description" content="Helpix: ripara il tuo PC Linux o Windows con l'IA che usi già (ChatGPT, Claude, Gemini, Copilot, DeepSeek). Open source, GPL-3.0.">
 <link rel="icon" href="icon.png">
 <style>
 @font-face { font-family: Inter; src: url(Inter-Variable.ttf) format("truetype"); font-weight: 100 900; font-display: swap; }
@@ -53,6 +53,10 @@ pre { margin: 0; padding: 14px 16px; overflow-x: auto; flex: 1; font: 14px/1.6 "
 .copy:hover { color: var(--text); }
 .copy.done { color: var(--ok); }
 .primary .cmd { border-color: var(--accent); }
+.btn { display: inline-block; background: var(--accent); color: var(--accent-ink); border-radius: 10px; padding: 12px 18px;
+       font-weight: 600; margin: 8px 0 12px; }
+.btn:hover { text-decoration: none; filter: brightness(1.08); }
+h3 + p.muted { margin-top: 0; }
 details { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 4px 16px; margin: 10px 0; }
 summary { cursor: pointer; padding: 10px 0; font-weight: 600; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-top: 16px; }
@@ -80,7 +84,7 @@ html[lang="en"] [data-l="en"] { display: revert; }
   </header>
 
   <div class="hero">
-    <h1><span data-l="it">Ripara il tuo PC Linux con l'IA che usi già.</span><span data-l="en">Fix your Linux PC with the AI you already use.</span></h1>
+    <h1><span data-l="it">Ripara il tuo PC con l'IA che usi già.</span><span data-l="en">Fix your PC with the AI you already use.</span></h1>
     <p class="lead" data-l="it">Helpix apre ChatGPT, Claude, Gemini, Copilot o DeepSeek con il tuo account, incolla gli screenshot nella chat,
       esegue con un clic i comandi che l'IA ti propone e le riporta l'output. Open source, gratuito, solo quando lo chiedi tu.</p>
     <p class="lead" data-l="en">Helpix opens ChatGPT, Claude, Gemini, Copilot or DeepSeek with your own account, pastes screenshots into the chat,
@@ -93,6 +97,7 @@ html[lang="en"] [data-l="en"] { display: revert; }
 
   <section id="install" class="primary">
     <h2><span data-l="it">Installa</span><span data-l="en">Install</span></h2>
+    <h3>Linux</h3>
     <p class="muted" data-l="it">Un comando: aggiunge il repository firmato di Helpix e lo installa. Debian, Ubuntu, Mint, Pop!_OS, Fedora, RHEL 9+, openSUSE (x86_64 e ARM64).</p>
     <p class="muted" data-l="en">One command: adds Helpix's signed repository and installs it. Debian, Ubuntu, Mint, Pop!_OS, Fedora, RHEL 9+, openSUSE (x86_64 and ARM64).</p>
     <div class="cmd"><pre>curl -fsSL @SITE_URL@/setup.sh | sudo sh</pre><button class="copy">Copia</button></div>
@@ -126,6 +131,11 @@ sudo zypper install helpix</pre><button class="copy">Copia</button></div>
       <p data-l="en">Installs into your home folder, no root needed, and picks a Qt version that suits your system.</p>
       <div class="cmd"><pre>git clone @REPO_URL@.git helpix &amp;&amp; cd helpix &amp;&amp; ./install.sh</pre><button class="copy">Copia</button></div>
     </details>
+    <h3 style="margin-top:28px">Windows</h3>
+    <p class="muted"><span data-l="it">Windows 10 (1809 o più recente) e Windows 11, 64 bit. Si installa per il tuo utente, senza permessi di amministratore.</span><span data-l="en">Windows 10 (1809 or later) and Windows 11, 64-bit. Installs for your user, no administrator rights needed.</span></p>
+    <a class="btn" href="@REPO_URL@/releases/download/v@VERSION@/Helpix-@VERSION@-Setup.exe"><span data-l="it">Scarica Helpix @VERSION@ per Windows</span><span data-l="en">Download Helpix @VERSION@ for Windows</span></a>
+    <p class="muted" data-l="it">Il programma non è ancora firmato digitalmente: al primo avvio Windows mostra «Windows ha protetto il PC», premi <b>Ulteriori informazioni › Esegui comunque</b>. Quando esce una nuova versione Helpix te lo dice (disattivabile).</p>
+    <p class="muted" data-l="en">The program is not digitally signed yet: on first launch Windows shows "Windows protected your PC", press <b>More info › Run anyway</b>. When a new version comes out Helpix tells you (can be turned off).</p>
     <p class="muted" style="margin-top:16px"><span data-l="it">Impronta della chiave che firma i pacchetti:</span><span data-l="en">Fingerprint of the package signing key:</span><br>
       <span class="fp">@FINGERPRINT@</span></p>
   </section>

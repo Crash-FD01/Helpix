@@ -53,7 +53,7 @@ from .web_panel import WEB_SITES, WEBENGINE, WebPanel
 from .workers import FuncWorker
 from ..i18n import LANGUAGES, current as current_language, tr
 
-SOURCE_URL = "https://github.com/Crash-FD01/Helpix"
+from ..system import SOURCE_URL  # noqa: E402,F401 - anche per chi lo importa da qui
 MAX_SHARE = 12_000  # caratteri di output inviati all'IA per comando (motore API)
 
 
@@ -425,6 +425,12 @@ class MainWindow(QMainWindow):
         menu.addAction(icon("lock", C["text"], 16), tr("Sicurezza…"), self.open_security)
         if not IS_WINDOWS:  # su Windows Qt è incluso nel programma: niente pacchetti di sistema da installare
             menu.addAction(icon("download", C["text"], 16), tr("Dipendenze di sistema…"), self.check_system_deps)
+        else:  # su Linux gli aggiornamenti arrivano dal gestore pacchetti
+            from .. import updates
+            act = menu.addAction(icon("download", C["text"], 16), tr("Avvisami delle nuove versioni"))
+            act.setCheckable(True)
+            act.setChecked(bool(self.settings.get("check_updates", updates.enabled_by_default())))
+            act.toggled.connect(lambda on: self.settings.set("check_updates", on))
         menu.addAction(icon("info", C["text"], 16), tr("Guida rapida (giro guidato)"), self.start_tour)
         menu.addAction(icon("star", C["text"], 16), tr("Schermata iniziale…"), self.open_start_screen)
         self.act_start_screen = menu.addAction(tr("Mostra la schermata iniziale all'avvio"))
@@ -2054,11 +2060,48 @@ class MainWindow(QMainWindow):
         self.tour = None
         if self.settings.get("show_tips", True):
             QTimer.singleShot(900, self._startup_tips)
+        QTimer.singleShot(15000, self._check_updates)
         choice = self.settings.get("quick_shortcut")  # None = non ancora chiesto
         if choice is None:
             QTimer.singleShot(2500, self._ask_global_shortcut)
         elif choice:
             QTimer.singleShot(1500, self._start_global_shortcut)
+
+    def _check_updates(self):
+        """Una volta al giorno chiede a GitHub l'ultima versione (disattivabile; su Linux spento)."""
+        from .. import updates
+        if not updates.due(self.settings):
+            return
+        self.settings.set("updates_checked_at", time.time())
+        w = FuncWorker(updates.latest_release, parent=self)
+        w.done.connect(self._update_found)
+        self._start(w)
+
+    def _update_found(self, info):
+        from .. import __version__, updates
+        if not info or not updates.is_newer(info["version"]) or info["version"] == self.settings.get("skip_version"):
+            return
+        box = QMessageBox(self)
+        box.setWindowTitle(tr("Nuova versione di Helpix"))
+        box.setIcon(QMessageBox.Icon.Information)
+        box.setText(tr("È disponibile Helpix {new} (hai la {cur}).").format(new=info["version"], cur=__version__))
+        box.setInformativeText(tr("Scarica il programma di installazione e aprilo: aggiorna Helpix mantenendo "
+                                  "impostazioni e accessi."))
+        get = box.addButton(tr("Scarica"), QMessageBox.ButtonRole.AcceptRole)
+        skip = box.addButton(tr("Salta questa versione"), QMessageBox.ButtonRole.DestructiveRole)
+        box.addButton(tr("Più tardi"), QMessageBox.ButtonRole.RejectRole)
+
+        def chosen(_result):
+            clicked = box.clickedButton()
+            if clicked is get:
+                from PySide6.QtCore import QUrl
+                from PySide6.QtGui import QDesktopServices
+                QDesktopServices.openUrl(QUrl(info.get("setup") or info["url"]))
+            elif clicked is skip:
+                self.settings.set("skip_version", info["version"])
+
+        box.finished.connect(chosen)
+        box.open()
 
     def _ask_global_shortcut(self):
         """Prima volta: propone la scorciatoia globale della finestra rapida."""

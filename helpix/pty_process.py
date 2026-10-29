@@ -205,7 +205,10 @@ class WinPtyProcess(QObject):
         full_env.update(env or {})
         full_env.update(TERM="xterm-256color", COLORTERM="truecolor")
         exe = shutil.which(argv[0], path=full_env.get("PATH")) or argv[0]
-        self.proc = _ConPty.spawn([exe, *argv[1:]], cwd=cwd, env=full_env, dimensions=(self.rows, self.cols))
+        cmdline = [exe, *argv[1:]]
+        if exe.lower().endswith((".cmd", ".bat")):  # programmi installati con npm (gemini.cmd…): li apre cmd.exe
+            cmdline = [os.environ.get("COMSPEC", "cmd.exe"), "/d", "/c", *cmdline]
+        self.proc = _ConPty.spawn(cmdline, cwd=cwd, env=full_env, dimensions=(self.rows, self.cols))
         self._generation += 1
         gen, proc = self._generation, self.proc
 

@@ -67,12 +67,17 @@ def test_tray():
     win.show()
     pump(200)
     assert win.tray is not None and not app.quitOnLastWindowClosed()
+    calls = []
+    real_to_tray = win.to_tray
+    win.to_tray = lambda: (calls.append("to_tray"), real_to_tray())
     win.close()  # la X: resta nell'area di notifica
     for _ in range(30):  # sulle macchine lente (CI) chiusura e icona arrivano qualche istante dopo
         pump(100)
         if not win.isVisible() and win.tray.isVisible():
             break
-    assert not win.isVisible() and win.tray.isVisible(), (win.isVisible(), win.tray.isVisible())
+    shown = [type(w).__name__ + ":" + w.objectName() for w in QApplication.topLevelWidgets() if w.isVisible()]
+    assert not win.isVisible() and win.tray.isVisible(), (win.isVisible(), win.tray.isVisible(), calls,
+                                                          int(win.windowState().value), shown)
     assert not win.isVisible() and not win._quitting
     win.show_from_tray()
     assert win.isVisible()

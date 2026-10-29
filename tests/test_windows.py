@@ -152,6 +152,20 @@ def test_conpty_terminal_on_windows():
     text = "".join(out)
     assert "helpix-conpty" in text, text
     assert codes == [4], codes
+    # programma installato da npm: un file .cmd nel PATH (come gemini.cmd)
+    shim_dir = tempfile.mkdtemp()
+    with open(os.path.join(shim_dir, "finto-agente.cmd"), "w", encoding="ascii") as f:
+        f.write("@echo off\r\necho shim-ok %1\r\nexit /b 0\r\n")
+    out.clear()
+    codes.clear()
+    loop2 = QEventLoop()
+    pty.finished.disconnect()
+    pty.finished.connect(lambda rc: (codes.append(rc), loop2.quit()))
+    QTimer.singleShot(30000, loop2.quit)
+    pty.start(["finto-agente", "argomento"], shim_dir, {"PATH": shim_dir + os.pathsep + os.environ["PATH"]})
+    loop2.exec()
+    assert "shim-ok argomento" in "".join(out), "".join(out)
+    assert codes == [0], codes
     del app
 
 
@@ -181,6 +195,34 @@ def test_windows_hello_on_windows():
     assert status in ("available", "not-configured", "unavailable"), status
     import winrt.windows.security.credentials.ui  # noqa: F401 - le dipendenze di Windows sono installate
     print("  Windows Hello:", status)
+
+
+def test_update_check():
+    from unittest import mock
+    from helpix import updates
+    assert updates.is_newer("0.16.0", "0.15.2") and updates.is_newer("1.0", "0.99.9")
+    assert not updates.is_newer("0.15.2", "0.15.2") and not updates.is_newer("0.15.1", "0.15.2")
+
+    class S(dict):
+        def get(self, k, d=None):
+            return super().get(k, d)
+    assert updates.due(S(check_updates=True)) and not updates.due(S(check_updates=False))
+    import time
+    assert not updates.due(S(check_updates=True, updates_checked_at=time.time() - 60))
+
+    class R:
+        status_code = 200
+
+        @staticmethod
+        def json():
+            return {"tag_name": "v9.1.0", "html_url": "https://github.com/x/y/releases/tag/v9.1.0", "assets": [
+                {"name": "helpix_9.1.0_amd64.deb", "browser_download_url": "https://x/deb"},
+                {"name": "Helpix-9.1.0-Setup.exe", "browser_download_url": "https://x/setup"}]}
+    with mock.patch("requests.get", return_value=R()) as get:
+        info = updates.latest_release()
+    assert info == {"version": "9.1.0", "url": "https://github.com/x/y/releases/tag/v9.1.0",
+                    "setup": "https://x/setup"}, info
+    assert "/repos/Crash-FD01/Helpix/releases/latest" in get.call_args[0][0]
 
 
 if __name__ == "__main__":

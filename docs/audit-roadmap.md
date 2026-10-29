@@ -213,7 +213,31 @@ Oggi l'installazione è `install.sh`: un venv nella home più `pip`, circa 300 M
 
 Da aggiungere in ogni caso: un controllo facoltativo delle nuove versioni (GitHub Releases), con un avviso nell'app.
 
-## 4. Windows e macOS (rimandato: prima si completa Linux)
+## 3bis. Versione per Windows (v0.16)
+
+Decisioni di Crash: tutto subito (non una prima versione ridotta), senza firma per ora, installer con avviso delle
+nuove versioni nell'app, prove su Windows 11.
+
+| Componente | Come funziona su Windows | Dove |
+|---|---|---|
+| Cartelle | `%APPDATA%\Helpix` (impostazioni), `%LOCALAPPDATA%\Helpix` (dati, accessi) | `system.py` |
+| Istanza unica e finestra rapida | Named pipe dell'utente (`QLocalServer`); client con l'API di Windows, pid del server con `GetNamedPipeServerProcessId` | `instance.py` |
+| Comandi | PowerShell 7 o 5.1, script con `-EncodedCommand`, cartella corrente tramite file | `winshell.py`, `executor.py` |
+| Amministratore | `sudo` davanti come su Linux → Controllo account utente (`Start-Process -Verb RunAs`), output letto man mano da file | `winshell.py` |
+| Rischi | Regole per PowerShell e cmd (cancellazioni ricorsive, dischi, avvio, registro, download+esecuzione, antivirus/firewall, copie shadow…) | `winshell.py` |
+| Prompt | Istruzioni per PowerShell, blocchi ```powershell eseguibili | `prompts.py`, `chat.py` |
+| Scorciatoia globale | `RegisterHotKey` in un thread con la sua coda di messaggi | `global_shortcut.py` |
+| Agenti | ConPTY (pywinpty); installazione con i comandi ufficiali per PowerShell, Node.js con winget; PATH riletto dal registro | `pty_process.py`, `agents.py` |
+| Diagnosi | Un solo PowerShell: sistema, dischi, rete, servizi automatici fermi, errori delle ultime 24 ore, riavvio in attesa, Defender | `diagnostics.py` |
+| Sblocco | Windows Hello (`UserConsentVerifier`, pacchetti winrt) | `security.py` |
+| Tema | Registro `AppsUseLightTheme` | `app.py` |
+| Pacchetto | PyInstaller (cartella) + Inno Setup per utente, senza amministratore; prova di installazione, `--self-test` e disinstallazione su GitHub | `packaging/windows/` |
+| Aggiornamenti | Una volta al giorno l'ultima release da GitHub (disattivabile) | `updates.py` |
+
+Test: `tests/test_windows.py` (regole e script ovunque; comandi veri, elevazione, ConPTY, diagnosi e Windows Hello su
+Windows); la CI ha un job Windows; i test solo Linux si saltano lì. L'estensione del browser resta solo Linux.
+
+## 4. Windows e macOS (piano originale)
 
 La GUI (PySide6, QtWebEngine, tray, finestra rapida, portachiavi tramite keyring) è già multipiattaforma. La parte da riscrivere è tutto ciò che parla con il sistema. Il piano è un **livello di piattaforma** `helpix/platform/{linux,windows,macos}.py` con un'interfaccia comune, così il resto del codice non cambia.
 
