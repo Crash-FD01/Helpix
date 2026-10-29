@@ -150,6 +150,29 @@ def test_settings_dialog_installs():
     win.close()
 
 
+def test_apt_t64_names():
+    """Ubuntu 24.04/Debian 13: libasound2 esiste solo come libasound2t64; Ubuntu 22.04: solo libasound2."""
+    import subprocess as sp
+
+    def fake_run(available):
+        def run(argv, **kw):
+            name = argv[-1]
+            out = f"{name}:\n  Installed: (none)\n  Candidate: 1.0\n" if name in available else ""
+            return sp.CompletedProcess(argv, 0, out, "")
+        return run
+
+    real = sysdeps.subprocess.run
+    try:
+        for available, expected in (({"libasound2t64", "libnss3"}, "libasound2t64"), ({"libasound2"}, "libasound2")):
+            sysdeps._APT_NAMES.clear()
+            sysdeps.subprocess.run = fake_run(available)
+            assert sysdeps.apt_name("libasound2") == expected, (available, sysdeps.apt_name("libasound2"))
+            assert sysdeps._pkg(sysdeps.LIBS, "libasound.so.2", "apt") == expected
+    finally:
+        sysdeps.subprocess.run = real
+        sysdeps._APT_NAMES.clear()
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

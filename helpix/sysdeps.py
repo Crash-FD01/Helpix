@@ -174,7 +174,37 @@ def session_type() -> str:
 def _pkg(table: dict, key: str, pm: str | None) -> str | None:
     if pm not in MANAGERS or key not in table:
         return None
-    return table[key][MANAGERS.index(pm)]
+    name = table[key][MANAGERS.index(pm)]
+    if pm == "apt" and name:
+        name = " ".join(apt_name(p) for p in name.split())
+    return name
+
+
+_APT_NAMES: dict[str, str] = {}
+
+
+def apt_name(pkg: str) -> str:
+    """Nome del pacchetto che apt può installare davvero su questo sistema.
+
+    Da Ubuntu 24.04 e Debian 13 diverse librerie hanno il suffisso «t64» (libasound2 → libasound2t64): il nome
+    vecchio resta solo come pacchetto virtuale e «apt-get install libasound2» fallisce. Le tabelle usano il nome
+    vecchio (valido su Ubuntu 22.04, Debian 12, Mint 21); qui si sceglie quello che ha una versione installabile.
+    """
+    if pkg in _APT_NAMES:
+        return _APT_NAMES[pkg]
+
+    def installable(name: str) -> bool:
+        try:
+            out = subprocess.run(["apt-cache", "policy", name], capture_output=True, text=True, timeout=30).stdout
+        except (OSError, subprocess.SubprocessError):
+            return False
+        return "Candidate:" in out and "Candidate: (none)" not in out
+
+    result = pkg
+    if not installable(pkg) and installable(pkg + "t64"):
+        result = pkg + "t64"
+    _APT_NAMES[pkg] = result
+    return result
 
 
 # ------------------------------------------------------------ librerie di Qt
