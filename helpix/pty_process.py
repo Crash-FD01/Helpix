@@ -4,21 +4,25 @@
 
 Serve per gli agenti a riga di comando (Claude Code, Codex, Gemini CLI): sono interfacce
 a tutto schermo che hanno bisogno di un TTY con dimensioni, colori e tasti come in un
-terminale normale.
+terminale normale. Linux: os.openpty. Windows: ConPTY tramite pywinpty (WinPtyProcess, stessa interfaccia).
 """
 from __future__ import annotations
 
 import codecs
 import errno
-import fcntl
 import os
 import shutil
 import signal
 import struct
 import subprocess
-import termios
+import sys
+import threading
 
 from PySide6.QtCore import QObject, QSocketNotifier, QTimer, Signal
+
+if sys.platform != "win32":
+    import fcntl
+    import termios
 
 
 def _set_size(fd: int, cols: int, rows: int) -> None:
@@ -29,7 +33,7 @@ def _child_setup() -> None:  # nel processo figlio, dopo setsid: il PTY diventa 
     fcntl.ioctl(0, termios.TIOCSCTTY, 0)
 
 
-class PtyProcess(QObject):
+class _PosixPtyProcess(QObject):
     output = Signal(str)     # testo dal programma (già decodificato, in blocchi)
     finished = Signal(int)   # codice di uscita
 
@@ -165,3 +169,117 @@ class PtyProcess(QObject):
                     pass
         if self.fd is not None or self.proc is not None:
             self._closed()
+
+
+class WinPtyProcess(QObject):
+    """Come _PosixPtyProcess, su Windows: ConPTY (pseudo-console di Windows 10 1809+) tramite pywinpty.
+
+    La lettura è bloccante, quindi avviene in un thread; il testo arriva al thread di Qt con un segnale."""
+    output = Signal(str)
+    finished = Signal(int)
+    _chunk = Signal(str)
+    _eof = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.proc = None
+        self.cols, self.rows = 100, 30
+        self._buf: list[str] = []
+        self._flush = QTimer(self)
+        self._flush.setSingleShot(True)
+        self._flush.setInterval(12)
+        self._flush.timeout.connect(self._emit)
+        self._chunk.connect(self._got)
+        self._eof.connect(self._closed)
+        self._reader: threading.Thread | None = None
+        self._generation = 0
+
+    @property
+    def running(self) -> bool:
+        return self.proc is not None and self.proc.isalive()
+
+    def start(self, argv: list[str], cwd: str, env: dict | None = None) -> None:
+        from winpty import PtyProcess as _ConPty
+        self.stop()
+        full_env = dict(os.environ)
+        full_env.update(env or {})
+        full_env.update(TERM="xterm-256color", COLORTERM="truecolor")
+        exe = shutil.which(argv[0], path=full_env.get("PATH")) or argv[0]
+        self.proc = _ConPty.spawn([exe, *argv[1:]], cwd=cwd, env=full_env, dimensions=(self.rows, self.cols))
+        self._generation += 1
+        gen, proc = self._generation, self.proc
+
+        def reader():
+            while True:
+                try:
+                    data = proc.read(65536)
+                except (EOFError, OSError):
+                    break
+                if data and gen == self._generation:
+                    self._chunk.emit(data)
+                elif not proc.isalive():
+                    break
+            if gen == self._generation:
+                self._eof.emit()
+
+        self._reader = threading.Thread(target=reader, name="helpix-conpty", daemon=True)
+        self._reader.start()
+
+    def _got(self, text: str):
+        self._buf.append(text)
+        if not self._flush.isActive():
+            self._flush.start()
+
+    def _emit(self):
+        if self._buf:
+            text, self._buf = "".join(self._buf), []
+            self.output.emit(text)
+
+    def _closed(self):
+        self._emit()
+        proc, self.proc = self.proc, None
+        rc = 0
+        if proc is not None:
+            try:
+                rc = int(proc.exitstatus or 0)
+            except (TypeError, ValueError):
+                rc = 0
+            try:
+                proc.close()
+            except Exception:  # noqa: BLE001 - già chiuso
+                pass
+        self.finished.emit(rc)
+
+    def write(self, text: str) -> None:
+        if self.proc is not None:
+            try:
+                self.proc.write(text)
+            except (EOFError, OSError):
+                pass
+
+    def paste(self, text: str) -> None:
+        self.write("\x1b[200~" + text.replace("\x1b", "") + "\x1b[201~")
+
+    def resize(self, cols: int, rows: int) -> None:
+        self.cols, self.rows = max(cols, 2), max(rows, 2)
+        if self.proc is not None:
+            try:
+                self.proc.setwinsize(self.rows, self.cols)
+            except (EOFError, OSError):
+                pass
+
+    def stop(self) -> None:
+        if self.proc is None:
+            return
+        self._generation += 1  # il thread del processo vecchio non manda più nulla
+        proc = self.proc
+        try:
+            if proc.isalive():
+                proc.terminate(force=True)
+        except Exception:  # noqa: BLE001
+            pass
+        self._closed()
+
+
+PtyProcess = WinPtyProcess if sys.platform == "win32" else _PosixPtyProcess
+

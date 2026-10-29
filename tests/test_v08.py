@@ -155,9 +155,9 @@ def test_native_install_paths():
         names = ni.install()
         assert names == ["Google Chrome", "Firefox"], names
         import json
-        chrome = json.loads(Path(home, ".config/google-chrome/NativeMessagingHosts/com.helpix.bridge.json").read_text())
+        chrome = json.loads(Path(home, ".config/google-chrome/NativeMessagingHosts/com.helpix.bridge.json").read_text(encoding="utf-8"))
         assert chrome["allowed_origins"] == [f"chrome-extension://{ni.CHROME_EXTENSION_ID}/"]
-        ff = json.loads(Path(home, ".mozilla/native-messaging-hosts/com.helpix.bridge.json").read_text())
+        ff = json.loads(Path(home, ".mozilla/native-messaging-hosts/com.helpix.bridge.json").read_text(encoding="utf-8"))
         assert ff["allowed_extensions"] == [ni.FIREFOX_EXTENSION_ID] and os.access(ff["path"], os.X_OK)
         assert ni.installed()
         assert set(ni.uninstall()) == {"Google Chrome", "Firefox"} and not ni.installed()
@@ -171,7 +171,7 @@ def test_extension_id_matches_key():
     import hashlib
     from pathlib import Path
     root = Path(__file__).resolve().parent.parent
-    der = base64.b64decode((root / "extension" / "chromium-public-key.txt").read_text().strip())
+    der = base64.b64decode((root / "extension" / "chromium-public-key.txt").read_text(encoding="utf-8").strip())
     ext_id = "".join("abcdefghijklmnop"[int(c, 16)] for c in hashlib.sha256(der).hexdigest()[:32])
     assert ext_id == native_install.CHROME_EXTENSION_ID
 

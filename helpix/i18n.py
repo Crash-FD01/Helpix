@@ -1194,4 +1194,52 @@ EN: dict[str, str] = {
     "dell'icona vicino all'orologio.":
         "Ctrl+Alt+H is not available ({why}). It still works inside Helpix; the quick window also opens from the menu "
         "of the icon next to the clock.",
+    "Prima installo Node.js con winget (Windows può chiedere il permesso di amministratore):\n"
+    "> winget install OpenJS.NodeJS.LTS\n\n":
+        "First I install Node.js with winget (Windows may ask for administrator permission):\n"
+        "> winget install OpenJS.NodeJS.LTS\n\n",
+    "Installo {name} con il comando ufficiale:\n> {cmd}\n\n": "Installing {name} with the official command:\n> {cmd}\n\n",
+
+    # --- Windows: diagnosi rapida
+    "Sistema, avvio e memoria": "System, boot and memory",
+    "Servizi automatici fermi": "Automatic services not running",
+    "Errori delle ultime 24 ore": "Errors in the last 24 hours",
+    "Riavvio in attesa": "Restart pending",
+    "Antivirus (Microsoft Defender)": "Antivirus (Microsoft Defender)",
+    "Ciao, ho un problema sul mio PC Windows. Ecco le informazioni di sistema raccolte da Helpix "
+    "(un'app di troubleshooting). Quando mi proponi dei comandi, usa PowerShell, scrivine uno per blocco di "
+    "codice e usa solo comandi non interattivi: li eseguirò e ti incollerò l'output.":
+        "Hi, I have a problem on my Windows PC. Here is the system information collected by Helpix "
+        "(a troubleshooting app). When you suggest commands, use PowerShell, put one per code block and use only "
+        "non-interactive commands: I will run them and paste the output back to you.",
+    "- Sistema: {distro} ({arch})": "- System: {distro} ({arch})",
+    "- Shell: {shell}; gestori di pacchetti: {pkg}": "- Shell: {shell}; package managers: {pkg}",
+
+    # --- Windows: sblocco con Windows Hello
+    "Sblocca Helpix": "Unlock Helpix",
+    "Blocca Helpix con Windows Hello (PIN, impronta o volto)": "Lock Helpix with Windows Hello (PIN, fingerprint or face)",
+    "All'avvio e dopo un periodo in cui non lo usi, Helpix si blocca: per riaprirlo confermi con Windows Hello (PIN, "
+    "impronta o volto), lo stesso dialogo che Windows usa per confermare la tua identità. Anche la finestra rapida "
+    "resta bloccata.":
+        "At startup and after a period when you don't use it, Helpix locks itself: to reopen it you confirm with "
+        "Windows Hello (PIN, fingerprint or face), the same dialog Windows uses to confirm your identity. The quick "
+        "window stays locked too.",
+    "Da sapere: gli accessi a ChatGPT, Claude e agli altri servizi li conserva il browser integrato nella tua cartella "
+    "utente. Il blocco impedisce di usarli da Helpix; per proteggere i file quando il PC è spento serve la cifratura "
+    "del disco (BitLocker).":
+        "Good to know: the sign-ins to ChatGPT, Claude and the other services are kept by the built-in browser in your "
+        "user folder. The lock prevents using them from Helpix; to protect the files when the PC is off you need disk "
+        "encryption (BitLocker).",
+    "Windows Hello non è configurato: imposta un PIN (o impronta o volto) in Impostazioni › Account › Opzioni di "
+    "accesso, poi riapri questa finestra.":
+        "Windows Hello is not set up: set a PIN (or fingerprint or face) in Settings › Accounts › Sign-in options, "
+        "then reopen this window.",
+    "Windows Hello non è disponibile su questo PC: il blocco non si può usare.":
+        "Windows Hello is not available on this PC: the lock cannot be used.",
+    "Quando copi un comando proposto dall'IA, in basso compare la barra «Hai copiato un comando»: premi Esegui e "
+    "l'output torna nella chat da solo. Se il comando è di quelli pericolosi (Remove-Item -Recurse, diskpart, reg "
+    "delete…) te lo dico prima, e per i permessi di amministratore è Windows a chiedertelo, mai io.":
+        "When you copy a command the AI suggests, the \"You copied a command\" bar appears at the bottom: press Run "
+        "and the output goes back to the chat by itself. If it's a risky one (Remove-Item -Recurse, diskpart, reg "
+        "delete…) I warn you first, and Windows asks for administrator permission, never me.",
 }

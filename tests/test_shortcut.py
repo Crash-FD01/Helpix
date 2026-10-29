@@ -4,6 +4,11 @@
 
 Esegui con: dbus-run-session -- python tests/test_shortcut.py
 """
+import sys as _sys
+if _sys.platform == "win32":
+    print("saltato su Windows: scorciatoia globale tramite il portal di Linux (su Windows: test_windows)")
+    raise SystemExit(0)
+
 import os
 import subprocess
 import sys

@@ -23,6 +23,9 @@ app = QApplication.instance() or QApplication([])
 
 
 def test_looks_like_command():
+    if sys.platform == "win32":  # comandi di Windows: test_windows.py
+        assert looks_like_command("Riavvia il computer e riprova") is None
+        return
     assert looks_like_command("ls -la /etc") == "ls -la /etc"
     assert looks_like_command("$ sudo ls /root") == "sudo ls /root"
     assert looks_like_command("user@pc:~$ uname -r") == "uname -r"

@@ -212,7 +212,7 @@ def test_main_window_toggle():
     sysmsg = win._system_prompt()
     assert "crash-desktop" not in sysmsg and "[HOST]" in sysmsg, sysmsg[-400:]
     ws = agents_mod.write_context("claude-code")
-    ctx = (ws / "CLAUDE.md").read_text()
+    ctx = (ws / "CLAUDE.md").read_text(encoding="utf-8")
     assert "crash-desktop" not in ctx and "/home/crash" not in ctx  # nessun dato personale
 
     # motore API: anche il testo scritto a mano nella casella

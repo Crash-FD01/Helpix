@@ -30,15 +30,17 @@ def _win_dir(var: str, fallback: str) -> Path:
 
 
 def config_dir() -> Path:
-    """Impostazioni. Linux: ~/.config/helpix. Windows: %APPDATA%\\Helpix (segue l'utente nei domini)."""
-    if IS_WINDOWS:
+    """Impostazioni. Linux: ~/.config/helpix. Windows: %APPDATA%\\Helpix (segue l'utente nei domini).
+
+    Su Windows XDG_CONFIG_HOME, se impostata apposta, vale lo stesso (test, installazioni portatili)."""
+    if IS_WINDOWS and not os.environ.get("XDG_CONFIG_HOME"):
         return _win_dir("APPDATA", "AppData/Roaming")
     return _xdg("XDG_CONFIG_HOME", ".config") / APP_ID
 
 
 def data_dir() -> Path:
     """Dati, sessioni, screenshot, log. Linux: ~/.local/share/helpix. Windows: %LOCALAPPDATA%\\Helpix."""
-    if IS_WINDOWS:
+    if IS_WINDOWS and not os.environ.get("XDG_DATA_HOME"):
         return _win_dir("LOCALAPPDATA", "AppData/Local")
     return _xdg("XDG_DATA_HOME", ".local/share") / APP_ID
 

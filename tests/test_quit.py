@@ -66,6 +66,11 @@ def start_quick():
 
 
 def cleanup(*procs):
+    if sys.platform == "win32":
+        for p in procs:
+            if p.poll() is None:
+                subprocess.run(["taskkill", "/PID", str(p.pid), "/T", "/F"], capture_output=True)
+        return
     for p in procs:
         if p.poll() is None:
             os.killpg(p.pid, signal.SIGKILL)
@@ -111,6 +116,9 @@ def test_quick_window_does_not_resurrect_helpix():
 
 
 def test_old_quick_window_from_previous_version():
+    if sys.platform == "win32":  # la finestra rapida finta usa un socket Unix; su Windows non c'è una versione vecchia
+        print("  (solo Linux: saltato)")
+        return
     """Dopo un aggiornamento può restare in giro la finestra rapida della versione prima, che ignora «quit»
     e riapriva Helpix: la nuova Helpix la riconosce e la chiude."""
     log = os.path.join(_tmp, "old_quick.log")

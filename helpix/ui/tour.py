@@ -18,6 +18,7 @@ from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen, QRegion
 from PySide6.QtWidgets import (QCheckBox, QGraphicsDropShadowEffect, QHBoxLayout, QLabel, QPushButton,
                                QVBoxLayout, QWidget)
 
+from ..system import IS_WINDOWS
 from .. import theme
 from ..i18n import tr
 
@@ -73,6 +74,10 @@ def steps_for(win) -> list[Step]:
              tr("Un clic e raccolgo disco, memoria, rete, servizi in errore e gli ultimi errori del log. Prima di "
                 "incollare ti faccio vedere tutto: togli quello che non vuoi condividere.")),
         Step("command", None, tr("Comandi senza fatica"),
+             tr("Quando copi un comando proposto dall'IA, in basso compare la barra «Hai copiato un comando»: premi "
+                "Esegui e l'output torna nella chat da solo. Se il comando è di quelli pericolosi (Remove-Item "
+                "-Recurse, diskpart, reg delete…) te lo dico prima, e per i permessi di amministratore è Windows a "
+                "chiedertelo, mai io.") if IS_WINDOWS else
              tr("Quando copi un comando proposto dall'IA, in basso compare la barra «Hai copiato un comando»: premi "
                 "Esegui e l'output torna nella chat da solo. Se il comando è di quelli pericolosi (rm -r, dd, "
                 "mkfs…) te lo dico prima, e sudo chiede la password al sistema, mai a me.")),

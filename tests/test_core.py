@@ -36,6 +36,8 @@ def run(cmd, cwd, timeout=10, cancel_after=None):
 
 
 def test_analyze():
+    if sys.platform == "win32":  # bash e regole di Linux; su Windows: test_windows.py
+        return
     assert analyze("sudo dnf install htop").needs_root
     assert not analyze("echo sudoku").needs_root
     assert analyze("ls && sudo systemctl restart NetworkManager").needs_root
@@ -52,6 +54,8 @@ def test_analyze():
 
 
 def test_runner_cwd_and_rc():
+    if sys.platform == "win32":  # bash e regole di Linux; su Windows: test_windows.py
+        return
     d = tempfile.mkdtemp()
     os.mkdir(os.path.join(d, "sub dir"))
     res = run("cd 'sub dir' && echo ciao", d)
@@ -68,6 +72,8 @@ def test_runner_cwd_and_rc():
 
 
 def test_runner_timeout_cancel_background():
+    if sys.platform == "win32":  # bash e regole di Linux; su Windows: test_windows.py
+        return
     d = tempfile.mkdtemp()
     res = run("sleep 30", d, timeout=1)
     assert res.timed_out and res.rc != 0

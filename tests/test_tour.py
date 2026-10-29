@@ -136,7 +136,7 @@ def test_lock_closes_tour_without_marking_done():
         win.tour.close_tour(mark_done=False)
     else:
         security.POLICY_FILE = Path(_tmp) / "p.policy"
-        security.POLICY_FILE.write_text("<policyconfig/>")
+        security.POLICY_FILE.write_text("<policyconfig/>", encoding="utf-8")
         settings.set("lock_enabled", True)
         win.lock()
     assert win.tour is None and not settings.get("tour_done")

@@ -27,7 +27,8 @@ from PySide6.QtGui import QColor, QImage  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 app = QApplication.instance() or QApplication([])
-faulthandler.register(signal.SIGUSR1)
+if hasattr(faulthandler, "register"):  # non su Windows
+    faulthandler.register(signal.SIGUSR1)
 from helpix.config import ensure_dirs  # noqa: E402
 from helpix.ui.web_panel import WebPanel  # noqa: E402
 

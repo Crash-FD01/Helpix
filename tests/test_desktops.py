@@ -6,6 +6,11 @@ Va lanciato dentro dbus-run-session (per Xfce parte il vero xfconfd). Gli schemi
 devono essere installati (pacchetti gnome-settings-daemon-common, cinnamon-desktop-data,
 mate-control-center-common): se mancano, quel desktop viene saltato.
 """
+import sys as _sys
+if _sys.platform == "win32":
+    print("saltato su Windows: scorciatoie e area di notifica dei desktop Linux")
+    raise SystemExit(0)
+
 import os
 import shutil
 import subprocess
@@ -94,16 +99,16 @@ def test_xfce():
 def test_cosmic():
     path = ss.cosmic_file()
     assert ss.install("cosmic")
-    text = path.read_text()
+    text = path.read_text(encoding="utf-8")
     assert text.startswith("{") and 'modifiers: [Ctrl, Alt], key: "h"' in text and "--quick" in text, text
     # file già pieno di scorciatoie dell'utente: le sue restano, la nostra si aggiunge una volta sola
-    path.write_text('{\n    (modifiers: [Super], key: "t"): Spawn("cosmic-term")\n}\n')
+    path.write_text('{\n    (modifiers: [Super], key: "t"): Spawn("cosmic-term")\n}\n', encoding="utf-8")
     assert ss.install("cosmic") and ss.install("cosmic")
-    text = path.read_text()
+    text = path.read_text(encoding="utf-8")
     assert 'Spawn("cosmic-term"),' in text and text.count("--quick") == 1, text
     assert text.strip().endswith("}") and (path.parent / "custom.helpix-bak").exists()
-    path.write_text("formato che non conosco")
-    assert not ss.install("cosmic") and path.read_text() == "formato che non conosco", "non tocca file strani"
+    path.write_text("formato che non conosco", encoding="utf-8")
+    assert not ss.install("cosmic") and path.read_text(encoding="utf-8") == "formato che non conosco", "non tocca file strani"
 
 
 def test_manual_desktops():
@@ -126,12 +131,12 @@ def test_remove_all():
     xfce = bool(shutil.which("xfconf-query") and os.environ.get("DBUS_SESSION_BUS_ADDRESS"))
     if xfce:
         ss.install("xfce")
-    ss.cosmic_file().write_text('{\n    (modifiers: [Super], key: "t"): Spawn("cosmic-term"),\n}\n')
+    ss.cosmic_file().write_text('{\n    (modifiers: [Super], key: "t"): Spawn("cosmic-term"),\n}\n', encoding="utf-8")
     ss.install("cosmic")
     ss.install_kde()
     done = ss.remove_all()
     assert {"cosmic", "kde"} <= set(done), done
-    text = ss.cosmic_file().read_text()
+    text = ss.cosmic_file().read_text(encoding="utf-8")
     assert "--quick" not in text and 'Spawn("cosmic-term")' in text and text.strip().endswith("}"), text
     assert not (ss._apps_dir() / ss.DESKTOP_ID).exists()
     assert not ss.cosmic_file().with_name("custom.helpix-bak").exists(), "nessuna traccia di Helpix"

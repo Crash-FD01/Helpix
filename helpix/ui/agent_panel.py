@@ -16,6 +16,7 @@ from PySide6.QtCore import Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QStackedWidget, QVBoxLayout, QWidget
 
+from ..system import IS_WINDOWS
 from .. import agents, site_icons, theme
 from ..i18n import tr
 from .controls import IconButton
@@ -86,7 +87,7 @@ class _InstallPage(QWidget):
                              "comandi (chiedendoti conferma) e si collega con il tuo account nel browser. {plan}.\n"
                              "Helpix lo installa per il tuo utente con il comando ufficiale:").format(
             name=a["label"], who=a["who"], plan=a["plan"]))
-        self.cmd.setText(a["install"])
+        self.cmd.setText(agents.install_command(key))
         self._url = a["docs"]
 
 
@@ -205,6 +206,9 @@ class AgentPanel(QWidget):
         self.term.pty.finished.connect(self._exited)
         self.term.clear()
         self.stack.setCurrentWidget(self.term)
+        if IS_WINDOWS:
+            self._install_windows()
+            return
         from .. import sysdeps
         steps = []
         missing = sysdeps.tools_missing(a.get("needs", []), path=agents.search_path())
@@ -225,6 +229,31 @@ class AgentPanel(QWidget):
         self._update_status()
         script = " && ".join([*steps, a["install"]]) + "; rc=$?; echo; exit $rc"
         self.term.pty.start(["bash", "-lc", script], os.path.expanduser("~"), {"PATH": agents.search_path()})
+
+    def _install_windows(self):
+        """Windows: installazione in PowerShell con il comando ufficiale; Node.js (per Gemini CLI) con winget."""
+        import shutil
+        from ..winshell import powershell
+        a = agents.AGENTS[self.key]
+        path = agents.search_path()
+        steps = ["$ErrorActionPreference = 'Stop'", "$ProgressPreference = 'SilentlyContinue'"]
+        if "npm" in agents.needs(self.key) and not shutil.which("npm", path=path):
+            self.term.write_local(tr("Prima installo Node.js con winget (Windows può chiedere il permesso di "
+                                     "amministratore):\n> winget install OpenJS.NodeJS.LTS\n\n"))
+            steps += ["winget install -e --id OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements",
+                      "$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + "
+                      "[Environment]::GetEnvironmentVariable('Path','User')"]
+        if agents.precheck(self.key):
+            steps.append(agents.precheck(self.key))
+        cmd = agents.install_command(self.key)
+        self.term.write_local(tr("Installo {name} con il comando ufficiale:\n> {cmd}\n\n").format(
+            name=a["label"], cmd=cmd))
+        steps.append(cmd)
+        self.state = "installing"
+        self._update_status()
+        script = "\n".join(steps) + "\nexit 0"
+        self.term.pty.start([powershell(), "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
+                            os.path.expanduser("~"), {"PATH": path})
 
     def _exited(self, rc: int):
         if self.state == "installing":

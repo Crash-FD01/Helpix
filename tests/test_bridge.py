@@ -1,6 +1,11 @@
 # SPDX-FileCopyrightText: 2026 Crash
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Test del canale estensione ↔ Helpix (python tests/test_bridge.py)."""
+import sys as _sys
+if _sys.platform == "win32":
+    print("saltato su Windows: l'estensione del browser (messa da parte) gira solo su Linux")
+    raise SystemExit(0)
+
 import io
 import json
 import os

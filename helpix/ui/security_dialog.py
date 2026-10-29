@@ -7,6 +7,7 @@ from PySide6.QtCore import QProcess, Qt, Signal
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QMessageBox,
                                QPushButton, QVBoxLayout, QWidget)
 
+from ..system import IS_WINDOWS
 from .. import security
 from ..i18n import tr
 from ..icons import icon
@@ -148,10 +149,14 @@ class SecurityDialog(QDialog):
         b = QVBoxLayout(box)
         b.setContentsMargins(16, 14, 16, 14)
         b.setSpacing(8)
-        self.cb_lock = QCheckBox(tr("Blocca Helpix con la password del sistema o l'impronta"))
+        self.cb_lock = QCheckBox(tr("Blocca Helpix con Windows Hello (PIN, impronta o volto)") if IS_WINDOWS else
+                                 tr("Blocca Helpix con la password del sistema o l'impronta"))
         self.cb_lock.setChecked(bool(settings.get("lock_enabled", False)))
         b.addWidget(self.cb_lock)
-        b.addWidget(_wrap(tr("All'avvio e dopo un periodo in cui non lo usi, Helpix si blocca: per riaprirlo usi la "
+        b.addWidget(_wrap(tr("All'avvio e dopo un periodo in cui non lo usi, Helpix si blocca: per riaprirlo confermi "
+                             "con Windows Hello (PIN, impronta o volto), lo stesso dialogo che Windows usa per "
+                             "confermare la tua identità. Anche la finestra rapida resta bloccata.") if IS_WINDOWS else
+                          tr("All'avvio e dopo un periodo in cui non lo usi, Helpix si blocca: per riaprirlo usi la "
                              "password del tuo utente Linux o l'impronta (se è configurata nel sistema), con il "
                              "dialogo di sistema. Anche la finestra rapida resta bloccata.")))
         row = QHBoxLayout()
@@ -182,7 +187,11 @@ class SecurityDialog(QDialog):
 
         v.addWidget(_wrap(tr("Da sapere: gli accessi a ChatGPT, Claude e agli altri servizi li conserva il browser "
                              "integrato nella tua cartella utente. Il blocco impedisce di usarli da Helpix; per "
-                             "proteggere i file quando il PC è spento serve la cifratura del disco (LUKS).")))
+                             "proteggere i file quando il PC è spento serve la cifratura del disco (LUKS).")
+                          if not IS_WINDOWS else
+                          tr("Da sapere: gli accessi a ChatGPT, Claude e agli altri servizi li conserva il browser "
+                             "integrato nella tua cartella utente. Il blocco impedisce di usarli da Helpix; per "
+                             "proteggere i file quando il PC è spento serve la cifratura del disco (BitLocker).")))
         buttons = QHBoxLayout()
         buttons.addStretch(1)
         cancel = QPushButton(tr("Annulla"))
@@ -199,7 +208,13 @@ class SecurityDialog(QDialog):
     def _update(self, *_):
         on = self.cb_lock.isChecked()
         self.auto.setEnabled(on)
-        if not security.unlock_available():
+        if IS_WINDOWS and not security.unlock_available():
+            self.lock_status.setText(
+                tr("Windows Hello non è configurato: imposta un PIN (o impronta o volto) in Impostazioni › Account › "
+                   "Opzioni di accesso, poi riapri questa finestra.") if security.hello_status() == "not-configured"
+                else tr("Windows Hello non è disponibile su questo PC: il blocco non si può usare."))
+            self.cb_lock.setEnabled(False)
+        elif not security.unlock_available():
             self.lock_status.setText(tr("polkit (pkcheck) non è installato: il blocco non è disponibile."))
             self.cb_lock.setEnabled(False)
         elif on and not security.policy_installed():

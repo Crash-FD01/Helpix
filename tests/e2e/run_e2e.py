@@ -86,7 +86,7 @@ def main():
         "allowed_origins": [f"chrome-extension://{EXT_ID}/"]}))
 
     app = subprocess.Popen([sys.executable, str(HERE / "fake_app.py"), str(log_file)], env=env)
-    events = lambda: json.loads(log_file.read_text()) if log_file.exists() else []  # noqa: E731
+    events = lambda: json.loads(log_file.read_text(encoding="utf-8")) if log_file.exists() else []  # noqa: E731
     wait(lambda: any(e["kind"] == "started" for e in events()), what="avvio app finta")
 
     port = serve_fake_sites(tmp)

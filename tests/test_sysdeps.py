@@ -1,6 +1,11 @@
 # SPDX-FileCopyrightText: 2026 Crash
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Dipendenze di sistema (python tests/test_sysdeps.py)."""
+import sys as _sys
+if _sys.platform == "win32":
+    print("saltato su Windows: dipendenze di sistema dei pacchetti Linux (su Windows Qt è incluso)")
+    raise SystemExit(0)
+
 import os
 import sys
 import tempfile

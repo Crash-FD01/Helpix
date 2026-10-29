@@ -423,7 +423,8 @@ class MainWindow(QMainWindow):
         menu = theme.prepare_menu(QMenu(self))
         menu.addAction(icon("key", C["text"], 16), tr("Chiavi API e modelli…"), self.open_settings)
         menu.addAction(icon("lock", C["text"], 16), tr("Sicurezza…"), self.open_security)
-        menu.addAction(icon("download", C["text"], 16), tr("Dipendenze di sistema…"), self.check_system_deps)
+        if not IS_WINDOWS:  # su Windows Qt è incluso nel programma: niente pacchetti di sistema da installare
+            menu.addAction(icon("download", C["text"], 16), tr("Dipendenze di sistema…"), self.check_system_deps)
         menu.addAction(icon("info", C["text"], 16), tr("Guida rapida (giro guidato)"), self.start_tour)
         menu.addAction(icon("star", C["text"], 16), tr("Schermata iniziale…"), self.open_start_screen)
         self.act_start_screen = menu.addAction(tr("Mostra la schermata iniziale all'avvio"))
@@ -1891,6 +1892,8 @@ class MainWindow(QMainWindow):
 
     def _gnome_tray_hint(self):
         """GNOME senza area di notifica: una volta sola propone di installare/attivare AppIndicator."""
+        if IS_WINDOWS:
+            return
         from .. import sysdeps
         if self.settings.get("gnome_tray_hint") or sysdeps.gnome_tray_status() not in ("install", "enable"):
             return

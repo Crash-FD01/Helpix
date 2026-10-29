@@ -17,6 +17,7 @@ from pathlib import Path
 from .config import DATA_DIR
 from .i18n import current, tr
 from .prompts import system_info
+from .system import IS_WINDOWS
 from .task import SUMMARY_MARKER
 
 WORKSPACE = DATA_DIR / "agent"
@@ -30,6 +31,8 @@ AGENTS: dict[str, dict] = {
         "install": "curl -fsSL https://claude.ai/install.sh | bash",
         "needs": ["curl", "bash"],  # se mancano, li installa prima il gestore pacchetti (sysdeps)
         "docs": "https://code.claude.com/docs/en/setup",
+        "install_win": "irm https://claude.ai/install.ps1 | iex",  # in %USERPROFILE%\\.local\\bin, senza amministratore
+        "needs_win": [],
         "prompt_args": lambda p: [p],
         # modelli (alias ufficiali) ed effort: --model / --effort all'avvio, /model e /effort durante la sessione
         "models": ["default", "opus", "sonnet", "haiku", "best"],
@@ -45,6 +48,8 @@ AGENTS: dict[str, dict] = {
         "install": "curl -fsSL https://chatgpt.com/codex/install.sh | sh",
         "needs": ["curl"],
         "docs": "https://github.com/openai/codex",
+        "install_win": "irm https://chatgpt.com/codex/install.ps1 | iex",
+        "needs_win": [],
         "prompt_args": lambda p: [p],
         "models": ["default", "gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex"],
         "efforts": ["minimal", "low", "medium", "high", "xhigh"],
@@ -61,6 +66,10 @@ AGENTS: dict[str, dict] = {
                     "echo 'Attenzione: Gemini CLI richiede Node.js 20 o superiore; questa distro ne ha uno più "
                     "vecchio (aggiornalo, per esempio da nodejs.org o con il modulo nodejs:20).'",
         "docs": "https://github.com/google-gemini/gemini-cli",
+        "install_win": "npm install -g @google/gemini-cli",
+        "needs_win": ["npm"],  # Node.js: se manca lo installa winget (OpenJS.NodeJS.LTS)
+        "precheck_win": "if ([int](node -p 'process.versions.node.split(\".\")[0]') -lt 20) { Write-Warning "
+                        "'Gemini CLI richiede Node.js 20 o superiore: aggiornalo con winget upgrade OpenJS.NodeJS.LTS' }",
         "prompt_args": lambda p: ["-i", p],
         "models": ["default", "gemini-2.5-pro", "gemini-2.5-flash"],
         "efforts": [],
@@ -70,12 +79,50 @@ AGENTS: dict[str, dict] = {
 
 # dove finiscono di solito i programmi installati senza root
 _EXTRA_PATHS = ["~/.local/bin", "~/.npm-global/bin", "~/bin", "~/.local/share/pnpm", "/usr/local/bin"]
+_EXTRA_PATHS_WIN = ["~/.local/bin", "%APPDATA%/npm", "%LOCALAPPDATA%/Programs/nodejs", "%ProgramFiles%/nodejs"]
+
+
+def _registry_path() -> list[str]:
+    """PATH di utente e sistema letti dal registro: dopo un'installazione Windows aggiorna solo quelli, e Helpix
+    (già aperto) li vede solo così, senza riavviarsi."""
+    try:
+        import winreg
+    except ImportError:
+        return []
+    out: list[str] = []
+    for root, key in ((winreg.HKEY_CURRENT_USER, "Environment"),
+                      (winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment")):
+        try:
+            with winreg.OpenKey(root, key) as k:
+                value, _ = winreg.QueryValueEx(k, "Path")
+            out += [os.path.expandvars(p) for p in str(value).split(";") if p]
+        except OSError:
+            continue
+    return out
 
 
 def search_path() -> str:
-    extra = [os.path.expanduser(p) for p in _EXTRA_PATHS]
     parts = os.environ.get("PATH", "").split(os.pathsep)
-    return os.pathsep.join(dict.fromkeys(parts + extra))
+    if IS_WINDOWS:
+        extra = [os.path.expandvars(os.path.expanduser(p)) for p in _EXTRA_PATHS_WIN] + _registry_path()
+    else:
+        extra = [os.path.expanduser(p) for p in _EXTRA_PATHS]
+    return os.pathsep.join(dict.fromkeys(p for p in parts + extra if p))
+
+
+def install_command(key: str) -> str:
+    a = AGENTS[key]
+    return a["install_win"] if IS_WINDOWS else a["install"]
+
+
+def needs(key: str) -> list[str]:
+    a = AGENTS[key]
+    return list(a.get("needs_win", []) if IS_WINDOWS else a.get("needs", []))
+
+
+def precheck(key: str) -> str | None:
+    a = AGENTS[key]
+    return a.get("precheck_win") if IS_WINDOWS else a.get("precheck")
 
 
 def find_cli(key: str) -> str | None:
@@ -91,13 +138,11 @@ def workspace() -> Path:
 _TEMPLATE = {
     "it": """# Helpix
 
-Sei l'assistente di Helpix: aiuti l'utente a risolvere problemi o a portare avanti lavori sul suo PC Linux.
+Sei l'assistente di Helpix: aiuti l'utente a risolvere problemi o a portare avanti lavori sul suo PC.
 L'utente potrebbe non essere esperto: scrivi in italiano, in modo semplice e con passi chiari.
 
 ## Il PC
-- Sistema: {distro} ({arch}), kernel {kernel}
-- Desktop: {desktop} (sessione {session})
-- Gestore pacchetti: {pkg}; altri formati: {extra}
+{pc}
 
 ## Regole
 - Prima di eseguire comandi che modificano il sistema (installazioni, file di configurazione, servizi, sudo,
@@ -121,13 +166,11 @@ Prossimi passi:
 """,
     "en": """# Helpix
 
-You are Helpix's assistant: you help the user fix problems or carry on work on their Linux PC.
+You are Helpix's assistant: you help the user fix problems or carry on work on their PC.
 The user may not be an expert: write in English, simply, with clear steps.
 
 ## The PC
-- System: {distro} ({arch}), kernel {kernel}
-- Desktop: {desktop} ({session} session)
-- Package manager: {pkg}; other formats: {extra}
+{pc}
 
 ## Rules
 - Before running commands that change the system (installs, configuration files, services, sudo, deletions),
@@ -152,11 +195,22 @@ Next steps:
 }
 
 
+def _pc_lines() -> str:
+    info, en = system_info(), current() == "en"
+    if IS_WINDOWS:
+        return ("- System: {distro} ({arch})\n- Shell: {shell}\n- Package managers: {pkg}" if en else
+                "- Sistema: {distro} ({arch})\n- Shell: {shell}\n- Gestori di pacchetti: {pkg}").format(**info)
+    return ("- System: {distro} ({arch}), kernel {kernel}\n- Desktop: {desktop} ({session} session)\n"
+            "- Package manager: {pkg}; other formats: {extra}" if en else
+            "- Sistema: {distro} ({arch}), kernel {kernel}\n- Desktop: {desktop} (sessione {session})\n"
+            "- Gestore pacchetti: {pkg}; altri formati: {extra}").format(**info)
+
+
 def write_context(key: str, task_text: str | None = None) -> Path:
     """Prepara la cartella di lavoro: istruzioni per l'agente ed eventuale task da continuare."""
     ws = workspace()
     text = _TEMPLATE.get(current(), _TEMPLATE["it"]).format(
-        task=TASK_FILE, summary=SUMMARY_FILE, marker=SUMMARY_MARKER, **system_info())
+        task=TASK_FILE, summary=SUMMARY_FILE, marker=SUMMARY_MARKER, pc=_pc_lines())
     from . import privacy
     text = privacy.filter_paste(text, notify=False)  # scudo acceso: l'agente non riceve utente e nome del PC
     for agent in AGENTS.values():  # tutti e tre: si può cambiare agente nella stessa cartella

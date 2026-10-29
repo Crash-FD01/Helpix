@@ -133,6 +133,56 @@ def test_run_commands_on_windows():
         assert r.rc == 0 and "elevato" in r.output and "True" in r.output, (r.rc, r.output)
 
 
+def test_conpty_terminal_on_windows():
+    if not WINDOWS:
+        print("  (solo su Windows: saltato)")
+        return
+    from PySide6.QtCore import QCoreApplication, QEventLoop, QTimer
+    from helpix.pty_process import PtyProcess
+    app = QCoreApplication.instance() or QCoreApplication([])
+    pty = PtyProcess()
+    out, codes = [], []
+    loop = QEventLoop()
+    pty.output.connect(out.append)
+    pty.finished.connect(lambda rc: (codes.append(rc), loop.quit()))
+    QTimer.singleShot(30000, loop.quit)
+    pty.start(["cmd", "/c", "echo helpix-conpty & exit 4"], os.path.expanduser("~"))
+    pty.resize(120, 40)
+    loop.exec()
+    text = "".join(out)
+    assert "helpix-conpty" in text, text
+    assert codes == [4], codes
+    del app
+
+
+def test_diagnostics_on_windows():
+    if not WINDOWS:
+        print("  (solo su Windows: saltato)")
+        return
+    from helpix import diagnostics
+    sections = diagnostics._windows_sections()
+    titles = [t for t, _c, _o in sections]
+    assert len(sections) == len(diagnostics.WINDOWS_CHECKS), titles
+    body = dict((t, o) for t, _c, o in sections)
+    first = diagnostics.WINDOWS_CHECKS[0][0]
+    assert "Windows" in body[first] and "RAM:" in body[first], body[first]
+    assert "GB free of" in body[diagnostics.WINDOWS_CHECKS[1][0]]
+    text = diagnostics.collect()
+    assert "PowerShell" in text and len(text) > 300, text[:500]
+    print("  diagnosi:", len(text), "caratteri")
+
+
+def test_windows_hello_on_windows():
+    if not WINDOWS:
+        print("  (solo su Windows: saltato)")
+        return
+    from helpix import security
+    status = security.hello_status()  # sulle macchine di GitHub nessun PIN: «not-configured» o «unavailable»
+    assert status in ("available", "not-configured", "unavailable"), status
+    import winrt.windows.security.credentials.ui  # noqa: F401 - le dipendenze di Windows sono installate
+    print("  Windows Hello:", status)
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

@@ -80,7 +80,7 @@ def test_agents_flow():
     assert start["name"] == "claude" and start["tty"] and start["cols"] > 40 and start["rows"] > 10, start
     assert os.path.realpath(start["cwd"]) == os.path.realpath(str(agents.WORKSPACE))
     assert {"CLAUDE.md", "AGENTS.md", "GEMINI.md"} <= set(start["context"])
-    assert "HELPIX-SUMMARY.md" in (agents.WORKSPACE / "CLAUDE.md").read_text()
+    assert "HELPIX-SUMMARY.md" in (agents.WORKSPACE / "CLAUDE.md").read_text(encoding="utf-8")
     assert win.engine == "agent" and win.picker.name.text() == "Claude Code"
     assert not win._sc_new.isEnabled(), "Ctrl+N deve arrivare al terminale"
 
@@ -134,7 +134,7 @@ def test_agents_flow():
     start2 = until(lambda: events("start")[n_before:], what="avvio di codex")[0]
     assert start2["name"] == "codex" and "HELPIX-TASK.md" in start2["argv"][-1], start2
     assert start2["argv"][:4] == ["--model", "gpt-5.4-mini", "-c", 'model_reasoning_effort="low"'], start2
-    task = (agents.WORKSPACE / "HELPIX-TASK.md").read_text()
+    task = (agents.WORKSPACE / "HELPIX-TASK.md").read_text(encoding="utf-8")
     assert "TESTO DEL TASK DA CONTINUARE" in task and "screenshots/errore" in task
     assert win.picker.name.text() == "Codex"
 

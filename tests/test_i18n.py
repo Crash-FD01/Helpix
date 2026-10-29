@@ -23,7 +23,7 @@ def test_placeholders_match():
 def test_every_tr_call_has_translation():
     missing = []
     for f in (ROOT / "helpix").rglob("*.py"):
-        for node in ast.walk(ast.parse(f.read_text())):
+        for node in ast.walk(ast.parse(f.read_text(encoding="utf-8"))):
             if isinstance(node, ast.Call) and getattr(node.func, "id", "") == "tr" and node.args \
                     and isinstance(node.args[0], ast.Constant) and node.args[0].value not in i18n.EN:
                 missing.append((f.name, node.lineno, node.args[0].value[:60]))

@@ -54,7 +54,7 @@ def test_quick_shortcut_hides_and_debounces():
 def test_kde_launcher():
     from helpix import shortcut_setup as ss
     path = ss.install_kde()
-    text = path.read_text()
+    text = path.read_text(encoding="utf-8")
     assert "X-KDE-Shortcuts=Ctrl+Alt+H" in text and "--quick" in text and path.name == "helpix-quick.desktop"
 
 

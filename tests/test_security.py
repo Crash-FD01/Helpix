@@ -79,7 +79,8 @@ def test_encrypted_export_roundtrip():
     plain = export_task(s, os.path.join(_tmp, "chiaro.helpix"))
     enc = export_task(s, os.path.join(_tmp, "cifrato.helpix"), password="parola-segreta")
     assert not security.is_encrypted_file(plain) and security.is_encrypted_file(enc)
-    assert oct(os.stat(enc).st_mode & 0o777) == "0o600"
+    if sys.platform != "win32":  # su Windows i permessi sono quelli (già privati) della cartella utente
+        assert oct(os.stat(enc).st_mode & 0o777) == "0o600"
     assert b"backup" not in open(enc, "rb").read()
     try:
         import_task(enc)
@@ -100,6 +101,8 @@ def test_encrypted_export_roundtrip():
 
 
 def test_lock_and_unlock():
+    if sys.platform == "win32":  # nei test lo sblocco è simulato: Windows Hello non serve
+        security.unlock_available = lambda: True
     if not security.unlock_available():
         print("  (pkcheck assente: test del blocco saltato)")
         return
@@ -117,7 +120,7 @@ def test_lock_and_unlock():
     pump(100)
 
     security.POLICY_FILE = Path(_tmp) / "helpix.policy"
-    security.POLICY_FILE.write_text("<policyconfig/>")
+    security.POLICY_FILE.write_text("<policyconfig/>", encoding="utf-8")
     win = MainWindow(settings, SecretStore())
     win.resize(900, 600)
     win.show()
@@ -133,11 +136,13 @@ def test_lock_and_unlock():
     assert replies[-1]["type"] == "locked"
 
     # sblocco rifiutato, poi riuscito
-    security.SystemUnlock.command = ["false"]
+    no, yes = ([sys.executable, "-c", "raise SystemExit(1)"], [sys.executable, "-c", "raise SystemExit(0)"]) \
+        if sys.platform == "win32" else (["false"], ["true"])
+    security.SystemUnlock.command = no
     win.unlock()
     until(lambda: not win._unlocker.busy, what="esito pkcheck")
     assert win.locked and win._overlay.isVisible()
-    security.SystemUnlock.command = ["true"]
+    security.SystemUnlock.command = yes
     results = []
     win._on_instance({"type": "unlock"}, object())
     win.unlock(results.append)

@@ -11,9 +11,17 @@ from . import __version__
 
 
 def _system_prefers_dark() -> bool:
-    """Preferenza del desktop prima che Qt sia avviato (GNOME e derivati)."""
+    """Preferenza del desktop prima che Qt sia avviato (GNOME e derivati; su Windows il tema delle app)."""
     import shutil
     import subprocess
+    if sys.platform == "win32":
+        try:
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                                r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize") as k:
+                return winreg.QueryValueEx(k, "AppsUseLightTheme")[0] == 0
+        except OSError:
+            return False
     if shutil.which("gsettings"):
         try:
             out = subprocess.run(["gsettings", "get", "org.gnome.desktop.interface", "color-scheme"],
