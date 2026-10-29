@@ -42,6 +42,10 @@ mode = sys.argv[1]
 if mode == "quit":
     QTimer.singleShot(int(sys.argv[2]), w.quit_app)  # «Esci da Helpix» dal menu dell'icona
 app.exec()
+sys.stdout.flush()
+if sys.platform == "win32":  # come tests/hardexit.py: niente routine di chiusura delle DLL
+    import ctypes
+    ctypes.windll.kernel32.TerminateProcess(ctypes.windll.kernel32.GetCurrentProcess(), 0)
 os._exit(0)
 """
 

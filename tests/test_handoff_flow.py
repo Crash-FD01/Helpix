@@ -13,6 +13,7 @@ import threading
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import hardexit  # noqa: E402 - uscita immediata anche su Windows
 _tmp = tempfile.mkdtemp()
 os.environ["XDG_CONFIG_HOME"] = os.path.join(_tmp, "config")
 os.environ["XDG_DATA_HOME"] = os.path.join(_tmp, "data")
@@ -172,15 +173,15 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         globals()[sys.argv[1]]()
         print("ok", sys.argv[1], flush=True)
-        os._exit(0)
+        hardexit.now(0)
     failed = False
     for name in names:
         r = subprocess.run([sys.executable, os.path.abspath(__file__), name], capture_output=True, text=True,
                            encoding="utf-8", errors="replace", timeout=240)
         ok = r.returncode == 0 and f"ok {name}" in r.stdout
-        print(("ok " if ok else "FALLITO ") + name, flush=True)
+        print(("ok " if ok else f"FALLITO (codice {r.returncode}) ") + name, flush=True)
         if not ok:
             failed = True
             print("\n".join((r.stdout + r.stderr).splitlines()[-25:]), flush=True)
     sys.stdout.flush()
-    os._exit(1 if failed else 0)
+    hardexit.now(1 if failed else 0)

@@ -7,6 +7,7 @@ import tempfile
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import hardexit  # noqa: E402 - uscita immediata anche su Windows
 _tmp = tempfile.mkdtemp()
 os.environ["XDG_CONFIG_HOME"] = os.path.join(_tmp, "config")
 os.environ["XDG_DATA_HOME"] = os.path.join(_tmp, "data")
@@ -244,4 +245,4 @@ if __name__ == "__main__":
         if name.startswith("test_"):
             fn()
             print("ok", name, flush=True)
-    os._exit(0)
+    hardexit.now(0)
