@@ -39,6 +39,7 @@ jobs:
   build:
     name: Pacchetti ${{ matrix.arch }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - arch: x86_64
@@ -66,9 +67,10 @@ jobs:
           sudo apt-get install -y -q rpm
           python -m venv /tmp/probe
           /tmp/probe/bin/pip install -q .
-          /tmp/probe/bin/python -m helpix.sysdeps install --yes
+          .github/scripts/annotate.sh "Dipendenze di sistema (${{ matrix.arch }})" \
+            /tmp/probe/bin/python -m helpix.sysdeps install --yes
       - name: Costruisci
-        run: packaging/build-packages.sh ${{ matrix.arch }}
+        run: .github/scripts/annotate.sh "Build (${{ matrix.arch }})" packaging/build-packages.sh ${{ matrix.arch }}
       - name: Prova il pacchetto installato
         run: |
           sudo apt-get install -y -q ./dist/packages/helpix_*.deb
