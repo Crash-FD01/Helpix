@@ -113,7 +113,8 @@ def main(argv: list[str] | None = None) -> int:
     from .i18n import set_language
     set_language(settings.get("language", "auto"))
     _web_color_scheme(settings.get("theme", "auto"))
-    if hasattr(os, "geteuid") and os.geteuid() == 0:
+    from .system import IS_LINUX, is_admin
+    if IS_LINUX and is_admin():
         # Chromium rifiuta di girare come root con la sandbox attiva
         os.environ.setdefault("QTWEBENGINE_DISABLE_SANDBOX", "1")
     try:  # QtWebEngine va importato prima di creare la QApplication

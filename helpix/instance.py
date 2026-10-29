@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Collegamento con la finestra di Helpix già aperta (un'istanza sola).
 
-L'app ascolta su un socket locale accessibile solo all'utente. Lo usano:
+L'app ascolta su un canale locale accessibile solo all'utente: un socket Unix su Linux, una named pipe su
+Windows (QLocalServer crea l'una o l'altra). Lo usano:
 - `helpix` lanciato di nuovo: porta in primo piano la finestra esistente;
 - `helpix --quick`: la finestra rapida manda testo e richieste di screenshot all'app.
 Protocollo: una riga JSON per messaggio, in entrambe le direzioni.
@@ -12,18 +13,109 @@ from __future__ import annotations
 import json
 import os
 import socket
+import time
 from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 
+from .system import IS_WINDOWS, channel
+
 
 def socket_path() -> str:
-    from .bridge_host import runtime_base
-    return os.path.join(runtime_base(), "helpix", "app.sock")
+    return channel("app")
 
 
+# ------------------------------------------------------------------ Windows: client delle named pipe
+class _Pipe:
+    r"""Client minimo di una named pipe (\\.\pipe\<nome>) con timeout, tramite l'API di Windows."""
+
+    def __init__(self, name: str, timeout: float):
+        import ctypes
+        from ctypes import wintypes
+        self._k = k = ctypes.WinDLL("kernel32", use_last_error=True)
+        k.CreateFileW.restype = wintypes.HANDLE
+        k.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID,
+                                  wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
+        k.WaitNamedPipeW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD]
+        k.WriteFile.argtypes = [wintypes.HANDLE, wintypes.LPCVOID, wintypes.DWORD,
+                                ctypes.POINTER(wintypes.DWORD), wintypes.LPVOID]
+        k.ReadFile.argtypes = [wintypes.HANDLE, wintypes.LPVOID, wintypes.DWORD,
+                               ctypes.POINTER(wintypes.DWORD), wintypes.LPVOID]
+        k.PeekNamedPipe.argtypes = [wintypes.HANDLE, wintypes.LPVOID, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD),
+                                    ctypes.POINTER(wintypes.DWORD), ctypes.POINTER(wintypes.DWORD)]
+        k.GetNamedPipeServerProcessId.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.ULONG)]
+        k.CloseHandle.argtypes = [wintypes.HANDLE]
+        self._ct, self._wt = ctypes, wintypes
+        path = name if name.startswith("\\\\") else "\\\\.\\pipe\\" + name
+        deadline = time.monotonic() + timeout
+        invalid = wintypes.HANDLE(-1).value
+        while True:
+            h = k.CreateFileW(path, 0x80000000 | 0x40000000, 0, None, 3, 0, None)  # lettura+scrittura, OPEN_EXISTING
+            if h and h != invalid:
+                self.handle = h
+                return
+            err = ctypes.get_last_error()
+            left = deadline - time.monotonic()
+            if err != 231 or left <= 0:  # 231: tutte le istanze occupate, si può aspettare; altro: non c'è nessuno
+                raise OSError(err, "named pipe non disponibile")
+            k.WaitNamedPipeW(path, max(1, int(left * 1000)))
+
+    def send(self, data: bytes) -> None:
+        done = self._wt.DWORD(0)
+        view = self._ct.create_string_buffer(data, len(data))
+        if not self._k.WriteFile(self.handle, view, len(data), self._ct.byref(done), None) or done.value != len(data):
+            raise OSError(self._ct.get_last_error(), "scrittura sulla named pipe non riuscita")
+
+    def read_line(self, timeout: float) -> bytes:
+        buf, deadline = b"", time.monotonic() + timeout
+        avail = self._wt.DWORD(0)
+        while b"\n" not in buf:
+            if not self._k.PeekNamedPipe(self.handle, None, 0, None, self._ct.byref(avail), None):
+                break  # chiusa dall'altra parte
+            if avail.value:
+                chunk = self._ct.create_string_buffer(min(avail.value, 65536))
+                got = self._wt.DWORD(0)
+                if not self._k.ReadFile(self.handle, chunk, len(chunk), self._ct.byref(got), None):
+                    break
+                buf += chunk.raw[:got.value]
+                continue
+            if time.monotonic() >= deadline:
+                break
+            time.sleep(0.01)
+        return buf
+
+    def server_pid(self) -> int | None:
+        pid = self._wt.ULONG(0)
+        return pid.value if self._k.GetNamedPipeServerProcessId(self.handle, self._ct.byref(pid)) and pid.value else None
+
+    def close(self) -> None:
+        self._k.CloseHandle(self.handle)
+
+
+def _win_exchange(msg: dict | None, path: str, timeout: float, want_reply: bool) -> dict | bool | None:
+    try:
+        pipe = _Pipe(path, timeout)
+    except OSError:
+        return None
+    try:
+        if msg is not None:
+            pipe.send((json.dumps(msg) + "\n").encode("utf-8"))
+        if not want_reply:
+            return True
+        line = pipe.read_line(timeout).split(b"\n", 1)[0]
+        reply = json.loads(line.decode("utf-8")) if line.strip() else None
+        return reply if isinstance(reply, dict) else None
+    except (OSError, ValueError):
+        return None
+    finally:
+        pipe.close()
+
+
+# ------------------------------------------------------------------ client
 def is_running(path: str | None = None) -> bool:
+    if IS_WINDOWS:
+        return _win_exchange(None, path or socket_path(), 0.5, False) is True
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     s.settimeout(0.5)
     try:
@@ -37,6 +129,8 @@ def is_running(path: str | None = None) -> bool:
 
 def send_once(msg: dict, path: str | None = None) -> bool:
     """Invia un messaggio all'app aperta senza aspettare risposta (es. «mostra la finestra»)."""
+    if IS_WINDOWS:
+        return _win_exchange(msg, path or socket_path(), 1.0, False) is True
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     s.settimeout(1.0)
     try:
@@ -51,6 +145,9 @@ def send_once(msg: dict, path: str | None = None) -> bool:
 
 def request(msg: dict, path: str, timeout: float = 1.0) -> dict | None:
     """Invia un messaggio e aspetta una riga di risposta (None se non risponde)."""
+    if IS_WINDOWS:
+        reply = _win_exchange(msg, path, timeout, True)
+        return reply if isinstance(reply, dict) else None
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     s.settimeout(timeout)
     try:
@@ -72,7 +169,18 @@ def request(msg: dict, path: str, timeout: float = 1.0) -> dict | None:
 
 
 def peer_pid(path: str) -> int | None:
-    """Pid del processo in ascolto sul socket (credenziali del socket: solo processi dello stesso utente)."""
+    """Pid del processo in ascolto sul socket (credenziali del socket: solo processi dello stesso utente).
+
+    Su Windows la pipe accetta solo l'utente stesso (QLocalServer.UserAccessOption): il pid lo dà il sistema."""
+    if IS_WINDOWS:
+        try:
+            pipe = _Pipe(path, 1.0)
+        except OSError:
+            return None
+        try:
+            return pipe.server_pid()
+        finally:
+            pipe.close()
     if not hasattr(socket, "SO_PEERCRED"):
         return None
     import struct
@@ -100,17 +208,18 @@ class InstanceServer(QObject):
         self._bufs: dict[int, bytes] = {}
 
     def start(self) -> bool:
-        folder = Path(self.path).parent
-        try:
-            folder.mkdir(parents=True, exist_ok=True)
-            os.chmod(folder, 0o700)
-        except OSError:
-            return False
+        if not IS_WINDOWS:  # su Windows è il nome di una named pipe, non un file
+            folder = Path(self.path).parent
+            try:
+                folder.mkdir(parents=True, exist_ok=True)
+                os.chmod(folder, 0o700)
+            except OSError:
+                return False
         if is_running(self.path):
             return False
         QLocalServer.removeServer(self.path)
         ok = self.server.listen(self.path)
-        if ok:
+        if ok and not IS_WINDOWS:
             try:
                 os.chmod(self.path, 0o600)
             except OSError:

@@ -30,23 +30,14 @@ QUEUE_LIMIT = 50
 
 
 def runtime_base() -> str:
-    """Cartella privata per i socket di Helpix.
-
-    Di norma $XDG_RUNTIME_DIR (/run/user/UID, solo dell'utente). Se manca (sessioni senza systemd,
-    alcuni avvii da cron o SSH) uso ~/.cache/helpix-run invece di /tmp, dove un altro utente
-    potrebbe creare per primo la cartella con un nome prevedibile.
-    """
-    base = os.environ.get("XDG_RUNTIME_DIR")
-    if base and os.path.isdir(base):
-        return base
-    cache = os.environ.get("XDG_CACHE_HOME") or os.path.join(os.path.expanduser("~"), ".cache")
-    path = os.path.join(cache, "helpix-run")
-    os.makedirs(path, mode=0o700, exist_ok=True)
-    return path
+    """Cartella privata per i socket di Helpix (vedi system.runtime_dir)."""
+    from .system import runtime_dir
+    return runtime_dir()
 
 
 def socket_path() -> str:
-    return os.path.join(runtime_base(), "helpix", "bridge.sock")
+    from .system import channel
+    return channel("bridge")
 
 
 # ------------------------------------------------------------------ protocollo del browser

@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Crash
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Percorsi XDG, impostazioni e archiviazione sicura delle chiavi API."""
+"""Percorsi (XDG su Linux, AppData su Windows), impostazioni e archiviazione sicura delle chiavi API."""
 from __future__ import annotations
 
 import json
@@ -8,18 +8,12 @@ import logging
 import os
 from pathlib import Path
 
+from .system import APP_ID, config_dir, data_dir  # noqa: F401
+
 log = logging.getLogger(__name__)
 
-APP_ID = "helpix"
-
-
-def _xdg(var: str, fallback: str) -> Path:
-    value = os.environ.get(var)
-    return Path(value) if value else Path.home() / fallback
-
-
-CONFIG_DIR = _xdg("XDG_CONFIG_HOME", ".config") / APP_ID
-DATA_DIR = _xdg("XDG_DATA_HOME", ".local/share") / APP_ID
+CONFIG_DIR = config_dir()
+DATA_DIR = data_dir()
 SESSIONS_DIR = DATA_DIR / "sessions"
 SHOTS_DIR = DATA_DIR / "screenshots"
 LOG_FILE = DATA_DIR / "helpix.log"

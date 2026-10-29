@@ -59,3 +59,29 @@ jobs:
           cinnamon-desktop-data mate-control-center-common xfconf
       - name: Test
         run: .github/scripts/annotate.sh "Test" tests/run_all.sh python
+
+  windows:
+    name: Windows (Python 3.13)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Helpix e dipendenze Python
+        run: pip install .
+      - name: Avvio della finestra principale
+        shell: bash
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: >
+          .github/scripts/annotate.sh "Avvio su Windows" python -c "import sys;
+          from PySide6.QtWidgets import QApplication; import PySide6.QtWebEngineWidgets;
+          app = QApplication([]); from helpix.config import Settings, SecretStore, ensure_dirs; ensure_dirs();
+          from helpix.ui.main_window import MainWindow; s = Settings();
+          s.data.update(engine='web', skip_setup=True, quick_shortcut=False, show_tips=False);
+          w = MainWindow(s, SecretStore()); w.show(); from PySide6.QtCore import QTimer;
+          QTimer.singleShot(3000, app.quit); app.exec(); print('finestra principale ok')"
+      - name: Test
+        shell: bash
+        run: .github/scripts/annotate.sh "Test su Windows" tests/run_all.sh python

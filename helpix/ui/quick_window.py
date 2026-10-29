@@ -43,7 +43,8 @@ POS_FILE = DATA_DIR / "quick.json"
 
 
 def quick_socket_path() -> str:
-    return os.path.join(os.path.dirname(socket_path()), "quick.sock")
+    from ..system import channel
+    return channel("quick")
 
 
 def _load_pos() -> dict:

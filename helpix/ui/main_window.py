@@ -139,9 +139,9 @@ def stop_quick_window(only_if_stale: bool = False) -> None:
     only_if_stale: solo se è di un'altra versione di Helpix. Dopo un aggiornamento può restare in giro la
     finestra rapida della versione prima, che non conosce «quit» e riapriva Helpix appena lo chiudevi:
     quella va terminata (si riapre aggiornata con Ctrl+Alt+H)."""
-    import signal
     from .. import __version__
     from ..instance import is_running, peer_pid, request, send_once
+    from ..system import is_helpix_quick, process_alive, terminate
     from .quick_window import quick_socket_path
     path = quick_socket_path()
     if not is_running(path):
@@ -154,17 +154,11 @@ def stop_quick_window(only_if_stale: bool = False) -> None:
     if current:
         send_once({"type": "quit"}, path)
         deadline = time.monotonic() + 1.5
-        while pid and time.monotonic() < deadline and os.path.exists(f"/proc/{pid}"):
+        while pid and time.monotonic() < deadline and process_alive(pid):
             time.sleep(0.05)
-    if pid and os.path.exists(f"/proc/{pid}"):
-        try:  # versione vecchia (o bloccata): solo se è davvero la finestra rapida di Helpix
-            with open(f"/proc/{pid}/cmdline", "rb") as f:
-                args = f.read().split(b"\0")
-            if b"--quick" in args and any(b"helpix" in a for a in args):
-                os.kill(pid, signal.SIGTERM)
-                logging.getLogger(__name__).info("finestra rapida di un'altra versione terminata (pid %s)", pid)
-        except OSError:
-            pass
+    # versione vecchia (o bloccata): solo se è davvero la finestra rapida di Helpix
+    if pid and process_alive(pid) and is_helpix_quick(pid) and terminate(pid):
+        logging.getLogger(__name__).info("finestra rapida di un'altra versione terminata (pid %s)", pid)
 
 
 class MainWindow(QMainWindow):
