@@ -18,6 +18,7 @@ on:
     paths:
       - "packaging/**"
       - "pyproject.toml"
+      - "helpix/sysdeps.py"
       - ".github/workflows/release.yml"
   workflow_dispatch:
     inputs:
