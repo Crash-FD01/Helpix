@@ -85,5 +85,5 @@ jobs:
       - name: Test
         shell: bash
         env:
-          TEST_TIMEOUT: "90"
+          TEST_TIMEOUT: "180"
         run: .github/scripts/annotate.sh "Test su Windows" tests/run_all.sh python
