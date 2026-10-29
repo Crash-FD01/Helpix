@@ -74,6 +74,10 @@ Run workflow*, indicando il tag.
 compromessa: generane una nuova, aggiorna il secret e ripubblica. Chi ha già il repository dovrà rieseguire lo
 script di installazione per importare la chiave nuova.
 
+**Windows:** l'installer lo costruisce il workflow di rilascio. A mano, su un PC Windows con Python 3.13:
+`pwsh packaging\windows\build.ps1` (crea `dist\packages\Helpix-<versione>-Setup.exe`). I test girano anche lì:
+`bash tests/run_all.sh python` da Git Bash.
+
 **Prova locale dei pacchetti:**
 
 ```bash

@@ -245,7 +245,8 @@ class MainWindow(QMainWindow):
         shot_menu = theme.prepare_menu(QMenu(self))
         self._shot_actions = [
             (shot_menu.addAction(tr("Area o finestra"), lambda: self.shots.start("smart")), "crop"),
-            (shot_menu.addAction(tr("Finestra (dialogo di sistema)"), lambda: self.shots.start("window")), "window"),
+            (shot_menu.addAction(tr("Finestra (clic per sceglierla)") if IS_WINDOWS else tr("Finestra (dialogo di sistema)"),
+                                 lambda: self.shots.start("window")), "window"),
             (shot_menu.addAction(tr("Schermo intero"), lambda: self.shots.start("full")), "monitor"),
             (shot_menu.addAction(tr("Area dopo 3 secondi"), lambda: self.shots.start("smart", delay=3)), "timer"),
         ]
@@ -1926,6 +1927,9 @@ class MainWindow(QMainWindow):
             self.showMinimized()
             return
         self.hide()
+        # di nuovo appena finita la gestione della chiusura: su Windows nasconderla mentre Qt elabora la X
+        # può non bastare
+        QTimer.singleShot(0, lambda: None if self._quitting else self.hide())
         if not self.settings.get("tray_hint_shown"):
             self.settings.set("tray_hint_shown", True)
             self.tray.showMessage("Helpix", tr("Helpix resta attivo nell'area di notifica: Ctrl+Alt+H apre la finestra "

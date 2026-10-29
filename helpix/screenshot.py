@@ -251,3 +251,45 @@ def normalize_image(src: str) -> str:
         dest.unlink(missing_ok=True)
         dest = jpg
     return str(dest)
+
+
+def windows_window_rects() -> list[tuple[tuple[int, int, int, int], str]]:
+    """Finestre visibili su Windows, dalla più in alto alla più in basso, in pixel dello schermo.
+
+    I bordi sono quelli veri (DWM, senza l'ombra invisibile); restano fuori le finestre ridotte a icona, quelle
+    nascoste da Windows (altri desktop virtuali, app sospese) e quelle di Helpix."""
+    import ctypes
+    from ctypes import wintypes
+    if sys.platform != "win32":
+        return []
+    user32, dwm = ctypes.windll.user32, ctypes.windll.dwmapi
+    me = os.getpid()
+    out: list[tuple[tuple[int, int, int, int], str]] = []
+    proto = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+    def visit(hwnd, _lparam):
+        if not user32.IsWindowVisible(hwnd) or user32.IsIconic(hwnd):
+            return True
+        pid = wintypes.DWORD(0)
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        if pid.value == me:
+            return True
+        cloaked = wintypes.DWORD(0)
+        dwm.DwmGetWindowAttribute(hwnd, 14, ctypes.byref(cloaked), ctypes.sizeof(cloaked))  # DWMWA_CLOAKED
+        if cloaked.value:
+            return True
+        length = user32.GetWindowTextLengthW(hwnd)
+        if length <= 0:
+            return True
+        title = ctypes.create_unicode_buffer(length + 1)
+        user32.GetWindowTextW(hwnd, title, length + 1)
+        rect = wintypes.RECT()
+        if dwm.DwmGetWindowAttribute(hwnd, 9, ctypes.byref(rect), ctypes.sizeof(rect)):  # EXTENDED_FRAME_BOUNDS
+            user32.GetWindowRect(hwnd, ctypes.byref(rect))
+        w, h = rect.right - rect.left, rect.bottom - rect.top
+        if w > 40 and h > 30:
+            out.append(((rect.left, rect.top, w, h), title.value))
+        return True
+
+    user32.EnumWindows(proto(visit), 0)
+    return out

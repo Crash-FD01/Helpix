@@ -14,8 +14,10 @@ from __future__ import annotations
 from PySide6.QtCore import QObject, QRect, QTimer, Signal
 from PySide6.QtGui import QImage
 
+from ..system import IS_WINDOWS
 from ..screenshot import (ScreenshotCancelled, ScreenshotError, capture_area_native, capture_external,
-                          capture_full_external, is_x11, qt_grab_full_image, save_image, x11_window_rects)
+                          capture_full_external, is_x11, qt_grab_full_image, save_image, windows_window_rects,
+                          x11_window_rects)
 from .region_selector import RegionSelector
 from .workers import FuncWorker
 
@@ -41,7 +43,7 @@ class ScreenshotController(QObject):
         # Su Wayland Helpix resta dov'è: nascondere la finestra fa riordinare le altre al compositor
         # e un'app non può togliersi da sola dalla riduzione a icona. La selezione dell'area dello
         # strumento del desktop (Spectacle, cattura di GNOME) copre comunque tutto lo schermo.
-        hide = hide and is_x11()
+        hide = hide and (is_x11() or IS_WINDOWS)
         if hide:
             self.window.hide()
         wait = (450 if hide else 80) + max(delay, 0) * 1000
@@ -49,6 +51,17 @@ class ScreenshotController(QObject):
 
     # ------------------------------------------------------------ cattura
     def _capture(self, mode: str):
+        if IS_WINDOWS:  # come su X11: schermo congelato e selezione di Helpix (clic su una finestra per sceglierla)
+            try:
+                image, geo = qt_grab_full_image()
+            except ScreenshotError as exc:
+                self._fail(str(exc))
+                return
+            if mode == "full":
+                self._done_image(image)
+            else:
+                self._select(image, geo, self._native_windows(image, geo, windows_window_rects()))
+            return
         if mode == "window":
             self._in_thread(capture_external, True, self._done_path)
             return
@@ -78,10 +91,14 @@ class ScreenshotController(QObject):
 
     @staticmethod
     def _x11_windows(image: QImage, geo: QRect) -> list[tuple[QRect, str]]:
+        return ScreenshotController._native_windows(image, geo, x11_window_rects())
+
+    @staticmethod
+    def _native_windows(image: QImage, geo: QRect, rects) -> list[tuple[QRect, str]]:
         """Finestre in coordinate del selettore (che copre tutto il desktop virtuale)."""
         scale = image.width() / max(geo.width(), 1)  # pixel fisici per pixel logico
         out = []
-        for (x, y, w, h), title in x11_window_rects():
+        for (x, y, w, h), title in rects:
             r = QRect(round(x / scale) - geo.x(), round(y / scale) - geo.y(), round(w / scale), round(h / scale))
             out.append((r, title))
         return out

@@ -69,6 +69,12 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.16.0" date="2026-10-29">
+      <description>
+        <p>First version for Windows 10 and 11, with installer. Fixes for Linux: system dependencies on Ubuntu 24.04,
+          Debian 13 and ARM; Qt 6.11 with Python 3.10 and 3.11.</p>
+      </description>
+    </release>
     <release version="0.15.2" date="2026-10-29">
       <description>
         <p>The RPM package installs on Fedora again: it requires glibc by version instead of a versioned symbol.</p>

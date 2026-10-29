@@ -225,6 +225,16 @@ def test_update_check():
     assert "/repos/Crash-FD01/Helpix/releases/latest" in get.call_args[0][0]
 
 
+def test_window_list_on_windows():
+    if not WINDOWS:
+        print("  (solo su Windows: saltato)")
+        return
+    from helpix.screenshot import windows_window_rects
+    rects = windows_window_rects()  # sulle macchine di GitHub può essere vuota: basta che non si rompa
+    assert all(w > 40 and h > 30 and isinstance(t, str) for (_x, _y, w, h), t in rects), rects[:3]
+    print("  finestre visibili:", len(rects))
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

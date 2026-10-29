@@ -1251,4 +1251,5 @@ EN: dict[str, str] = {
         "Download the installer and open it: it updates Helpix and keeps your settings and sign-ins.",
     "Scarica": "Download",
     "Salta questa versione": "Skip this version",
+    "Finestra (clic per sceglierla)": "Window (click to pick it)",
 }
