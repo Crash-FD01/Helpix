@@ -22,8 +22,8 @@ for f in "$ROOT"/site/*; do
         -e "s|@GLIBC_aarch64@|$(glibc aarch64 2.39)|g" "$f" > "$OUT/$(basename "$f")"
 done
 cp "$ROOT/helpix/data/icons/helpix-128.png" "$OUT/icon.png"
-cp "$ROOT/docs/principale-chiaro.png" "$OUT/screenshot-light.png"
-cp "$ROOT/docs/principale-scuro.png" "$OUT/screenshot-dark.png"
+cp "$ROOT/docs/screenshots/principale-chiaro.png" "$OUT/screenshot-light.png"
+cp "$ROOT/docs/screenshots/principale-scuro.png" "$OUT/screenshot-dark.png"
 cp "$ROOT/helpix/data/fonts/Inter-Variable.ttf" "$ROOT/helpix/data/fonts/JetBrainsMono-Regular.ttf" "$OUT/"
 touch "$OUT/.nojekyll"
 if grep -l '@[A-Za-z_0-9]*@' "$OUT"/*.html "$OUT"/*.sh 2>/dev/null; then echo "Segnaposto non sostituiti" >&2; exit 1; fi

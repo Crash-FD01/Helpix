@@ -35,7 +35,7 @@ La CI li ripete su ogni pull request, con Python 3.10 e 3.13.
 
 Alcune regole del progetto:
 - **Helpix agisce solo quando l'utente preme un pulsante.** Niente invii, letture o comandi automatici in più
-  rispetto a quelli descritti nel README.
+  rispetto a quelli descritti nella [guida](docs/GUIDA.md).
 - **Ogni funzione di sicurezza o privacy è facoltativa** e si può disattivare.
 - Non aggirare i blocchi dei siti (per esempio quello di Google sui browser integrati): niente user agent finti,
   niente cookie importati.
@@ -52,7 +52,7 @@ Contribuendo accetti che il tuo codice sia distribuito con la licenza del proget
 ## Pubblicare una versione (manutentori)
 
 1. Aggiorna `version` in `pyproject.toml` e `__version__` in `helpix/__init__.py`, aggiungi la release in
-   `packaging/io.github.crash_fd01.helpix.metainfo.xml` e la riga nella Roadmap del README.
+   `packaging/io.github.crash_fd01.helpix.metainfo.xml` e la riga nella Roadmap di `docs/GUIDA.md`.
 2. Commit e push su `main`; aspetta che la CI sia verde.
 3. Tag e push:
    ```bash

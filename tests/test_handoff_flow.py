@@ -176,8 +176,12 @@ if __name__ == "__main__":
         hardexit.now(0)
     failed = False
     for name in names:
-        r = subprocess.run([sys.executable, os.path.abspath(__file__), name], capture_output=True, text=True,
-                           encoding="utf-8", errors="replace", timeout=240)
+        for _attempt in range(2):
+            r = subprocess.run([sys.executable, os.path.abspath(__file__), name], capture_output=True, text=True,
+                               encoding="utf-8", errors="replace", timeout=240)
+            if r.returncode in (0, 1) or not os.environ.get("RETRY_CRASHED"):
+                break
+            print(f"crash in uscita (codice {r.returncode}) {name}: ripeto", flush=True)
         ok = r.returncode == 0 and f"ok {name}" in r.stdout
         print(("ok " if ok else f"FALLITO (codice {r.returncode}) ") + name, flush=True)
         if not ok:

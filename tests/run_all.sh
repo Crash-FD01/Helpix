@@ -18,11 +18,18 @@ for t in tests/test_*.py; do
         wrap=(dbus-run-session --)
     fi
     start=$SECONDS
-    if out="$(timeout "${TEST_TIMEOUT:-300}" "${wrap[@]}" "$PY" "$t" 2>&1)"; then
+    out="$(timeout "${TEST_TIMEOUT:-300}" "${wrap[@]}" "$PY" "$t" 2>&1)"; rc=$?
+    # RETRY_CRASHED=1: un test chiuso da un crash (codice >= 128, non un'asserzione fallita né il timeout) si ripete
+    # una volta. Serve su Windows, dove il motore web di Qt a volte va in crash mentre il processo esce.
+    if [[ -n "${RETRY_CRASHED:-}" ]] && (( rc >= 128 && rc != 124 )); then
+        echo "  crash (codice $rc) in $t: ripeto"
+        [[ "${GITHUB_ACTIONS:-}" == true ]] && echo "::warning title=$t::crash (codice $rc), test ripetuto"
+        out="$(timeout "${TEST_TIMEOUT:-300}" "${wrap[@]}" "$PY" "$t" 2>&1)"; rc=$?
+    fi
+    if (( rc == 0 )); then
         printf '  ok    %-28s %3ss\n' "$t" "$((SECONDS - start))"
         summary+=("$(printf 'ok    %-28s %3ss' "$t" "$((SECONDS - start))")")
     else
-        rc=$?
         printf '  FAIL  %-28s %3ss (codice %s)\n' "$t" "$((SECONDS - start))" "$rc"
         summary+=("$(printf 'FAIL  %-28s %3ss (codice %s)' "$t" "$((SECONDS - start))" "$rc")")
         printf '%s\n' "$out" | tail -40 | sed 's/^/        /'

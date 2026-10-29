@@ -89,6 +89,7 @@ install -Dm644 "$ROOT/packaging/io.github.crash_fd01.helpix.metainfo.xml" \
 install -Dm644 "$ROOT/helpix/data/polkit/io.github.crash_fd01.helpix.unlock.policy" \
     "$STAGE/usr/share/polkit-1/actions/io.github.crash_fd01.helpix.unlock.policy"
 install -Dm644 "$ROOT/README.md" "$STAGE/usr/share/doc/helpix/README.md"
+install -Dm644 "$ROOT/docs/GUIDA.md" "$STAGE/usr/share/doc/helpix/GUIDA.md"
 install -Dm644 "$ROOT/THIRD-PARTY-NOTICES.md" "$STAGE/usr/share/doc/helpix/THIRD-PARTY-NOTICES.md"
 install -Dm644 "$ROOT/LICENSE" "$STAGE/usr/share/licenses/helpix/LICENSE"
 for f in "$ROOT"/LICENSES/*.txt; do install -Dm644 "$f" "$STAGE/usr/share/licenses/helpix/$(basename "$f")"; done
