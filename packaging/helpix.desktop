@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Helpix
+GenericName=Troubleshooting assistant
+GenericName[it]=Assistente di troubleshooting
+Comment=Fix your Linux PC's problems with the help of AI
+Comment[it]=Risolvi i problemi del PC Linux con l'aiuto dell'IA
+Exec=@EXEC@
+Icon=helpix
+Terminal=false
+Categories=System;
+Keywords=AI;help;troubleshooting;terminal;screenshot;
+Keywords[it]=IA;AI;aiuto;troubleshooting;terminale;screenshot;
+StartupWMClass=helpix

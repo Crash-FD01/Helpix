@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!-- Sblocco di Helpix: chiede la password (o l'impronta) dell'utente stesso, non dell'amministratore. -->
+<policyconfig>
+  <vendor>Helpix</vendor>
+  <vendor_url>https://github.com/Crash-FD01/Helpix</vendor_url>
+  <icon_name>helpix</icon_name>
+  <action id="io.github.crash_fd01.helpix.unlock">
+    <description>Unlock Helpix</description>
+    <description xml:lang="it">Sblocca Helpix</description>
+    <message>Authentication is required to unlock Helpix</message>
+    <message xml:lang="it">Per sbloccare Helpix serve la tua password (o la tua impronta)</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_self</allow_active>
+    </defaults>
+  </action>
+</policyconfig>

@@ -1,0 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Crash
+# SPDX-License-Identifier: GPL-3.0-or-later
+blank_issues_enabled: true
+contact_links:
+  - name: Vulnerabilità di sicurezza / Security vulnerability
+    url: https://github.com/Crash-FD01/Helpix/security/advisories/new
+    about: Segnalala in privato, non con una issue pubblica. / Report it privately, not in a public issue.

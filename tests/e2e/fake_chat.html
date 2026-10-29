@@ -1,0 +1,81 @@
+<!doctype html>
+<!-- SPDX-FileCopyrightText: 2026 Crash
+     SPDX-License-Identifier: GPL-3.0-or-later -->
+<html><head><meta charset="utf-8"><title>Chat finta</title>
+<style>body{font-family:sans-serif;background:#fff} #prompt-textarea{border:1px solid #999;min-height:60px;padding:8px;white-space:pre-wrap}</style>
+</head><body>
+<main id="thread">
+  <p>Prova questo comando:</p>
+  <pre><code class="language-bash">echo hello-helpix</code></pre>
+  <p>Codice Python (niente pulsante):</p>
+  <pre><code class="language-python">print("ciao")</code></pre>
+  <p>Comando rischioso:</p>
+  <pre><code class="language-bash">rm -rf /tmp/helpix-e2e-dir &amp;&amp; echo removed</code></pre>
+  <p>Riepilogo:</p>
+  <pre><code>HELPIX-TASK
+Problema: il wifi non va</code></pre>
+  <pre><code class="language-bash">open-package</code></pre>
+</main>
+<div id="attachments"></div>
+<div id="prompt-textarea" class="ProseMirror" contenteditable="true"></div>
+<button data-testid="send-button" id="send">Invia</button>
+<script>
+  // come ProseMirror: gestisce l'incolla e chiama preventDefault
+  const box = document.getElementById('prompt-textarea');
+  window.pastedFiles = [];
+  box.addEventListener('paste', (e) => {
+    const files = [...e.clipboardData.files];
+    if (files.length) {
+      e.preventDefault();
+      for (const f of files) {
+        window.pastedFiles.push({name: f.name, type: f.type, size: f.size});
+        const d = document.createElement('div'); d.className = 'att'; d.textContent = f.name;
+        document.getElementById('attachments').appendChild(d);
+      }
+      return;
+    }
+    const text = e.clipboardData.getData('text/plain');
+    if (text) { e.preventDefault(); box.append(document.createTextNode(text)); }
+  });
+  // invio finto: mostra il messaggio e, se è la richiesta di riepilogo, «scrive» la risposta a pezzi
+  window.sent = [];
+  document.getElementById('send').addEventListener('click', () => {
+    const text = box.textContent;
+    window.sent.push(text);
+    box.textContent = '';
+    const thread = document.getElementById('thread');
+    const fence = text.indexOf('```');
+    if (fence >= 0) {  // il modello vuoto della richiesta, mostrato come blocco di codice
+      const pre = document.createElement('pre'); const code = document.createElement('code');
+      code.textContent = text.slice(fence + 3).split('```')[0].trim();
+      pre.appendChild(code); thread.appendChild(pre);
+    }
+    if (!text.includes('HELPIX-TASK')) {  // risposta normale, scritta a pezzi come fanno le chat
+      const stop = document.createElement('button'); stop.setAttribute('data-testid', 'stop-button');
+      stop.textContent = 'Stop'; document.body.appendChild(stop);
+      const msg = document.createElement('div'); msg.setAttribute('data-message-author-role', 'assistant');
+      thread.appendChild(msg);
+      const words = ('Risposta finta: controlla il driver del wifi con nmcli device status e riavvia ' +
+                     'NetworkManager.').split(' ');
+      let w = 0;
+      const t2 = setInterval(() => {
+        msg.textContent = words.slice(0, ++w).join(' ');
+        if (w === words.length) { clearInterval(t2); setTimeout(() => stop.remove(), 400); }
+      }, 120);
+      return;
+    }
+    const stop = document.createElement('button'); stop.setAttribute('data-testid', 'stop-button');
+    stop.textContent = 'Stop'; document.body.appendChild(stop);
+    const answer = ['HELPIX-TASK', 'Obiettivo:', 'la stampante non stampa', '', 'Contesto:', 'Fedora 44 KDE', '',
+                    'Cosa è stato fatto (comandi, risultati, decisioni):', 'lpstat -p, journalctl -u cups', '', 'Stato attuale:',
+                    'driver sbagliato'];
+    const pre = document.createElement('pre'); const code = document.createElement('code');
+    pre.appendChild(code); thread.appendChild(pre);
+    let i = 0;
+    const tick = setInterval(() => {
+      code.textContent = answer.slice(0, ++i).join('\n');
+      if (i === answer.length) { clearInterval(tick); setTimeout(() => stop.remove(), 600); }
+    }, 700);
+  });
+</script>
+</body></html>

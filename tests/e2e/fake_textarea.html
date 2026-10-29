@@ -1,0 +1,15 @@
+<!doctype html>
+<!-- SPDX-FileCopyrightText: 2026 Crash
+     SPDX-License-Identifier: GPL-3.0-or-later -->
+<html><head><meta charset="utf-8"><title>Chat finta (textarea)</title></head><body>
+<p>Nuova chat</p>
+<div id="files"></div>
+<input type="file" id="up" accept="image/*" multiple style="display:none">
+<textarea id="chat-input" placeholder="Scrivi" rows="4" cols="60"></textarea>
+<script>
+  window.uploaded = [];
+  document.getElementById('up').addEventListener('change', (e) => {
+    for (const f of e.target.files) { window.uploaded.push({name: f.name, size: f.size}); }
+  });
+</script>
+</body></html>

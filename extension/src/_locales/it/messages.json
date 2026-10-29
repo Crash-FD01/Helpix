@@ -1,0 +1,131 @@
+{
+  "name": {
+    "message": "Helpix"
+  },
+  "description": {
+    "message": "Collega le chat di ChatGPT, Claude, Gemini, Copilot e DeepSeek all'app Helpix: esegui i comandi, incolla screenshot e diagnosi."
+  },
+  "run": {
+    "message": "Esegui con Helpix"
+  },
+  "sendSummary": {
+    "message": "Invia il riepilogo a Helpix"
+  },
+  "waiting": {
+    "message": "Invio a Helpix…"
+  },
+  "running": {
+    "message": "In esecuzione in Helpix…"
+  },
+  "done": {
+    "message": "Fatto"
+  },
+  "failedRc": {
+    "message": "Terminato con codice $RC$",
+    "placeholders": {
+      "rc": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "outputPastedShort": {
+    "message": "output nella chat"
+  },
+  "outputPasted": {
+    "message": "Output incollato nella chat: controlla e premi Invio."
+  },
+  "pasteOutput": {
+    "message": "Incolla l'output"
+  },
+  "confirmTitle": {
+    "message": "Questo comando richiede attenzione"
+  },
+  "runAnyway": {
+    "message": "Esegui comunque"
+  },
+  "cancel": {
+    "message": "Annulla"
+  },
+  "cancelled": {
+    "message": "Annullato"
+  },
+  "busy": {
+    "message": "Helpix sta già eseguendo un comando"
+  },
+  "rejected": {
+    "message": "Helpix non può eseguire questo blocco"
+  },
+  "summarySent": {
+    "message": "Riepilogo inviato a Helpix"
+  },
+  "notConnected": {
+    "message": "Helpix non è collegato a questo browser. In Helpix apri Impostazioni › Collega il browser."
+  },
+  "appClosed": {
+    "message": "Helpix non è aperto: lo avvio…"
+  },
+  "screenshotTip": {
+    "message": "Screenshot: selezioni una parte dello schermo e la incollo qui"
+  },
+  "diagnosticsTip": {
+    "message": "Diagnosi: raccoglie le informazioni del PC, le controlli in Helpix e le incollo qui"
+  },
+  "shotHint": {
+    "message": "Seleziona l'area da catturare (Esc per annullare)"
+  },
+  "diagHint": {
+    "message": "Helpix raccoglie le informazioni: controllale nella finestra di Helpix"
+  },
+  "shotPasted": {
+    "message": "Screenshot incollato: aggiungi una descrizione e invia."
+  },
+  "textPasted": {
+    "message": "Incollato nella chat: controlla e invia."
+  },
+  "noComposer": {
+    "message": "Non trovo la casella della chat: cliccaci dentro e riprova."
+  },
+  "copy": {
+    "message": "Copia"
+  },
+  "copied": {
+    "message": "Copiato: premi Ctrl+V nella chat."
+  },
+  "packagePasted": {
+    "message": "Task incollato: controlla e premi Invio."
+  },
+  "reload": {
+    "message": "Helpix è stato aggiornato: ricarica la pagina."
+  },
+  "statusOn": {
+    "message": "Collegato a Helpix"
+  },
+  "statusApp": {
+    "message": "Helpix non è aperto"
+  },
+  "statusMissing": {
+    "message": "Helpix non è collegato a questo browser"
+  },
+  "launch": {
+    "message": "Apri Helpix"
+  },
+  "reconnect": {
+    "message": "Riprova"
+  },
+  "popupMissingHelp": {
+    "message": "Installa Helpix e, nell'app, apri Impostazioni › Collega il browser (oppure esegui «helpix --connect-browser»). Poi premi Riprova."
+  },
+  "popupAppHelp": {
+    "message": "L'estensione è pronta: apri Helpix per usarla."
+  },
+  "popupOnHelp": {
+    "message": "Nelle chat trovi «Esegui con Helpix» sotto i blocchi di codice e i pulsanti Screenshot e Diagnosi a lato."
+  },
+  "showPill": {
+    "message": "Mostra i pulsanti a lato nelle chat"
+  },
+  "privacy": {
+    "message": "L'estensione non legge le conversazioni e non invia messaggi: agisce solo quando premi un suo pulsante."
+  }
+}

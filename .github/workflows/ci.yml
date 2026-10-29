@@ -1,0 +1,61 @@
+# SPDX-FileCopyrightText: 2026 Crash
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Controlli a ogni push e pull request: stile del codice, licenze (REUSE), sintassi degli script, test.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Controlli (ruff, REUSE, script)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install ruff reuse shellcheck-py
+      - run: ruff check .
+      - name: Licenze di ogni file (REUSE)
+        run: reuse lint
+      - name: Sintassi degli script
+        run: |
+          shellcheck -S warning install.sh uninstall.sh packaging/*.sh tests/run_all.sh site/setup.sh
+
+  test:
+    name: Test (Python ${{ matrix.python }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.10: la più vecchia supportata da Qt 6.12 (Ubuntu 22.04, Debian 12 hanno 3.10/3.11)
+        python: ["3.10", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Helpix e dipendenze Python
+        run: pip install .
+      - name: Librerie di sistema per Qt (le installa Helpix stesso, come sul PC degli utenti)
+        run: |
+          sudo apt-get update -q
+          python -m helpix.sysdeps install --yes
+      - name: Schemi dei desktop per i test delle scorciatoie
+        run: >
+          sudo apt-get install -y -q dbus gnome-settings-daemon-common gnome-shell-common
+          cinnamon-desktop-data mate-control-center-common xfconf
+      - name: Test
+        run: tests/run_all.sh python

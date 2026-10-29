@@ -1,0 +1,65 @@
+# SPDX-FileCopyrightText: 2026 Crash
+# SPDX-License-Identifier: GPL-3.0-or-later
+name: Segnala un problema / Bug report
+description: Qualcosa in Helpix non funziona come dovrebbe. / Something in Helpix doesn't work as it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Grazie! Puoi scrivere in italiano o in inglese. / Thanks! Italian or English are both fine.
+        **Non incollare password, token o dati personali** (il log di Helpix può contenere i comandi eseguiti: controllalo prima).
+        **Don't paste passwords, tokens or personal data** (Helpix's log may contain the commands you ran: check it first).
+        Problemi di sicurezza: non aprire una issue, vedi [SECURITY.md](../blob/main/SECURITY.md). / Security issues: see SECURITY.md.
+  - type: input
+    id: version
+    attributes:
+      label: Versione di Helpix / Helpix version
+      description: "Il risultato di: helpix --version"
+      placeholder: Helpix 0.15.0
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Come l'hai installato / How you installed it
+      options:
+        - Pacchetto dal repository (apt, dnf, zypper)
+        - install.sh (dai sorgenti / from source)
+        - Altro / Other
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Distribuzione e desktop / Distribution and desktop
+      description: "Es. Fedora 44 KDE Plasma (Wayland). Lo vedi con: cat /etc/os-release; echo $XDG_CURRENT_DESKTOP $XDG_SESSION_TYPE"
+      placeholder: Ubuntu 24.04, GNOME, Wayland
+    validations:
+      required: true
+  - type: dropdown
+    id: service
+    attributes:
+      label: Servizio IA / AI service
+      options: [ChatGPT, Claude, Gemini, Copilot, DeepSeek, "Chiave API / API key", "Non c'entra / Not relevant"]
+  - type: textarea
+    id: what
+    attributes:
+      label: Cosa è successo / What happened
+      description: Cosa ti aspettavi e cosa è successo invece. Uno screenshot aiuta. / What you expected and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Come riprodurlo / Steps to reproduce
+      placeholder: |
+        1. Apro Helpix
+        2. Premo Screenshot
+        3. ...
+  - type: textarea
+    id: log
+    attributes:
+      label: Log (facoltativo / optional)
+      description: "Le ultime righe di ~/.local/share/helpix/helpix.log, oppure l'output di «helpix» avviato da terminale."
+      render: text

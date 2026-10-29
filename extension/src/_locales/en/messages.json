@@ -1,0 +1,131 @@
+{
+  "name": {
+    "message": "Helpix"
+  },
+  "description": {
+    "message": "Connects ChatGPT, Claude, Gemini, Copilot and DeepSeek chats to the Helpix app: run commands, paste screenshots and diagnostics."
+  },
+  "run": {
+    "message": "Run with Helpix"
+  },
+  "sendSummary": {
+    "message": "Send summary to Helpix"
+  },
+  "waiting": {
+    "message": "Sending to Helpix…"
+  },
+  "running": {
+    "message": "Running in Helpix…"
+  },
+  "done": {
+    "message": "Done"
+  },
+  "failedRc": {
+    "message": "Exited with code $RC$",
+    "placeholders": {
+      "rc": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "outputPastedShort": {
+    "message": "output in the chat"
+  },
+  "outputPasted": {
+    "message": "Output pasted into the chat: check it and press Enter."
+  },
+  "pasteOutput": {
+    "message": "Paste output"
+  },
+  "confirmTitle": {
+    "message": "This command needs your attention"
+  },
+  "runAnyway": {
+    "message": "Run anyway"
+  },
+  "cancel": {
+    "message": "Cancel"
+  },
+  "cancelled": {
+    "message": "Cancelled"
+  },
+  "busy": {
+    "message": "Helpix is already running a command"
+  },
+  "rejected": {
+    "message": "Helpix can't run this block"
+  },
+  "summarySent": {
+    "message": "Summary sent to Helpix"
+  },
+  "notConnected": {
+    "message": "Helpix isn't connected to this browser. In Helpix open Settings › Connect browser."
+  },
+  "appClosed": {
+    "message": "Helpix isn't open: starting it…"
+  },
+  "screenshotTip": {
+    "message": "Screenshot: select part of the screen and I'll paste it here"
+  },
+  "diagnosticsTip": {
+    "message": "Diagnostics: collects PC information, you review it in Helpix and I paste it here"
+  },
+  "shotHint": {
+    "message": "Select the area to capture (Esc to cancel)"
+  },
+  "diagHint": {
+    "message": "Helpix is collecting the information: review it in the Helpix window"
+  },
+  "shotPasted": {
+    "message": "Screenshot pasted: add a description and send."
+  },
+  "textPasted": {
+    "message": "Pasted into the chat: check it and send."
+  },
+  "noComposer": {
+    "message": "Can't find the chat box: click into it and try again."
+  },
+  "copy": {
+    "message": "Copy"
+  },
+  "copied": {
+    "message": "Copied: press Ctrl+V in the chat."
+  },
+  "packagePasted": {
+    "message": "Task pasted: check it and press Enter."
+  },
+  "reload": {
+    "message": "Helpix was updated: reload the page."
+  },
+  "statusOn": {
+    "message": "Connected to Helpix"
+  },
+  "statusApp": {
+    "message": "Helpix isn't open"
+  },
+  "statusMissing": {
+    "message": "Helpix isn't connected to this browser"
+  },
+  "launch": {
+    "message": "Open Helpix"
+  },
+  "reconnect": {
+    "message": "Retry"
+  },
+  "popupMissingHelp": {
+    "message": "Install Helpix and, in the app, open Settings › Connect browser (or run “helpix --connect-browser”). Then press Retry."
+  },
+  "popupAppHelp": {
+    "message": "The extension is ready: open Helpix to use it."
+  },
+  "popupOnHelp": {
+    "message": "In the chats you'll find “Run with Helpix” below code blocks and the Screenshot and Diagnostics buttons on the side."
+  },
+  "showPill": {
+    "message": "Show the side buttons in chats"
+  },
+  "privacy": {
+    "message": "The extension doesn't read your conversations or send messages: it only acts when you press one of its buttons."
+  }
+}

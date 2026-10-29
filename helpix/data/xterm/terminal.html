@@ -1,0 +1,92 @@
+<!doctype html>
+<!-- SPDX-FileCopyrightText: 2026 Crash
+     SPDX-License-Identifier: GPL-3.0-or-later -->
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="xterm.css">
+<style>
+  @font-face { font-family: "JetBrains Mono"; src: url("../fonts/JetBrainsMono-Regular.ttf"); font-weight: 400; }
+  @font-face { font-family: "JetBrains Mono"; src: url("../fonts/JetBrainsMono-Medium.ttf"); font-weight: 700; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg, #1e1e1e); }
+  #term { position: absolute; inset: 8px 4px 4px 10px; }
+  .xterm .xterm-viewport { scrollbar-width: thin; }
+</style>
+<script src="xterm.js"></script>
+<script src="addon-fit.js"></script>
+<script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+</head>
+<body>
+<div id="term"></div>
+<script>
+  // Terminale di Helpix: xterm.js collegato al pseudo-terminale dell'app tramite QWebChannel.
+  const term = new Terminal({
+    fontFamily: '"JetBrains Mono", "DejaVu Sans Mono", monospace', fontSize: 13, lineHeight: 1.15,
+    cursorBlink: true, allowProposedApi: true, scrollback: 5000, macOptionIsMeta: true,
+  });
+  const fit = new FitAddon.FitAddon();
+  term.loadAddon(fit);
+  term.open(document.getElementById('term'));
+  document.fonts.load('13px "JetBrains Mono"').then(() => { term.options.fontFamily = term.options.fontFamily; doFit(); });
+  let bridge = null;
+
+  function applyTheme(t) {
+    document.body.style.setProperty('--bg', t.background);
+    document.body.style.background = t.background;
+    document.documentElement.style.colorScheme = t.dark ? 'dark' : 'light';  // barra di scorrimento intonata
+    term.options.theme = t;
+  }
+  function doFit() {
+    try { fit.fit(); } catch (e) { return; }
+    if (bridge) bridge.resized(term.cols, term.rows);
+  }
+  new ResizeObserver(doFit).observe(document.getElementById('term'));
+
+  // Ctrl+Maiusc+C copia la selezione, Ctrl+Maiusc+V incolla (Ctrl+C e Ctrl+V vanno al programma)
+  term.attachCustomKeyEventHandler((e) => {
+    if (e.type === 'keydown' && e.ctrlKey && e.shiftKey && (e.key === 'C' || e.key === 'c')) {
+      if (bridge && term.hasSelection()) bridge.copy(term.getSelection());
+      return false;
+    }
+    if (e.type === 'keydown' && e.ctrlKey && e.shiftKey && (e.key === 'V' || e.key === 'v')) {
+      if (bridge) bridge.pasteClipboard();
+      return false;
+    }
+    return true;
+  });
+
+  // anche Incolla dal menu e il clic centrale passano da Helpix (scudo privacy)
+  document.addEventListener('paste', (e) => {
+    const text = e.clipboardData && e.clipboardData.getData('text/plain');
+    if (!bridge || !text) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    bridge.pasteText(text);
+  }, true);
+
+  // testo del terminale (ultime righe), per mostrare la risposta nella finestra rapida
+  window.helpixScreen = (n) => {
+    const b = term.buffer.active;
+    const lines = [];
+    for (let i = Math.max(0, b.length - (n || 200)); i < b.length; i++) {
+      const l = b.getLine(i);
+      if (l) lines.push(l.translateToString(true));
+    }
+    return lines.join('\n').replace(/\s+$/, '');
+  };
+
+  new QWebChannel(qt.webChannelTransport, (channel) => {
+    bridge = channel.objects.bridge;
+    bridge.write.connect((text) => term.write(text));
+    bridge.reset.connect(() => term.reset());
+    bridge.themeChanged.connect((json) => applyTheme(JSON.parse(json)));
+    bridge.focusTerminal.connect(() => term.focus());
+    term.onData((data) => bridge.input(data));
+    term.onBinary((data) => bridge.input(data));
+    bridge.ready();
+    doFit();
+    term.focus();
+  });
+</script>
+</body>
+</html>

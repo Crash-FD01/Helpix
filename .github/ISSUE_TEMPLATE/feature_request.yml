@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: 2026 Crash
+# SPDX-License-Identifier: GPL-3.0-or-later
+name: Proponi un'idea / Feature request
+description: Una funzione nuova o un miglioramento. / A new feature or an improvement.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Cosa vorresti fare / What you'd like to do
+      description: Il problema da risolvere, più che la soluzione. / The problem to solve, rather than the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Come te lo immagini / How you picture it
+  - type: input
+    id: system
+    attributes:
+      label: Distribuzione e desktop / Distribution and desktop
+      placeholder: Fedora 44, KDE Plasma

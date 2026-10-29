@@ -1,0 +1,46 @@
+# Licenze dei file che non possono contenere un'intestazione (immagini, font, dati) e del codice di terzi.
+# Formato REUSE (https://reuse.software): `reuse lint` verifica che ogni file abbia autore e licenza.
+version = 1
+SPDX-PackageName = "Helpix"
+SPDX-PackageSupplier = "Crash"
+SPDX-PackageDownloadLocation = "https://github.com/Crash-FD01/Helpix"
+
+# Tutto ciò che è di Helpix e non ha un'intestazione propria: icone, documentazione, screenshot,
+# metadati, configurazione, estensione già costruita, dati dei test
+[[annotations]]
+path = "**"
+precedence = "closest"
+SPDX-FileCopyrightText = "2026 Crash"
+SPDX-License-Identifier = "GPL-3.0-or-later"
+
+# I metadati AppStream sono CC0 (lo chiedono Flathub e i software center)
+[[annotations]]
+path = "packaging/io.github.crash_fd01.helpix.metainfo.xml"
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Crash"
+SPDX-License-Identifier = "CC0-1.0"
+
+# xterm.js e il suo addon fit: terminale degli agenti (MIT)
+[[annotations]]
+path = ["helpix/data/xterm/xterm.js", "helpix/data/xterm/xterm.css", "helpix/data/xterm/addon-fit.js",
+        "helpix/data/xterm/LICENSE-xterm.txt"]
+precedence = "override"
+SPDX-FileCopyrightText = ["2017-2019 The xterm.js authors (https://github.com/xtermjs/xterm.js)",
+                          "2014-2016 SourceLair Private Company (https://www.sourcelair.com)",
+                          "2012-2013 Christopher Jeffrey (https://github.com/chjj/)"]
+SPDX-License-Identifier = "MIT"
+
+# Font Inter (SIL Open Font License 1.1)
+[[annotations]]
+path = ["helpix/data/fonts/Inter-Variable.ttf", "helpix/data/fonts/OFL-Inter.txt"]
+precedence = "override"
+SPDX-FileCopyrightText = "2020 The Inter Project Authors (https://github.com/rsms/inter)"
+SPDX-License-Identifier = "OFL-1.1"
+
+# Font JetBrains Mono (SIL Open Font License 1.1)
+[[annotations]]
+path = ["helpix/data/fonts/JetBrainsMono-Regular.ttf", "helpix/data/fonts/JetBrainsMono-Medium.ttf",
+        "helpix/data/fonts/OFL-JetBrainsMono.txt"]
+precedence = "override"
+SPDX-FileCopyrightText = "2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)"
+SPDX-License-Identifier = "OFL-1.1"

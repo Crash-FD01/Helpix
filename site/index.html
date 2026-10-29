@@ -1,0 +1,183 @@
+<!doctype html>
+<!-- SPDX-FileCopyrightText: 2026 Crash -->
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Helpix</title>
+<meta name="description" content="Helpix: ripara il tuo PC Linux con l'IA che usi già (ChatGPT, Claude, Gemini, Copilot, DeepSeek). Open source, GPL-3.0.">
+<link rel="icon" href="icon.png">
+<style>
+@font-face { font-family: Inter; src: url(Inter-Variable.ttf) format("truetype"); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url(JetBrainsMono-Regular.ttf) format("truetype"); font-display: swap; }
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --text: #16181d; --muted: #5d6470; --line: #e2e5ea;
+  --accent: #1f6feb; --accent-ink: #ffffff; --code-bg: #f0f2f5; --code-text: #16181d; --ok: #1a7f37;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #18191c; --panel: #202125; --text: #eceef2; --muted: #9aa1ad; --line: #2e3036;
+    --accent: #3b82f6; --accent-ink: #ffffff; --code-bg: #121316; --code-text: #e6e8ec; --ok: #3fb950;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 Inter, system-ui, sans-serif; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.wrap { max-width: 980px; margin: 0 auto; padding: 0 16px; }
+header { display: flex; align-items: center; gap: 12px; padding: 20px 0; }
+header img { width: 32px; height: 32px; border-radius: 8px; }
+header b { font-size: 18px; letter-spacing: -.01em; }
+header nav { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+.lang { border: 1px solid var(--line); background: var(--panel); color: var(--muted); border-radius: 8px;
+        padding: 4px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+.lang[aria-pressed="true"] { color: var(--text); border-color: var(--accent); }
+.hero { padding: 40px 0 24px; }
+h1 { font-size: clamp(30px, 5vw, 46px); line-height: 1.12; letter-spacing: -.025em; margin: 0 0 16px; max-width: 760px; }
+.lead { font-size: 18px; color: var(--muted); max-width: 700px; margin: 0 0 28px; }
+.shot { display: block; width: 100%; height: auto; border-radius: 14px; border: 1px solid var(--line);
+        box-shadow: 0 24px 60px -24px rgba(0,0,0,.35); margin: 8px 0 0; }
+section { padding: 36px 0; border-top: 1px solid var(--line); }
+h2 { font-size: 24px; letter-spacing: -.015em; margin: 0 0 8px; }
+h3 { font-size: 16px; margin: 20px 0 6px; }
+p { margin: 0 0 12px; }
+.muted { color: var(--muted); }
+.cmd { position: relative; display: flex; align-items: stretch; background: var(--code-bg); border: 1px solid var(--line);
+       border-radius: 10px; margin: 10px 0 14px; }
+pre { margin: 0; padding: 14px 16px; overflow-x: auto; flex: 1; font: 14px/1.6 "JetBrains Mono", ui-monospace, monospace;
+      color: var(--code-text); white-space: pre; }
+.copy { flex: none; border: 0; border-left: 1px solid var(--line); background: transparent; color: var(--muted);
+        font: inherit; font-size: 13px; padding: 0 14px; cursor: pointer; border-radius: 0 10px 10px 0; }
+.copy:hover { color: var(--text); }
+.copy.done { color: var(--ok); }
+.primary .cmd { border-color: var(--accent); }
+details { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 4px 16px; margin: 10px 0; }
+summary { cursor: pointer; padding: 10px 0; font-weight: 600; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-top: 16px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+.card b { display: block; margin-bottom: 4px; }
+.card p { color: var(--muted); font-size: 15px; margin: 0; }
+code { font: 0.9em "JetBrains Mono", ui-monospace, monospace; background: var(--code-bg); padding: 1px 5px; border-radius: 5px; }
+.fp { font: 13px "JetBrains Mono", ui-monospace, monospace; word-break: break-all; color: var(--muted); }
+footer { padding: 28px 0 40px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+[data-l="en"] { display: none; }
+html[lang="en"] [data-l="it"] { display: none; }
+html[lang="en"] [data-l="en"] { display: revert; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img src="icon.png" alt="">
+    <b>Helpix</b>
+    <nav>
+      <button class="lang" data-set="it" aria-pressed="true">IT</button>
+      <button class="lang" data-set="en" aria-pressed="false">EN</button>
+      <a class="lang" href="@REPO_URL@">GitHub</a>
+    </nav>
+  </header>
+
+  <div class="hero">
+    <h1><span data-l="it">Ripara il tuo PC Linux con l'IA che usi già.</span><span data-l="en">Fix your Linux PC with the AI you already use.</span></h1>
+    <p class="lead" data-l="it">Helpix apre ChatGPT, Claude, Gemini, Copilot o DeepSeek con il tuo account, incolla gli screenshot nella chat,
+      esegue con un clic i comandi che l'IA ti propone e le riporta l'output. Open source, gratuito, solo quando lo chiedi tu.</p>
+    <p class="lead" data-l="en">Helpix opens ChatGPT, Claude, Gemini, Copilot or DeepSeek with your own account, pastes screenshots into the chat,
+      runs the commands the AI suggests with one click and brings the output back. Open source, free, and only when you ask.</p>
+    <picture>
+      <source srcset="screenshot-dark.png" media="(prefers-color-scheme: dark)">
+      <img class="shot" src="screenshot-light.png" width="1180" height="780" alt="Helpix: chat with an AI and a suggested command ready to run">
+    </picture>
+  </div>
+
+  <section id="install" class="primary">
+    <h2><span data-l="it">Installa</span><span data-l="en">Install</span></h2>
+    <p class="muted" data-l="it">Un comando: aggiunge il repository firmato di Helpix e lo installa. Debian, Ubuntu, Mint, Pop!_OS, Fedora, RHEL 9+, openSUSE (x86_64 e ARM64).</p>
+    <p class="muted" data-l="en">One command: adds Helpix's signed repository and installs it. Debian, Ubuntu, Mint, Pop!_OS, Fedora, RHEL 9+, openSUSE (x86_64 and ARM64).</p>
+    <div class="cmd"><pre>curl -fsSL @SITE_URL@/setup.sh | sudo sh</pre><button class="copy">Copia</button></div>
+    <p data-l="it"><b>Aggiornamenti:</b> arrivano insieme a quelli del sistema, con <code>sudo apt upgrade</code>, <code>sudo dnf upgrade</code> o <code>sudo zypper update</code> (e con Discover, GNOME Software, Gestore aggiornamenti).</p>
+    <p data-l="en"><b>Updates</b> arrive with your system's: <code>sudo apt upgrade</code>, <code>sudo dnf upgrade</code> or <code>sudo zypper update</code> (and Discover, GNOME Software, Update Manager).</p>
+
+    <details>
+      <summary><span data-l="it">Preferisci farlo a mano? Debian, Ubuntu, Mint</span><span data-l="en">Rather do it by hand? Debian, Ubuntu, Mint</span></summary>
+      <div class="cmd"><pre>sudo install -d -m 755 /etc/apt/keyrings
+curl -fsSL @SITE_URL@/helpix.asc | sudo tee /etc/apt/keyrings/helpix.asc &gt;/dev/null
+echo "deb [signed-by=/etc/apt/keyrings/helpix.asc] @APT_URL@ ./" | sudo tee /etc/apt/sources.list.d/helpix.list
+sudo apt update &amp;&amp; sudo apt install helpix</pre><button class="copy">Copia</button></div>
+    </details>
+    <details>
+      <summary>Fedora, RHEL, AlmaLinux, Rocky</summary>
+      <div class="cmd"><pre>sudo rpm --import @SITE_URL@/helpix.asc
+sudo curl -fsSL @SITE_URL@/helpix.repo -o /etc/yum.repos.d/helpix.repo
+sudo dnf install helpix</pre><button class="copy">Copia</button></div>
+      <p class="muted" data-l="it">Silverblue, Kinoite, Bazzite: come sopra, poi <code>rpm-ostree install helpix</code> e riavvia.</p>
+      <p class="muted" data-l="en">Silverblue, Kinoite, Bazzite: as above, then <code>rpm-ostree install helpix</code> and reboot.</p>
+    </details>
+    <details>
+      <summary>openSUSE Tumbleweed, Leap</summary>
+      <div class="cmd"><pre>sudo rpm --import @SITE_URL@/helpix.asc
+sudo zypper addrepo --refresh @SITE_URL@/helpix.repo
+sudo zypper install helpix</pre><button class="copy">Copia</button></div>
+    </details>
+    <details>
+      <summary><span data-l="it">Arch, altre distribuzioni, sistemi più vecchi: dai sorgenti</span><span data-l="en">Arch, other distributions, older systems: from source</span></summary>
+      <p data-l="it">Installa nella tua cartella utente, senza root, e sceglie la versione di Qt adatta al sistema.</p>
+      <p data-l="en">Installs into your home folder, no root needed, and picks a Qt version that suits your system.</p>
+      <div class="cmd"><pre>git clone @REPO_URL@.git helpix &amp;&amp; cd helpix &amp;&amp; ./install.sh</pre><button class="copy">Copia</button></div>
+    </details>
+    <p class="muted" style="margin-top:16px"><span data-l="it">Impronta della chiave che firma i pacchetti:</span><span data-l="en">Fingerprint of the package signing key:</span><br>
+      <span class="fp">@FINGERPRINT@</span></p>
+  </section>
+
+  <section>
+    <h2><span data-l="it">Cosa fa</span><span data-l="en">What it does</span></h2>
+    <div class="grid">
+      <div class="card"><b><span data-l="it">Il tuo account, non una API</span><span data-l="en">Your account, not an API</span></b>
+        <p data-l="it">Accedi alla pagina ufficiale del servizio dentro Helpix. Funziona anche con l'account gratuito.</p>
+        <p data-l="en">Sign in to the service's official page inside Helpix. Works with free accounts too.</p></div>
+      <div class="card"><b>Screenshot</b>
+        <p data-l="it">Selezioni l'area del problema e l'immagine finisce direttamente nella casella della chat.</p>
+        <p data-l="en">Select the area with the problem and the image lands straight in the chat box.</p></div>
+      <div class="card"><b><span data-l="it">Comandi con un clic</span><span data-l="en">One-click commands</span></b>
+        <p data-l="it">Copi un comando dalla chat: Helpix ti avvisa se è rischioso, lo esegue e incolla l'output.</p>
+        <p data-l="en">Copy a command from the chat: Helpix warns you if it's risky, runs it and pastes the output.</p></div>
+      <div class="card"><b><span data-l="it">Scudo privacy</span><span data-l="en">Privacy shield</span></b>
+        <p data-l="it">Facoltativo: maschera password, chiavi, indirizzi e numeri personali prima che arrivino all'IA.</p>
+        <p data-l="en">Optional: masks passwords, keys, addresses and personal numbers before they reach the AI.</p></div>
+    </div>
+  </section>
+
+  <footer>
+    Helpix @VERSION@ · <a href="@REPO_URL@">@REPO_URL@</a> ·
+    <span data-l="it">software libero sotto licenza</span><span data-l="en">free software under the</span>
+    <a href="@REPO_URL@/blob/main/LICENSE">GPL-3.0-or-later</a> · © 2026 Crash
+  </footer>
+</div>
+<script>
+(function () {
+  var root = document.documentElement;
+  function setLang(l) {
+    root.lang = l;
+    document.querySelectorAll(".lang[data-set]").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.set === l)); });
+    document.querySelectorAll(".copy").forEach(function (b) { if (!b.classList.contains("done")) b.textContent = l === "en" ? "Copy" : "Copia"; });
+    try { localStorage.setItem("helpix-lang", l); } catch (e) {}
+  }
+  var saved = null;
+  try { saved = localStorage.getItem("helpix-lang"); } catch (e) {}
+  setLang(saved || ((navigator.language || "it").slice(0, 2) === "it" ? "it" : "en"));
+  document.querySelectorAll(".lang[data-set]").forEach(function (b) { b.onclick = function () { setLang(b.dataset.set); }; });
+  document.querySelectorAll(".copy").forEach(function (b) {
+    b.onclick = function () {
+      var text = b.previousElementSibling.textContent;
+      var done = function () {
+        b.classList.add("done"); b.textContent = root.lang === "en" ? "Copied" : "Copiato";
+        setTimeout(function () { b.classList.remove("done"); b.textContent = root.lang === "en" ? "Copy" : "Copia"; }, 1500);
+      };
+      if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, function () {});
+    };
+  });
+})();
+</script>
+</body>
+</html>

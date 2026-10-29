@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: 2026 Crash
+     SPDX-License-Identifier: CC0-1.0 -->
+<component type="desktop-application">
+  <id>io.github.crash_fd01.helpix</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+
+  <name>Helpix</name>
+  <summary>Fix your Linux PC with the AI you already use</summary>
+  <summary xml:lang="it">Risolvi i problemi del PC Linux con l'IA che usi già</summary>
+
+  <developer id="io.github.crash_fd01">
+    <name>Crash</name>
+  </developer>
+
+  <description>
+    <p>
+      Helpix is an open source troubleshooting assistant for Linux. It opens ChatGPT, Claude, Gemini, Copilot or
+      DeepSeek with your own account, pastes screenshots straight into the chat, runs the commands the AI suggests
+      with one click and brings the output back to the conversation.
+    </p>
+    <p xml:lang="it">
+      Helpix è un assistente open source per risolvere i problemi di Linux. Apre ChatGPT, Claude, Gemini, Copilot o
+      DeepSeek con il tuo account, incolla gli screenshot direttamente nella chat, esegue con un clic i comandi che
+      l'IA propone e riporta l'output nella conversazione.
+    </p>
+    <ul>
+      <li>Screenshots and quick diagnostics pasted into the chat</li>
+      <li>Commands run with a warning for the risky ones; administrator password asked by the system</li>
+      <li>Continue a task with another AI, or with Claude Code, Codex or Gemini CLI in a real terminal</li>
+      <li>Quick window with a global shortcut, privacy shield, optional lock and encrypted export</li>
+    </ul>
+    <ul xml:lang="it">
+      <li>Screenshot e diagnosi rapida incollati nella chat</li>
+      <li>Comandi eseguiti con avviso per quelli rischiosi; la password di amministratore la chiede il sistema</li>
+      <li>Continua un task con un'altra IA, o con Claude Code, Codex o Gemini CLI in un terminale vero</li>
+      <li>Finestra rapida con scorciatoia globale, scudo privacy, blocco ed export cifrato facoltativi</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">helpix.desktop</launchable>
+  <provides>
+    <binary>helpix</binary>
+  </provides>
+
+  <url type="homepage">https://github.com/Crash-FD01/Helpix</url>
+  <url type="bugtracker">https://github.com/Crash-FD01/Helpix/issues</url>
+  <url type="vcs-browser">https://github.com/Crash-FD01/Helpix</url>
+
+  <screenshots>
+    <screenshot type="default">
+      <caption>Helpix with the chat and the screenshot and command tools</caption>
+      <image>https://raw.githubusercontent.com/Crash-FD01/Helpix/main/docs/principale-chiaro.png</image>
+    </screenshot>
+  </screenshots>
+
+  <categories>
+    <category>System</category>
+  </categories>
+  <keywords>
+    <keyword>AI</keyword>
+    <keyword>troubleshooting</keyword>
+    <keyword>help</keyword>
+    <keyword>terminal</keyword>
+    <keyword>screenshot</keyword>
+  </keywords>
+
+  <content_rating type="oars-1.1"/>
+
+  <releases>
+    <release version="0.15.0" date="2026-10-29">
+      <description>
+        <p>Packages for Debian, Ubuntu, Fedora, RHEL and openSUSE with signed repositories: updates arrive with apt,
+          dnf and zypper.</p>
+      </description>
+    </release>
+    <release version="0.14.0" date="2026-10-28">
+      <description>
+        <p>First public release under the GPL-3.0-or-later license.</p>
+      </description>
+    </release>
+  </releases>
+</component>

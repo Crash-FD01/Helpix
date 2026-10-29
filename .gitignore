@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+dist/
+build/
+*.egg-info/
+# chiave privata dell'estensione: MAI nel repository
+*.pem
+.ruff_cache/
+.venv/
+venv/
+# chiave privata che firma i pacchetti: MAI nel repository (sta solo nel secret di GitHub e nel tuo backup)
+*PRIVATE*.asc
+*.key

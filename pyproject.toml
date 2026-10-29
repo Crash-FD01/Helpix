@@ -1,0 +1,67 @@
+[build-system]
+requires = ["setuptools>=77"]  # licenza come espressione SPDX (PEP 639)
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "helpix"
+version = "0.15.0"
+description = "Open source AI troubleshooting assistant for Linux: use your own account (ChatGPT, Claude, Gemini, Copilot, DeepSeek), screenshots and one-click commands"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE", "LICENSES/*.txt", "THIRD-PARTY-NOTICES.md"]
+authors = [{ name = "Crash" }]
+keywords = ["ai", "troubleshooting", "linux", "assistant", "chatgpt", "claude", "gemini"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: X11 Applications :: Qt",
+    "Intended Audience :: End Users/Desktop",
+    "Intended Audience :: System Administrators",
+    "Natural Language :: Italian",
+    "Natural Language :: English",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: System",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "PySide6-Essentials>=6.12; python_version >= '3.12'",
+    "PySide6-WebEngine>=6.12; python_version >= '3.12'",
+    # Qt for Python 6.12.0 con Python 3.10/3.11 toglie un riferimento a None a ogni chiamata senza risultato
+    # (setText, show, resize…): dopo qualche migliaio il programma si chiude. Lì si usa Qt 6.8–6.11, provato:
+    # pip sceglie da solo la più recente che funziona sul sistema (6.11 con glibc ≥ 2.34, altrimenti 6.9).
+    "PySide6-Essentials>=6.8,<6.12; python_version < '3.12'",
+    "PySide6-Addons>=6.8,<6.12; python_version < '3.12'",
+    "requests>=2.25",
+    "keyring>=23",
+    "cryptography>=41",
+    "jeepney>=0.8; sys_platform == 'linux'",
+]
+
+[project.urls]
+Homepage = "https://github.com/Crash-FD01/Helpix"
+Source = "https://github.com/Crash-FD01/Helpix"
+Issues = "https://github.com/Crash-FD01/Helpix/issues"
+
+[project.gui-scripts]
+helpix = "helpix.app:main"
+
+[tool.setuptools]
+packages = ["helpix", "helpix.ui"]
+
+[tool.setuptools.package-data]
+helpix = ["data/*", "data/fonts/*", "data/icons/*", "data/xterm/*", "data/polkit/*", "data/extension/*/*", "data/extension/*/*/*", "data/extension/*/*/*/*"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+extend-exclude = ["build", "dist", "helpix/data", "extension"]
+
+[tool.ruff.lint]
+# errori, avvisi, importazioni inutili e le regole di sicurezza della revisione: niente shell=True, richieste
+# senza timeout, verifica TLS disattivata, file temporanei insicuri, eval/exec
+select = ["E", "F", "W", "S102", "S108", "S113", "S307", "S501", "S602", "S604", "S605", "S606"]
+ignore = ["E501"]   # tabelle di espressioni regolari e messaggi: righe lunghe volute
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S108"]   # «/tmp» usato come cartella di lavoro finta nelle sessioni di prova
