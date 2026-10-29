@@ -59,7 +59,7 @@ jobs:
           if [ "v$version" != "$TAG" ]; then
             echo "::error::Il tag $TAG non corrisponde alla versione $version di pyproject.toml"; exit 1
           fi
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
       - name: Strumenti e librerie di sistema (servono a calcolare le dipendenze del .deb)
@@ -96,7 +96,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.TAG }}
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
       - name: Costruisci Helpix.exe e il programma di installazione
