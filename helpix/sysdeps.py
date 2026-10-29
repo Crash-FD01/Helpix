@@ -224,7 +224,10 @@ def qt_binaries(root: str | None = None) -> list[str]:
     for pattern in _QT_PLUGINS:
         files += glob.glob(os.path.join(root, "plugins", pattern))
     files.append(os.path.join(root, "libexec", "QtWebEngineProcess"))
-    files += glob.glob(os.path.join(os.path.dirname(root), "Qt*.abi3.so"))
+    # solo i moduli Python che Helpix importa: gli altri (Multimedia, Nfc…) chiederebbero librerie inutili
+    # come libpulse o libpcsclite
+    for name in _QT_LIBS:
+        files += glob.glob(os.path.join(os.path.dirname(root), f"Qt{name}.*so"))
     return [f for f in files if os.path.isfile(f)]
 
 
