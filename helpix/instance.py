@@ -46,7 +46,9 @@ class _Pipe:
                                     ctypes.POINTER(wintypes.DWORD), ctypes.POINTER(wintypes.DWORD)]
         k.GetNamedPipeServerProcessId.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.ULONG)]
         k.CloseHandle.argtypes = [wintypes.HANDLE]
+        k.CancelIoEx.argtypes = [wintypes.HANDLE, wintypes.LPVOID]
         self._ct, self._wt = ctypes, wintypes
+        self.timeout = timeout
         path = name if name.startswith("\\\\") else "\\\\.\\pipe\\" + name
         deadline = time.monotonic() + timeout
         invalid = wintypes.HANDLE(-1).value
@@ -54,6 +56,9 @@ class _Pipe:
             h = k.CreateFileW(path, 0x80000000 | 0x40000000, 0, None, 3, 0, None)  # lettura+scrittura, OPEN_EXISTING
             if h and h != invalid:
                 self.handle = h
+                # server nello stesso processo (la finestra principale che parla con sé stessa, i test): mentre
+                # aspetto devo far girare gli eventi di Qt, se no il server non legge e restiamo bloccati entrambi
+                self.own = self.server_pid() == os.getpid()
                 return
             err = ctypes.get_last_error()
             left = deadline - time.monotonic()
@@ -61,11 +66,37 @@ class _Pipe:
                 raise OSError(err, "named pipe non disponibile")
             k.WaitNamedPipeW(path, max(1, int(left * 1000)))
 
+    def _pump(self) -> None:
+        if self.own:
+            from PySide6.QtCore import QCoreApplication
+            if QCoreApplication.instance() is not None:
+                QCoreApplication.processEvents()
+
     def send(self, data: bytes) -> None:
-        done = self._wt.DWORD(0)
+        """Scrive con un limite di tempo: la scrittura su una pipe aspetta che l'altra parte legga, e un Helpix
+        bloccato non deve bloccare anche chi lo chiama."""
+        import threading
+        result: dict = {}
         view = self._ct.create_string_buffer(data, len(data))
-        if not self._k.WriteFile(self.handle, view, len(data), self._ct.byref(done), None) or done.value != len(data):
-            raise OSError(self._ct.get_last_error(), "scrittura sulla named pipe non riuscita")
+
+        def write():
+            done = self._wt.DWORD(0)
+            ok = self._k.WriteFile(self.handle, view, len(data), self._ct.byref(done), None)
+            result["ok"] = bool(ok) and done.value == len(data)
+            result["err"] = self._ct.get_last_error()
+
+        t = threading.Thread(target=write, daemon=True)
+        t.start()
+        deadline = time.monotonic() + max(self.timeout, 0.5)
+        while t.is_alive() and time.monotonic() < deadline:
+            self._pump()
+            t.join(0.01)
+        if t.is_alive():
+            self._k.CancelIoEx(self.handle, None)
+            t.join(1.0)
+            raise OSError(1460, "scrittura sulla named pipe scaduta")  # ERROR_TIMEOUT
+        if not result.get("ok"):
+            raise OSError(result.get("err", 0), "scrittura sulla named pipe non riuscita")
 
     def read_line(self, timeout: float) -> bytes:
         buf, deadline = b"", time.monotonic() + timeout
@@ -82,6 +113,7 @@ class _Pipe:
                 continue
             if time.monotonic() >= deadline:
                 break
+            self._pump()
             time.sleep(0.01)
         return buf
 

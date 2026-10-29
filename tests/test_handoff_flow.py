@@ -176,10 +176,11 @@ if __name__ == "__main__":
     failed = False
     for name in names:
         r = subprocess.run([sys.executable, os.path.abspath(__file__), name], capture_output=True, text=True,
-                           timeout=240)
+                           encoding="utf-8", errors="replace", timeout=240)
         ok = r.returncode == 0 and f"ok {name}" in r.stdout
-        print(("ok " if ok else "FALLITO ") + name)
+        print(("ok " if ok else "FALLITO ") + name, flush=True)
         if not ok:
             failed = True
-            print("\n".join(r.stderr.splitlines()[-15:]))
+            print("\n".join((r.stdout + r.stderr).splitlines()[-25:]), flush=True)
+    sys.stdout.flush()
     os._exit(1 if failed else 0)
