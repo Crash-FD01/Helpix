@@ -49,6 +49,19 @@
   `tests/test_qt_refcount.py` lo controlla (in CI anche con Python 3.10). I pacchetti .deb/.rpm usano Python 3.13
   e non erano colpiti. Da ricontrollare quando esce una 6.12.x successiva.
 
+**Corretto con la prima esecuzione su GitHub Actions** (CI e prova dei pacchetti x86_64 e aarch64 ora verdi)
+- Su Ubuntu 24.04+ e Debian 13 `libasound2`, `libcups2`, `libglib2.0-0` e `libminizip1` esistono solo come
+  pacchetti virtuali (i veri hanno il suffisso `t64`): l'installazione automatica delle dipendenze falliva. Ora
+  `sysdeps.apt_name()` sceglie il nome installabile.
+- Il controllo delle librerie guardava tutti i moduli Python di Qt, anche quelli che Helpix non usa (Multimedia,
+  Nfc): su un sistema senza audio o smart card chiedeva libpulse e libpcsclite. Ora solo i moduli usati.
+- Su aarch64 Qt WebEngine usa librerie di sistema (opus, webp, lcms2, snappy…) che su x86_64 sono incluse: aggiunte
+  alla tabella per tutti e quattro i gestori di pacchetti.
+- La protezione dei segreti di GitHub bloccava il caricamento per le chiavi finte del corpus di prova del filtro
+  privacy: ora le stringhe sono spezzate nel sorgente (Python le riunisce), il test controlla le stesse cose.
+- `test_quit` dipendeva dal nome della cartella del progetto.
+- In CI, se un passo fallisce, le ultime righe finiscono in un'annotazione (`.github/scripts/annotate.sh`).
+
 ## 0.1 Prima versione pubblica (v0.14.0)
 
 **Revisione finale prima della pubblicazione**
