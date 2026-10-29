@@ -32,7 +32,7 @@ jobs:
         run: reuse lint
       - name: Sintassi degli script
         run: |
-          shellcheck -S warning install.sh uninstall.sh packaging/*.sh tests/run_all.sh site/setup.sh
+          shellcheck -S warning install.sh uninstall.sh packaging/*.sh tests/run_all.sh site/setup.sh .github/scripts/*.sh
 
   test:
     name: Test (Python ${{ matrix.python }})
@@ -52,10 +52,10 @@ jobs:
       - name: Librerie di sistema per Qt (le installa Helpix stesso, come sul PC degli utenti)
         run: |
           sudo apt-get update -q
-          python -m helpix.sysdeps install --yes
+          .github/scripts/annotate.sh "Dipendenze di sistema" python -m helpix.sysdeps install --yes
       - name: Schemi dei desktop per i test delle scorciatoie
         run: >
           sudo apt-get install -y -q dbus gnome-settings-daemon-common gnome-shell-common
           cinnamon-desktop-data mate-control-center-common xfconf
       - name: Test
-        run: tests/run_all.sh python
+        run: .github/scripts/annotate.sh "Test" tests/run_all.sh python
