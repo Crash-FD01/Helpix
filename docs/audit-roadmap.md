@@ -234,6 +234,12 @@ nuove versioni nell'app, prove su Windows 11.
 | Pacchetto | PyInstaller (cartella) + Inno Setup per utente, senza amministratore; prova di installazione, `--self-test` e disinstallazione su GitHub | `packaging/windows/` |
 | Aggiornamenti | Una volta al giorno l'ultima release da GitHub (disattivabile) | `updates.py` |
 
+Corretto con la CI su Windows: scrittura sulle named pipe con limite di tempo (un Helpix bloccato non blocca chi lo
+chiama; con il server nello stesso processo gli eventi di Qt continuano a girare), riduzione nell'area di notifica
+ripetuta a fine chiusura, programmi `.cmd` di npm avviati tramite cmd.exe nel ConPTY, impostazioni isolate nei test,
+letture dei file sempre in UTF-8, uscita dei test con TerminateProcess (os._exit su Windows poteva andare in crash
+con il motore web caricato).
+
 Test: `tests/test_windows.py` (regole e script ovunque; comandi veri, elevazione, ConPTY, diagnosi e Windows Hello su
 Windows); la CI ha un job Windows; i test solo Linux si saltano lì. L'estensione del browser resta solo Linux.
 

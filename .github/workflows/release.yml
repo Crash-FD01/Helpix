@@ -8,7 +8,8 @@
 #   4. aggiorna il repository APT (release «repo») e quello RPM + il sito (GitHub Pages).
 # Da lì «apt upgrade», «dnf upgrade» e «zypper update» trovano la nuova versione.
 # Per ripubblicare una versione (es. dopo aver cambiato il sito): Actions → Rilascio → Run workflow → tag.
-# Quando cambiano i file dei pacchetti su main fa solo la prova: costruisce e installa, senza pubblicare nulla.
+# Quando cambiano il programma o i file dei pacchetti su main fa solo la prova: costruisce e installa, senza
+# pubblicare nulla. L'installer di Windows di prova si scarica dalla pagina dell'esecuzione (Artifacts).
 name: Rilascio
 
 on:
@@ -18,7 +19,7 @@ on:
     paths:
       - "packaging/**"
       - "pyproject.toml"
-      - "helpix/sysdeps.py"
+      - "helpix/**"
       - ".github/workflows/release.yml"
   workflow_dispatch:
     inputs:
