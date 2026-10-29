@@ -17,7 +17,7 @@ for t in tests/test_*.py; do
         wrap=(dbus-run-session --)
     fi
     start=$SECONDS
-    if out="$(timeout 300 "${wrap[@]}" "$PY" "$t" 2>&1)"; then
+    if out="$(timeout "${TEST_TIMEOUT:-300}" "${wrap[@]}" "$PY" "$t" 2>&1)"; then
         printf '  ok    %-28s %3ss\n' "$t" "$((SECONDS - start))"
     else
         printf '  FAIL  %-28s %3ss\n' "$t" "$((SECONDS - start))"

@@ -22,7 +22,8 @@ from ..theme import mono_font
 from ..i18n import tr
 
 CODE_RE = re.compile(r"```[ \t]*([\w+#.-]*)[^\n]*\n(.*?)(?:```|\Z)", re.S)
-SHELL_LANGS = {"bash", "sh", "shell", "zsh", "console", "terminal", "shell-session"}
+SHELL_LANGS = ({"powershell", "ps", "ps1", "pwsh", "posh", "cmd", "bat", "batch", "console", "terminal", "shell"}
+               if IS_WINDOWS else {"bash", "sh", "shell", "zsh", "console", "terminal", "shell-session"})
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
 
 

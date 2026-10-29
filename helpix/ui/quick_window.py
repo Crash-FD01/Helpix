@@ -15,7 +15,6 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import sys
 import time
 
 from PySide6.QtCore import QRectF, Qt, QTimer, Signal
@@ -306,8 +305,10 @@ class QuickWindow(QWidget):
             self.target.setText(tr("avvio Helpix…"))
             env = dict(os.environ)
             env.pop("QT_QPA_PLATFORM", None)  # la finestra principale usa la piattaforma normale
-            subprocess.Popen([sys.executable, "-m", "helpix"], env=env, stdin=subprocess.DEVNULL,
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+            from ..system import helpix_argv
+            subprocess.Popen(helpix_argv(), env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL, start_new_session=True,
+                             creationflags=getattr(subprocess, "DETACHED_PROCESS", 0))
         if self._tries > 60:
             if self._may_launch:
                 self.target.setText(tr("Helpix non risponde"))

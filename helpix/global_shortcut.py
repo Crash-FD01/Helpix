@@ -144,3 +144,54 @@ class GlobalShortcut(QObject):
                 log.info("portal Activated %s %s", msg.body[0], msg.body[1])
                 if msg.body[1] == SHORTCUT_ID:  # i segnali arrivano solo alla nostra connessione
                     self.activated.emit()
+
+
+class WindowsHotkey(QObject):
+    """Scorciatoia globale su Windows con RegisterHotKey: funziona da qualsiasi programma, senza conferme.
+
+    Gira in un thread con la propria coda di messaggi (WM_HOTKEY arriva al thread che l'ha registrata). Stessi
+    segnali di GlobalShortcut, così la finestra principale li gestisce allo stesso modo."""
+    activated = Signal()
+    state = Signal(str, str)
+
+    MOD_ALT, MOD_CONTROL, MOD_NOREPEAT = 0x0001, 0x0002, 0x4000
+    WM_HOTKEY, WM_QUIT = 0x0312, 0x0012
+
+    def __init__(self, key: str = "H", label: str = "Ctrl+Alt+H", parent=None):
+        super().__init__(parent)
+        self.key, self.label = key.upper(), label
+        self._thread: threading.Thread | None = None
+        self._thread_id = 0
+
+    def start(self):
+        if self._thread and self._thread.is_alive():
+            return
+        self._thread = threading.Thread(target=self._run, name="helpix-hotkey", daemon=True)
+        self._thread.start()
+
+    def stop(self):
+        if self._thread_id:
+            import ctypes
+            ctypes.windll.user32.PostThreadMessageW(self._thread_id, self.WM_QUIT, 0, 0)
+        self._thread_id = 0
+
+    def _run(self):
+        import ctypes
+        from ctypes import wintypes
+        user32 = ctypes.WinDLL("user32", use_last_error=True)
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        self._thread_id = kernel32.GetCurrentThreadId()
+        mods = self.MOD_CONTROL | self.MOD_ALT | self.MOD_NOREPEAT
+        if not user32.RegisterHotKey(None, 1, mods, ord(self.key)):
+            err = ctypes.get_last_error()
+            self.state.emit("error", "già usata da un altro programma" if err == 1409 else f"errore {err}")
+            self._thread_id = 0
+            return
+        self.state.emit("bound", self.label)
+        msg = wintypes.MSG()
+        try:
+            while user32.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
+                if msg.message == self.WM_HOTKEY:
+                    self.activated.emit()
+        finally:
+            user32.UnregisterHotKey(None, 1)

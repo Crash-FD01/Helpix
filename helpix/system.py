@@ -193,3 +193,18 @@ def terminate(pid: int) -> bool:
         return True
     except OSError:
         return False
+
+
+def helpix_argv(*args: str) -> list[str]:
+    """Riga di comando per avviare Helpix con questi argomenti (es. «--quick»).
+
+    Programma installato su Windows (PyInstaller): Helpix.exe. Dai sorgenti: python -m helpix; su Windows con
+    pythonw.exe, che non apre una finestra di console."""
+    if getattr(sys, "frozen", False):
+        return [sys.executable, *args]
+    exe = sys.executable
+    if IS_WINDOWS and exe.lower().endswith("python.exe"):
+        w = exe[:-len("python.exe")] + "pythonw.exe"
+        if os.path.exists(w):
+            exe = w
+    return [exe, "-m", "helpix", *args]

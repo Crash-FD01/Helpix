@@ -313,7 +313,7 @@ EN: dict[str, str] = {
     # --- impostazioni API
     "Helpix — Impostazioni": "Helpix — Settings",
     "Helpix — Scegli l'assistente": "Helpix — Choose the assistant",
-    "Assistente AI per risolvere i problemi del tuo PC Linux": "AI assistant to fix the problems of your Linux PC",
+    "Assistente AI per risolvere i problemi del tuo PC": "AI assistant to fix the problems of your PC",
     "Intelligenza artificiale": "Artificial intelligence",
     "Scegli dall'elenco o scrivi il nome esatto del modello": "Choose from the list or type the exact model name",
     "↻ Aggiorna": "↻ Refresh",
@@ -1000,7 +1000,7 @@ EN: dict[str, str] = {
     "Mostra la schermata iniziale all'avvio": "Show the start screen at startup",
     "Scelta salvata come predefinita: Helpix si aprirà così. La schermata iniziale la ritrovi in Impostazioni.":
         "Choice saved as default: Helpix will open like this. You'll find the start screen in Settings.",
-    "<b>Helpix {version}</b><br>Assistente AI open source per il troubleshooting su Linux.<br><br>"
+    "<b>Helpix {version}</b><br>Assistente AI open source per il troubleshooting su Linux e Windows.<br><br>"
     "© 2026 Crash<br>"
     "Helpix è software libero: puoi ridistribuirlo e/o modificarlo secondo i termini della "
     "<a href='https://www.gnu.org/licenses/gpl-3.0.html'>GNU General Public License</a>, versione 3 o "
@@ -1010,7 +1010,7 @@ EN: dict[str, str] = {
     "(SIL Open Font License). Dettagli nel file THIRD-PARTY-NOTICES.md.<br>"
     "Helpix non è affiliato a OpenAI, Anthropic, Google, Microsoft o DeepSeek: i loro nomi e marchi "
     "appartengono ai rispettivi proprietari.":
-        "<b>Helpix {version}</b><br>Open source AI troubleshooting assistant for Linux.<br><br>"
+        "<b>Helpix {version}</b><br>Open source AI troubleshooting assistant for Linux and Windows.<br><br>"
         "© 2026 Crash<br>"
         "Helpix is free software: you can redistribute it and/or modify it under the terms of the "
         "<a href='https://www.gnu.org/licenses/gpl-3.0.html'>GNU General Public License</a>, version 3 or "
@@ -1164,4 +1164,34 @@ EN: dict[str, str] = {
     "ai problemi!":
         "Now you know everything you need. If you get lost, the tour is in Settings › Quick guide. Happy "
         "troubleshooting!",
+
+    # --- Windows: comandi, elevazione, rischi
+    "cancellazione ricorsiva di file": "recursive file deletion",
+    "formattazione o cancellazione di un disco": "formatting or wiping a disk",
+    "modifica dell'avvio di Windows": "changes to Windows startup",
+    "cancellazione di chiavi del registro di sistema": "deletion of system registry keys",
+    "disattivazione delle protezioni di Windows (antivirus o firewall)":
+        "disabling Windows protections (antivirus or firewall)",
+    "cancellazione delle copie di backup di Windows": "deletion of Windows backup copies",
+    "cancellazione dei registri eventi": "clearing the event logs",
+    "disattivazione dei controlli sugli script per tutto il PC": "disabling script checks for the whole PC",
+    "Controllo account utente": "User Account Control",
+    "Richiesta di amministratore annullata.\n": "Administrator request cancelled.\n",
+    "\nIl comando gira come amministratore: Helpix non può fermarlo da qui. Se serve, chiudilo da Gestione attività.\n":
+        "\nThe command runs as administrator: Helpix cannot stop it from here. If needed, end it from Task Manager.\n",
+    "Windows chiede il permesso di amministratore (Controllo account utente)…\n":
+        "Windows is asking for administrator permission (User Account Control)…\n",
+    "Windows chiederà il permesso di amministratore (Controllo account utente)":
+        "Windows will ask for administrator permission (User Account Control)",
+    "Come amministratore": "As administrator",
+    "Funziona da qualsiasi programma; la disattivi quando vuoi da Impostazioni.":
+        "It works from any program; you can turn it off at any time in Settings.",
+    "La finestra rapida si apre in basso a destra per chiedere al volo: scrivi e premi Invio, la risposta compare lì. "
+    "La stessa scorciatoia la mostra e la nasconde.\n\nScorciatoia globale Ctrl+Alt+H: {state}.":
+        "The quick window opens at the bottom right to ask on the fly: type and press Enter, the answer appears there. "
+        "The same shortcut shows and hides it.\n\nGlobal shortcut Ctrl+Alt+H: {state}.",
+    "Ctrl+Alt+H non è disponibile ({why}). Dentro Helpix funziona comunque; la finestra rapida si apre anche dal menu "
+    "dell'icona vicino all'orologio.":
+        "Ctrl+Alt+H is not available ({why}). It still works inside Helpix; the quick window also opens from the menu "
+        "of the icon next to the clock.",
 }

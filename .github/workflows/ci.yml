@@ -84,4 +84,6 @@ jobs:
           QTimer.singleShot(3000, app.quit); app.exec(); print('finestra principale ok')"
       - name: Test
         shell: bash
+        env:
+          TEST_TIMEOUT: "90"
         run: .github/scripts/annotate.sh "Test su Windows" tests/run_all.sh python

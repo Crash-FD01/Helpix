@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import logging
 import os
-import sys
 import time
 from pathlib import Path
 
@@ -674,7 +673,7 @@ class MainWindow(QMainWindow):
 
     def show_about(self):
         QMessageBox.about(self, tr("Informazioni su Helpix"), tr(
-            "<b>Helpix {version}</b><br>Assistente AI open source per il troubleshooting su Linux.<br><br>"
+            "<b>Helpix {version}</b><br>Assistente AI open source per il troubleshooting su Linux e Windows.<br><br>"
             "© 2026 Crash<br>"
             "Helpix è software libero: puoi ridistribuirlo e/o modificarlo secondo i termini della "
             "<a href='https://www.gnu.org/licenses/gpl-3.0.html'>GNU General Public License</a>, versione 3 o "
@@ -2067,7 +2066,9 @@ class MainWindow(QMainWindow):
         box.setWindowTitle(tr("Finestra rapida"))
         box.setIcon(QMessageBox.Icon.Question)
         box.setText(tr("Vuoi aprire la finestra rapida di Helpix con Ctrl+Alt+H da qualsiasi programma?"))
-        box.setInformativeText(tr("Il desktop ti chiederà di confermare la scorciatoia (e potrai cambiarla)."))
+        box.setInformativeText(tr("Funziona da qualsiasi programma; la disattivi quando vuoi da Impostazioni.")
+                               if IS_WINDOWS else
+                               tr("Il desktop ti chiederà di confermare la scorciatoia (e potrai cambiarla)."))
         yes = box.addButton(tr("Attiva Ctrl+Alt+H"), QMessageBox.ButtonRole.AcceptRole)
         box.addButton(tr("Non ora"), QMessageBox.ButtonRole.RejectRole)
         box.exec()
@@ -2083,8 +2084,12 @@ class MainWindow(QMainWindow):
         """Chiede al desktop (portal GlobalShortcuts) la scorciatoia per la finestra rapida."""
         if self._shortcut is not None:
             return
-        from ..global_shortcut import GlobalShortcut
-        self._shortcut = GlobalShortcut("CTRL+ALT+h", tr("Helpix: richiesta rapida"), self)
+        if IS_WINDOWS:
+            from ..global_shortcut import WindowsHotkey
+            self._shortcut = WindowsHotkey("H", "Ctrl+Alt+H", self)
+        else:
+            from ..global_shortcut import GlobalShortcut
+            self._shortcut = GlobalShortcut("CTRL+ALT+h", tr("Helpix: richiesta rapida"), self)
         self._shortcut.activated.connect(self.open_quick)
         self._shortcut.state.connect(self._shortcut_changed)
         self._shortcut_state = tr("in attesa del desktop…")
@@ -2106,7 +2111,10 @@ class MainWindow(QMainWindow):
         else:
             self._shortcut_state = tr("non disponibile ({why})").format(why=text)
             self._shortcut = None
-            if self._shortcut_from_user:  # l'utente l'ha appena chiesta
+            if self._shortcut_from_user and IS_WINDOWS:
+                self.notify(tr("Ctrl+Alt+H non è disponibile ({why}). Dentro Helpix funziona comunque; la finestra "
+                               "rapida si apre anche dal menu dell'icona vicino all'orologio.").format(why=text), 10000)
+            elif self._shortcut_from_user:  # l'utente l'ha appena chiesta
                 from .. import shortcut_setup as ss
                 de = ss.desktop()
                 if de in ss.AUTOMATIC and de != "kde":  # Cinnamon, MATE, Xfce, COSMIC, GNOME < 48: subito
@@ -2122,9 +2130,27 @@ class MainWindow(QMainWindow):
         if send_once({"type": "toggle"}, quick_socket_path()):
             return
         from PySide6.QtCore import QProcess
-        QProcess.startDetached(sys.executable, ["-m", "helpix", "--quick"])
+        from ..system import helpix_argv
+        argv = helpix_argv("--quick")
+        QProcess.startDetached(argv[0], argv[1:])
 
     def quick_shortcut_info(self):
+        if IS_WINDOWS:
+            box = QMessageBox(self)
+            box.setWindowTitle(tr("Finestra rapida"))
+            box.setIcon(QMessageBox.Icon.Information)
+            box.setText(tr("La finestra rapida si apre in basso a destra per chiedere al volo: scrivi e premi Invio, "
+                           "la risposta compare lì. La stessa scorciatoia la mostra e la nasconde.\n\n"
+                           "Scorciatoia globale Ctrl+Alt+H: {state}.").format(state=self._shortcut_state))
+            retry = box.addButton(tr("Attiva Ctrl+Alt+H"), QMessageBox.ButtonRole.AcceptRole) \
+                if self._shortcut is None else None
+            box.addButton(tr("Chiudi"), QMessageBox.ButtonRole.RejectRole)
+            box.exec()
+            if retry is not None and box.clickedButton() is retry:
+                self.settings.set("quick_shortcut", True)
+                self._shortcut_from_user = True
+                self._start_global_shortcut()
+            return
         from .. import shortcut_setup as ss
         de = ss.desktop()
         name = ss.LABELS.get(de) or tr("questo desktop")

@@ -32,7 +32,7 @@ class SetupDialog(QDialog):
         title = QLabel("Helpix")
         title.setObjectName("setupTitle")
         v.addWidget(title)
-        sub = QLabel(tr("Assistente AI per risolvere i problemi del tuo PC Linux"))
+        sub = QLabel(tr("Assistente AI per risolvere i problemi del tuo PC"))
         sub.setObjectName("meta")
         v.addWidget(sub)
         v.addSpacing(6)

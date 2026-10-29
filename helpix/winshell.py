@@ -151,8 +151,15 @@ INTERACTIVE = {
 }
 _INTERACTIVE_CALLS = re.compile(r"(?i)\b(Read-Host|Get-Credential|pause)\b")
 FOLLOW = re.compile(r"(?i)\bGet-Content\b[^\n|;]*\s-Wait\b|\bping(\.exe)?\b[^\n|;]*\s-t\b")
-# cmdlet di PowerShell: Verbo-Nome (Get-Service, Restart-NetAdapter…), non si trovano con shutil.which
-CMDLET = re.compile(r"^[A-Z][a-z]+-[A-Za-z]+$")
+# cmdlet di PowerShell: Verbo-Nome (Get-Service, Restart-NetAdapter…), non si trovano con shutil.which. Solo i verbi
+# ufficiali di PowerShell, così una parola qualsiasi con il trattino non sembra un comando.
+VERBS = set("""Add Approve Assert Backup Block Build Checkpoint Clear Close Compare Complete Compress Confirm Connect
+Convert ConvertFrom ConvertTo Copy Debug Deny Deploy Disable Disconnect Dismount Edit Enable Enter Exit Expand Export
+Find Format Get Grant Group Hide Import Initialize Install Invoke Join Limit Lock Measure Merge Mount Move New Open
+Optimize Out Ping Pop Protect Publish Push Read Receive Redo Register Remove Rename Repair Request Reset Resize Resolve
+Restart Restore Resume Revoke Save Search Select Send Set Show Skip Split Start Step Stop Submit Suspend Switch Sync
+Test Trace Unblock Undo Uninstall Unlock Unprotect Unpublish Unregister Update Use Wait Watch Where Write""".split())
+CMDLET = re.compile(r"^(?P<verb>[A-Z][a-z]+)-[A-Z][A-Za-z0-9]*$")
 BUILTINS = {"cd", "dir", "ls", "cat", "echo", "set", "type", "copy", "move", "del", "md", "mkdir", "cls", "pwd",
             "sl", "gci", "gcm", "gps", "gsv", "sls", "iwr", "irm", "if", "foreach", "for", "&", "."}
 # «PS C:\Users\x> comando» o «C:\Users\x> comando» copiati dalla chat
@@ -178,7 +185,8 @@ def interactive_call(cmd: str) -> str | None:
 def is_command_word(name: str) -> bool:
     if name.startswith("$") or name in BUILTINS or name.lower() in BUILTINS:
         return True
-    if CMDLET.match(name):
+    m = CMDLET.match(name)
+    if m and m.group("verb") in VERBS:
         return True
     if re.match(r"^\.?\.?[\\/]", name) or re.match(r"^[A-Za-z]:\\", name):  # .\script.ps1, C:\...\x.exe
         return True

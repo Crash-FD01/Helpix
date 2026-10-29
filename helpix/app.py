@@ -37,7 +37,9 @@ def restart() -> None:
     """Riavvia Helpix (serve per applicare una nuova lingua)."""
     from PySide6.QtCore import QProcess
     from PySide6.QtWidgets import QApplication
-    QProcess.startDetached(sys.executable, ["-m", "helpix"] + [a for a in sys.argv[1:] if a != "--setup"])
+    from .system import helpix_argv
+    argv = helpix_argv(*[a for a in sys.argv[1:] if a != "--setup"])
+    QProcess.startDetached(argv[0], argv[1:])
     app = QApplication.instance()
     if app:
         app.quit()
@@ -65,7 +67,7 @@ def _test_shortcut() -> int:
     return 0
 
 
-USAGE = """Helpix {version} — assistente AI per risolvere i problemi del PC Linux
+USAGE = """Helpix {version} — assistente AI per risolvere i problemi del PC
 
 Uso: helpix [opzione]
 
