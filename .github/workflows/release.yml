@@ -79,7 +79,7 @@ jobs:
           QT_QPA_PLATFORM=offscreen /opt/helpix/venv/bin/python3 -P -c \
             "import helpix, requests, PySide6.QtWebEngineWidgets; print('Helpix', helpix.__version__)"
           helpix --help > /dev/null
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: packages-${{ matrix.arch }}
           path: |
@@ -116,7 +116,7 @@ jobs:
           Write-Host "Helpix installato e funzionante: $exe"
           $u = Start-Process "$env:LOCALAPPDATA\Programs\Helpix\unins000.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES' -Wait -PassThru
           if ($u.ExitCode) { throw "disinstallazione non riuscita ($($u.ExitCode))" }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: packages-windows
           path: dist/packages/*.exe
