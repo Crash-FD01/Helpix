@@ -84,6 +84,24 @@ def test_tray():
         if not win.isVisible() and win.tray.isVisible():
             break
     shown = [type(w).__name__ + ":" + w.objectName() for w in QApplication.topLevelWidgets() if w.isVisible()]
+    if win.isVisible() and sys.platform == "win32":  # diagnosi: cosa impedisce di nascondere la finestra
+        from PySide6.QtCore import Qt
+        wh = win.windowHandle()
+        info = {"isHidden": win.isHidden(), "WState_Hidden": win.testAttribute(Qt.WidgetAttribute.WA_WState_Hidden),
+                "WState_Visible": win.testAttribute(Qt.WidgetAttribute.WA_WState_Visible),
+                "handle_visible": wh.isVisible() if wh else None, "modal": str(QApplication.activeModalWidget()),
+                "popup": str(QApplication.activePopupWidget()), "flags": hex(int(win.windowFlags().value)),
+                "overlay": getattr(win, "_overlay", None) is not None and win._overlay.isVisible(),
+                "tour": str(getattr(win, "tour", None))}
+        if wh:
+            wh.hide()
+            pump(300)
+            info["after_handle_hide"] = win.isVisible()
+        win.setWindowState(Qt.WindowState.WindowMinimized)
+        win.hide()
+        pump(300)
+        info["after_minimize_hide"] = win.isVisible()
+        shown.append(info)
     assert not win.isVisible() and win.tray.isVisible(), (win.isVisible(), win.tray.isVisible(), calls,
                                                           int(win.windowState().value), shown)
     assert not win.isVisible() and not win._quitting
