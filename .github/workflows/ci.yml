@@ -86,4 +86,7 @@ jobs:
         shell: bash
         env:
           TEST_TIMEOUT: "180"
+          # piattaforma grafica vera di Windows (le macchine di GitHub hanno un desktop): con «offscreen» il motore
+          # web di Qt a volte va in crash all'uscita del test, dopo che tutte le verifiche sono passate
+          QT_QPA_PLATFORM: windows
         run: .github/scripts/annotate.sh "Test su Windows" tests/run_all.sh python
