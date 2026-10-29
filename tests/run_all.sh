@@ -29,6 +29,8 @@ for t in tests/test_*.py; do
         failed+=("$t")
         if [[ "${GITHUB_ACTIONS:-}" == true ]]; then  # un'annotazione per test fallito (visibile anche dall'API)
             level=error; (( ${#failed[@]} > 10 )) && level=warning
+            out="$out
+(codice di uscita $rc dopo $((SECONDS - start)) s)"
             msg="$(printf '%s\n' "$out" | grep -v "gpu_channel_manager\|QRhi\|RHI for\|socket_manager.cc\|Permissions-Policy\|WebGPU" | tail -n 25 \
                    | sed 's/%/%25/g; s/\r/%0D/g' | sed ':a;N;$!ba;s/\n/%0A/g')"
             echo "::$level title=$t::$msg"

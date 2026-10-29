@@ -12,6 +12,8 @@ os.environ["XDG_CONFIG_HOME"] = os.path.join(_tmp, "config")
 os.environ["XDG_DATA_HOME"] = os.path.join(_tmp, "data")
 os.environ["XDG_RUNTIME_DIR"] = os.path.join(_tmp, "run")
 os.makedirs(os.environ["XDG_RUNTIME_DIR"], mode=0o700)
+if sys.platform == "win32":  # piattaforma vera: nascondere e mostrare finestre è proprio ciò che si prova
+    os.environ["QT_QPA_PLATFORM"] = "windows"
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("QTWEBENGINE_DISABLE_SANDBOX", "1")
 os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu")
