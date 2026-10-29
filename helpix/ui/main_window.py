@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 
+from ..system import IS_WINDOWS
 from .. import __version__, theme
 from ..diagnostics import collect as collect_diagnostics
 from .. import agents
@@ -1371,7 +1372,8 @@ class MainWindow(QMainWindow):
         self.terminal.append(f"{self.terminal.prompt_text()} ", "prompt")
         self.terminal.append(f"{cmd}\n", "cmd")
         if info.needs_root:
-            self.terminal.append(tr("Autorizzazione di amministratore richiesta (polkit)…\n"), "muted")
+            self.terminal.append(tr("Windows chiede il permesso di amministratore (Controllo account utente)…\n")
+                                 if IS_WINDOWS else tr("Autorizzazione di amministratore richiesta (polkit)…\n"), "muted")
         runner = CommandRunner(cmd, self.session.cwd, info.needs_root,
                                int(self.settings.get("command_timeout", 120)), self.prev_cwd, parent=self)
         runner.chunk.connect(self.terminal.append)

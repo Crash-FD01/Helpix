@@ -1,11 +1,13 @@
 # SPDX-FileCopyrightText: 2026 Crash
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Esecuzione dei comandi: analisi di sicurezza, privilegi via polkit, tracking della cartella.
+"""Esecuzione dei comandi: analisi di sicurezza, privilegi di amministratore, tracking della cartella.
 
-Ogni comando gira in una `bash -c` nuova e non interattiva (stdin chiuso, pager
-disattivati). La cartella corrente viene preservata tra un comando e l'altro: una
-trap EXIT scrive `$PWD` su un descrittore dedicato, così anche `cd x && ls` o uno
-script con `exit` aggiornano correttamente la posizione.
+Linux: ogni comando gira in una `bash -c` nuova e non interattiva (stdin chiuso, pager disattivati); i
+privilegi di root passano da polkit (pkexec). La cartella corrente viene preservata tra un comando e l'altro:
+una trap EXIT scrive `$PWD` su un descrittore dedicato, così anche `cd x && ls` o uno script con `exit`
+aggiornano correttamente la posizione.
+
+Windows: PowerShell, elevazione con il Controllo account utente (vedi winshell.py).
 """
 from __future__ import annotations
 
@@ -21,7 +23,10 @@ import time
 from dataclasses import dataclass, field
 
 from PySide6.QtCore import QThread, Signal
+
+from . import winshell
 from .i18n import tr
+from .system import IS_WINDOWS, runtime_dir
 
 MAX_CAPTURE = 200_000  # caratteri di output conservati per comando
 
@@ -66,6 +71,8 @@ class CommandInfo:
 
 
 def analyze(cmd: str) -> CommandInfo:
+    if IS_WINDOWS:
+        return _analyze_windows(cmd)
     info = CommandInfo()
     info.needs_root = bool(_SUDO_ANY.search(cmd)) or cmd.lstrip().startswith("pkexec ")
     info.sudo_options = bool(_SUDO_OPTS.search(cmd))
@@ -88,6 +95,29 @@ def analyze(cmd: str) -> CommandInfo:
     return info
 
 
+def _analyze_windows(cmd: str) -> CommandInfo:
+    info = CommandInfo()
+    info.needs_root = bool(_SUDO_ANY.search(cmd))
+    info.sudo_options = bool(_SUDO_OPTS.search(cmd))
+    seen: list[str] = []
+    for rx, reason in winshell.DANGEROUS:
+        if rx.search(cmd) and reason not in seen:
+            seen.append(reason)
+    info.dangers = seen
+    info.interactive = winshell.interactive_call(cmd)
+    for seg in ([] if info.interactive else re.split(r"\|\|?|&&|;|\n", cmd)):
+        words = seg.strip().split()
+        while words and words[0].lower() in ("sudo", "&"):
+            words.pop(0)
+        if words:
+            info.interactive = winshell.interactive_reason(os.path.basename(words[0]), words)
+            if info.interactive:
+                break
+    if not info.interactive and winshell.FOLLOW.search(cmd):
+        info.interactive = tr("il comando resta in ascolto finché non premi «Ferma» (o fino al timeout)")
+    return info
+
+
 _BUILTINS = {"cd", "export", "echo", "printf", "source", ".", "for", "if", "while", "test", "[",
              "unset", "alias", "type", "ulimit", "umask", "set", "read", "case"}
 # "$ cmd" oppure "utente@host:~$ cmd" / "root@host:~# cmd"; un "#" da solo è un commento
@@ -103,7 +133,8 @@ def looks_like_command(text: str) -> str | None:
     text = (text or "").strip()
     if not text or len(text) > 3000 or text.count("\n") > 30:
         return None
-    lines = [_PROMPT.sub("", line, count=1) for line in text.splitlines()]
+    prompt = winshell.PROMPT if IS_WINDOWS else _PROMPT
+    lines = [prompt.sub("", line, count=1) for line in text.splitlines()]
     cleaned = "\n".join(lines).strip()
     first_line = next((ln for ln in lines if ln.strip() and not ln.lstrip().startswith("#")), "")
     words = first_line.split()
@@ -112,6 +143,8 @@ def looks_like_command(text: str) -> str | None:
     if not words:
         return None
     name = words[0]
+    if IS_WINDOWS:
+        return cleaned if winshell.is_command_word(name) else None
     if name in _BUILTINS or (re.match(r"^[\w.+/-]+$", name) and shutil.which(name)):
         return cleaned
     return None
@@ -122,7 +155,13 @@ def strip_sudo(cmd: str) -> str:
 
 
 def pkexec_available() -> bool:
-    return shutil.which("pkexec") is not None
+    """Si possono ottenere i privilegi di amministratore? (Linux: pkexec; Windows: il Controllo account utente)"""
+    return IS_WINDOWS or shutil.which("pkexec") is not None
+
+
+def elevation_name() -> str:
+    """Come il sistema chiede i permessi, per i messaggi: polkit su Linux, Controllo account utente su Windows."""
+    return tr("Controllo account utente") if IS_WINDOWS else "polkit"
 
 
 def clean_output(text: str) -> str:
@@ -170,6 +209,13 @@ class CommandRunner(QThread):
     def _kill(self) -> None:
         if not self.proc or self.proc.poll() is not None:
             return
+        if IS_WINDOWS:
+            winshell.kill_tree(self.proc.pid)
+            try:
+                self.proc.wait(3)
+            except subprocess.TimeoutExpired:
+                pass
+            return
         for sig, wait in ((signal.SIGTERM, 2.0), (signal.SIGKILL, 1.0)):
             try:
                 os.killpg(self.proc.pid, sig)
@@ -185,6 +231,8 @@ class CommandRunner(QThread):
                 continue
 
     def run(self) -> None:  # noqa: C901 - flusso lineare, più leggibile in un unico metodo
+        if IS_WINDOWS:
+            return self._run_windows()
         start = time.monotonic()
         r_fd, w_fd = os.pipe()
         bash = shutil.which("bash") or "/bin/bash"
@@ -278,3 +326,136 @@ class CommandRunner(QThread):
         self.completed.emit(CommandResult(
             self.cmd, rc, new_cwd, "".join(captured), self.root, timed_out, cancelled,
             truncated, time.monotonic() - start))
+
+    # ------------------------------------------------------------------ Windows
+    def _run_windows(self) -> None:  # noqa: C901
+        import tempfile
+        start = time.monotonic()
+        work = tempfile.mkdtemp(prefix="cmd-", dir=runtime_dir())
+        cwd_file, out_file, rc_file = (os.path.join(work, n) for n in ("cwd.txt", "out.txt", "rc.txt"))
+        cwd = self.cwd if os.path.isdir(self.cwd) else os.path.expanduser("~")
+        if self.root:
+            elevated = winshell.encode(winshell.elevated_script(strip_sudo(self.cmd), cwd, out_file, rc_file))
+            argv = winshell.argv(winshell.encode(winshell.launcher_script(elevated)))
+        else:
+            argv = winshell.argv(winshell.encode(winshell.script(strip_sudo(self.cmd), cwd, cwd_file)))
+        try:
+            self.proc = subprocess.Popen(
+                argv, cwd=cwd, env=self._env_windows(), stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT, bufsize=0,
+                creationflags=subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP)
+        except OSError as exc:
+            msg = tr("Impossibile avviare il comando: {exc}\n").format(exc=exc)
+            self.chunk.emit(msg)
+            self.completed.emit(CommandResult(self.cmd, 127, self.cwd, msg, self.root))
+            shutil.rmtree(work, ignore_errors=True)
+            return
+
+        lines: queue.Queue = queue.Queue()
+
+        def reader():
+            assert self.proc and self.proc.stdout
+            for raw in self.proc.stdout:
+                lines.put(_decode_windows(raw))
+            lines.put(None)
+
+        threading.Thread(target=reader, daemon=True).start()
+        captured: list[str] = []
+        size, truncated, timed_out, cancelled = 0, False, False, False
+        deadline = start + self.timeout if self.timeout else None
+        out_pos = 0
+        warned_elevated = False
+
+        def take(text: str) -> None:
+            nonlocal size, truncated
+            text = clean_output(text)
+            if not text:
+                return
+            self.chunk.emit(text)
+            if size < MAX_CAPTURE:
+                captured.append(text)
+                size += len(text)
+            else:
+                truncated = True
+
+        def drain_out_file() -> None:  # output del PowerShell elevato, scritto man mano
+            nonlocal out_pos
+            try:
+                with open(out_file, "rb") as f:
+                    f.seek(out_pos)
+                    data = f.read()
+            except OSError:
+                return
+            if data:
+                out_pos += len(data)
+                take(data.decode("utf-8-sig", "replace") if out_pos == len(data) else data.decode("utf-8", "replace"))
+
+        finished = False
+        while not finished:
+            try:
+                line = lines.get(timeout=0.1)
+            except queue.Empty:
+                line = ""
+            if line is None:
+                finished = True
+            elif line:
+                take(line)
+            if self.root:
+                drain_out_file()
+            if deadline and time.monotonic() > deadline and not timed_out:
+                timed_out = True
+                self._kill()
+            if self._cancel.is_set() and not cancelled:
+                cancelled = True
+                self._kill()
+                if self.root and not warned_elevated:
+                    warned_elevated = True
+                    take(tr("\nIl comando gira come amministratore: Helpix non può fermarlo da qui. Se serve, "
+                            "chiudilo da Gestione attività.\n"))
+        try:
+            rc = self.proc.wait(5)
+        except subprocess.TimeoutExpired:
+            self._kill()
+            rc = self.proc.returncode if self.proc.returncode is not None else -9
+        new_cwd = self.cwd
+        if self.root:
+            drain_out_file()
+            if rc == 1223:
+                take(tr("Richiesta di amministratore annullata.\n"))
+            try:
+                with open(rc_file, encoding="ascii") as f:
+                    rc = int(f.read().strip() or rc)
+            except (OSError, ValueError):
+                pass
+        else:
+            try:
+                with open(cwd_file, encoding="utf-8-sig") as f:
+                    data = f.read().strip()
+                if data and os.path.isdir(data):
+                    new_cwd = data
+            except OSError:
+                pass
+        shutil.rmtree(work, ignore_errors=True)
+        self.completed.emit(CommandResult(
+            self.cmd, rc, new_cwd, "".join(captured), self.root, timed_out, cancelled,
+            truncated, time.monotonic() - start))
+
+    def _env_windows(self) -> dict:
+        env = os.environ.copy()
+        env.update(NO_COLOR="1", PAGER="", GIT_PAGER="cat", POWERSHELL_UPDATECHECK="Off",
+                   POWERSHELL_TELEMETRY_OPTOUT="1")
+        return env
+
+
+def _decode_windows(raw: bytes) -> str:
+    """L'output dei programmi Windows è in UTF-8 (PowerShell impostato così) o nella codepage OEM (cmd.exe, vecchi
+    programmi): si prova UTF-8 e se non va si usa la codepage della console."""
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        try:
+            import ctypes
+            return raw.decode(f"cp{ctypes.windll.kernel32.GetOEMCP()}", "replace")
+        except (AttributeError, LookupError, OSError):
+            return raw.decode("cp850", "replace")
+

@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QTextEdit, QToolButton, QVBoxLayout, QWidget,
 )
 
+from ..system import IS_WINDOWS
 from ..executor import analyze
 from ..providers import PROVIDERS
 from ..screenshot import new_shot_path
@@ -108,7 +109,8 @@ class CodeCard(QFrame):
             if info.needs_root:
                 b = QLabel(tr("richiede root"))
                 b.setObjectName("badgeRoot")
-                b.setToolTip(tr("Verrà chiesta la password di amministratore (polkit)"))
+                b.setToolTip(tr("Windows chiederà il permesso di amministratore (Controllo account utente)")
+                             if IS_WINDOWS else tr("Verrà chiesta la password di amministratore (polkit)"))
                 head.addWidget(b)
             if info.dangers:
                 b = QLabel(tr("⚠ attenzione"))

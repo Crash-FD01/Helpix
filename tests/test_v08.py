@@ -5,6 +5,11 @@
 Un host di native messaging vero (in un thread) fa la parte del browser: invia le richieste
 che l'estensione manda quando premi «Esegui con Helpix» e legge le risposte dell'app.
 """
+import sys as _sys
+if _sys.platform == "win32":
+    print("saltato su Windows: l'estensione del browser (messa da parte) gira solo su Linux")
+    raise SystemExit(0)
+
 import os
 import sys
 import tempfile

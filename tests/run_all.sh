@@ -23,6 +23,12 @@ for t in tests/test_*.py; do
         printf '  FAIL  %-28s %3ss\n' "$t" "$((SECONDS - start))"
         printf '%s\n' "$out" | tail -40 | sed 's/^/        /'
         failed+=("$t")
+        if [[ "${GITHUB_ACTIONS:-}" == true ]]; then  # un'annotazione per test fallito (visibile anche dall'API)
+            level=error; (( ${#failed[@]} > 10 )) && level=warning
+            msg="$(printf '%s\n' "$out" | grep -v "gpu_channel_manager\|QRhi\|RHI for" | tail -n 25 \
+                   | sed 's/%/%25/g; s/\r/%0D/g' | sed ':a;N;$!ba;s/\n/%0A/g')"
+            echo "::$level title=$t::$msg"
+        fi
     fi
 done
 if (( ${#failed[@]} )); then

@@ -10,6 +10,7 @@ from __future__ import annotations
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPlainTextEdit, QPushButton, QVBoxLayout
 
+from ..system import IS_WINDOWS
 from .. import theme
 from ..executor import analyze
 from ..icons import icon
@@ -161,7 +162,11 @@ class CommandBar(QFrame):
         info = analyze(cmd)
         pills = []
         if info.needs_root:
-            pills.append((tr("Chiede la password"), "pillWarn", tr("Serve la password di amministratore (polkit)")))
+            if IS_WINDOWS:
+                pills.append((tr("Come amministratore"), "pillWarn",
+                              tr("Windows chiederà il permesso di amministratore (Controllo account utente)")))
+            else:
+                pills.append((tr("Chiede la password"), "pillWarn", tr("Serve la password di amministratore (polkit)")))
         if info.dangers:
             pills.append((tr("Attenzione"), "pillErr", "\n".join(info.dangers)))
         if info.interactive:
