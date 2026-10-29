@@ -5,6 +5,7 @@
 Processi veri: Helpix (finestra principale) e la finestra rapida (`helpix --quick`), che è un processo a sé.
 """
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -114,8 +115,11 @@ def test_old_quick_window_from_previous_version():
     e riapriva Helpix: la nuova Helpix la riconosce e la chiude."""
     log = os.path.join(_tmp, "old_quick.log")
     env = dict(ENV, OLD_QUICK_LOG=log)
-    # come la vera: «python -m helpix --quick» (Helpix controlla la riga di comando prima di terminarla)
-    old = subprocess.Popen([sys.executable, os.path.join(ROOT, "tests", "quick", "old_quick.py"), "--quick"], env=env,
+    # come la vera, «python -m helpix --quick»: Helpix controlla che la riga di comando contenga «helpix» e
+    # «--quick» prima di terminarla. Copia con «helpix» nel nome, qualunque sia la cartella del progetto.
+    fake = os.path.join(_tmp, "helpix-old-quick.py")
+    shutil.copy(os.path.join(ROOT, "tests", "quick", "old_quick.py"), fake)
+    old = subprocess.Popen([sys.executable, fake, "--quick"], env=env,
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
     assert wait(lambda: is_running(quick_socket_path()), 10), "finestra rapida vecchia non partita"
     main = start_main("quit", "9000")
