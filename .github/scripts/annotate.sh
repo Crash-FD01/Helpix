@@ -11,7 +11,8 @@ log="$(mktemp)"
 "$@" 2>&1 | tee "$log"
 rc="${PIPESTATUS[0]}"
 if (( rc != 0 )); then
-    msg="$(tail -n 40 "$log" | sed 's/%/%25/g; s/\r/%0D/g' | sed ':a;N;$!ba;s/\n/%0A/g')"
+    msg="$(grep -v "gpu_channel_manager\|socket_manager.cc\|QRhi\|RHI for\|Permissions-Policy\|WebGPU" "$log" \
+           | tail -n 40 | sed 's/%/%25/g; s/\r/%0D/g' | sed ':a;N;$!ba;s/\n/%0A/g')"
     echo "::error title=$title::$msg"
 fi
 rm -f "$log"

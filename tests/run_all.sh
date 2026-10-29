@@ -11,6 +11,7 @@ PY="${1:-python3}"
 export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-offscreen}" QTWEBENGINE_DISABLE_SANDBOX=1 PYTHONDONTWRITEBYTECODE=1
 export QTWEBENGINE_CHROMIUM_FLAGS="${QTWEBENGINE_CHROMIUM_FLAGS:---disable-gpu}"
 failed=()
+summary=()
 for t in tests/test_*.py; do
     wrap=()
     if [[ "$t" == tests/test_desktops.py ]] && command -v dbus-run-session >/dev/null; then
@@ -19,8 +20,11 @@ for t in tests/test_*.py; do
     start=$SECONDS
     if out="$(timeout "${TEST_TIMEOUT:-300}" "${wrap[@]}" "$PY" "$t" 2>&1)"; then
         printf '  ok    %-28s %3ss\n' "$t" "$((SECONDS - start))"
+        summary+=("$(printf 'ok    %-28s %3ss' "$t" "$((SECONDS - start))")")
     else
-        printf '  FAIL  %-28s %3ss\n' "$t" "$((SECONDS - start))"
+        rc=$?
+        printf '  FAIL  %-28s %3ss (codice %s)\n' "$t" "$((SECONDS - start))" "$rc"
+        summary+=("$(printf 'FAIL  %-28s %3ss (codice %s)' "$t" "$((SECONDS - start))" "$rc")")
         printf '%s\n' "$out" | tail -40 | sed 's/^/        /'
         failed+=("$t")
         if [[ "${GITHUB_ACTIONS:-}" == true ]]; then  # un'annotazione per test fallito (visibile anche dall'API)
@@ -31,6 +35,9 @@ for t in tests/test_*.py; do
         fi
     fi
 done
+echo
+echo "Riepilogo:"
+printf '  %s\n' "${summary[@]}"
 if (( ${#failed[@]} )); then
     echo "Test falliti: ${failed[*]}"; exit 1
 fi

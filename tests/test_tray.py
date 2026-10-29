@@ -70,6 +70,12 @@ def test_tray():
     calls = []
     real_to_tray = win.to_tray
     win.to_tray = lambda: (calls.append("to_tray"), real_to_tray())
+    import traceback
+    for name in ("show", "showNormal", "setVisible", "showMaximized", "raise_", "activateWindow"):
+        real = getattr(win, name)
+        setattr(win, name, lambda *a, _n=name, _r=real: (calls.append(
+            _n + str(a) + " ← " + " / ".join(ln.strip().splitlines()[0] for ln in traceback.format_stack()[-4:-1])),
+            _r(*a)))
     win.close()  # la X: resta nell'area di notifica
     for _ in range(30):  # sulle macchine lente (CI) chiusura e icona arrivano qualche istante dopo
         pump(100)
