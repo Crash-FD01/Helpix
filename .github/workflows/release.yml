@@ -8,11 +8,17 @@
 #   4. aggiorna il repository APT (release «repo») e quello RPM + il sito (GitHub Pages).
 # Da lì «apt upgrade», «dnf upgrade» e «zypper update» trovano la nuova versione.
 # Per ripubblicare una versione (es. dopo aver cambiato il sito): Actions → Rilascio → Run workflow → tag.
+# Quando cambiano i file dei pacchetti su main fa solo la prova: costruisce e installa, senza pubblicare nulla.
 name: Rilascio
 
 on:
   push:
     tags: ["v*"]
+    branches: [main]
+    paths:
+      - "packaging/**"
+      - "pyproject.toml"
+      - ".github/workflows/release.yml"
   workflow_dispatch:
     inputs:
       tag:
@@ -23,7 +29,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: release
+  group: release-${{ github.ref }}
   cancel-in-progress: false
 
 env:
@@ -45,6 +51,7 @@ jobs:
         with:
           ref: ${{ env.TAG }}
       - name: Il tag corrisponde alla versione
+        if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
         run: |
           version="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
           if [ "v$version" != "$TAG" ]; then
@@ -82,6 +89,7 @@ jobs:
   publish:
     name: Pubblica release e repository
     needs: build
+    if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     permissions:
       contents: write
