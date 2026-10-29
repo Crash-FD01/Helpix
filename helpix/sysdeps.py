@@ -82,6 +82,27 @@ LIBS: dict[str, tuple[str, str, str, str]] = {
     "libcups.so.2": ("cups-libs", "libcups2", "libcups", "libcups2"),
     "libxslt.so.1": ("libxslt", "libxslt1.1", "libxslt", "libxslt1"),
     "libminizip.so.1": ("minizip-compat", "libminizip1", "minizip", "libminizip1"),
+    # Qt WebEngine su ARM (aarch64) usa queste librerie di sistema invece di quelle incluse su x86_64; le comuni
+    # (X11, zlib, libstdc++…) ci sono quasi sempre, ma l'installazione deve conoscerne il pacchetto
+    "libICE.so.6": ("libICE", "libice6", "libice", "libICE6"),
+    "libSM.so.6": ("libSM", "libsm6", "libsm", "libSM6"),
+    "libX11.so.6": ("libX11", "libx11-6", "libx11", "libX11-6"),
+    "libbrotlidec.so.1": ("libbrotli", "libbrotli1", "brotli", "libbrotlidec1"),
+    "libexpat.so.1": ("expat", "libexpat1", "expat", "libexpat1"),
+    "libgcc_s.so.1": ("libgcc", "libgcc-s1", "gcc-libs", "libgcc_s1"),
+    "liblcms2.so.2": ("lcms2", "liblcms2-2", "lcms2", "liblcms2-2"),
+    "libopus.so.0": ("opus", "libopus0", "opus", "libopus0"),
+    "libsnappy.so.1": ("snappy", "libsnappy1v5", "snappy", "libsnappy1"),
+    "libstdc++.so.6": ("libstdc++", "libstdc++6", "gcc-libs", "libstdc++6"),
+    "libudev.so.1": ("systemd-libs", "libudev1", "systemd-libs", "libudev1"),
+    "libwebp.so.7": ("libwebp", "libwebp7", "libwebp", "libwebp7"),
+    "libwebpdemux.so.2": ("libwebp", "libwebpdemux2", "libwebp", "libwebpdemux2"),
+    "libwebpmux.so.3": ("libwebp", "libwebpmux3", "libwebp", "libwebpmux3"),
+    "libxcb-dri3.so.0": ("libxcb", "libxcb-dri3-0", "libxcb", "libxcb-dri3-0"),
+    "libxcb-render.so.0": ("libxcb", "libxcb-render0", "libxcb", "libxcb-render0"),
+    "libxcb.so.1": ("libxcb", "libxcb1", "libxcb", "libxcb1"),
+    "libz.so.1": ("zlib", "zlib1g", "zlib", "libz1"),
+    "libzstd.so.1": ("libzstd", "libzstd1", "zstd", "libzstd1"),
 }
 
 # strumenti → pacchetto per dnf, apt, pacman, zypper
