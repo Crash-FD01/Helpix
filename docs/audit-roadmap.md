@@ -62,6 +62,10 @@
 - `test_quit` dipendeva dal nome della cartella del progetto.
 - In CI, se un passo fallisce, le ultime righe finiscono in un'annotazione (`.github/scripts/annotate.sh`).
 
+**v0.15.1** — Il .deb 0.15.0 costruito su GitHub dipendeva da `firefox`: sulla macchina di build `dpkg -S` trovava
+`libnspr4.so` anche dentro Firefox. Ora contano solo le cartelle di sistema delle librerie e la build si ferma se
+una dipendenza non è una libreria (`tests/test_packaging.py`). Verificato installando dal repository pubblico.
+
 ## 0.1 Prima versione pubblica (v0.14.0)
 
 **Revisione finale prima della pubblicazione**

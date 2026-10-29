@@ -9,7 +9,7 @@ ChatGPT, Claude, Gemini, Copilot o DeepSeek. Fai uno screenshot del problema, He
 direttamente nella chat; copi il comando che l'IA ti propone, Helpix lo esegue con un clic e ti
 incolla l'output nella chat.
 
-## Come funziona (v0.15.0)
+## Come funziona (v0.15.1)
 
 **Motore "Il mio account" (predefinito, gratuito con l'account free)**
 - All'avvio scegli il servizio e accedi nella sua pagina ufficiale, dentro Helpix. L'accesso resta salvato.
