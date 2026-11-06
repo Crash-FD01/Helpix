@@ -73,7 +73,8 @@
       <description>
         <p>Quick window: every Ctrl+Alt+H opens a new, clean task (a new chat in the assistant); answers show up
           there even with Helpix hidden in the tray; with Helpix closed the shortcut starts it in the background and
-          shows only the quick window.</p>
+          shows only the quick window. Windows: if the official Codex installer is blocked on junctions
+          (RedirectionGuard), Helpix installs the official Codex release package in a normal folder.</p>
       </description>
     </release>
     <release version="0.17.1" date="2026-11-06">

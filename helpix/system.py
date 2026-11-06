@@ -29,7 +29,10 @@ def redirection_trust_policy() -> int | None:
     if not IS_WINDOWS:
         return None
     import ctypes
-    k = ctypes.windll.kernel32
+    from ctypes import wintypes
+    k = ctypes.WinDLL("kernel32", use_last_error=True)
+    k.GetCurrentProcess.restype = wintypes.HANDLE
+    k.GetProcessMitigationPolicy.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, ctypes.c_size_t]
     flags = ctypes.c_uint32(0)
     if not k.GetProcessMitigationPolicy(k.GetCurrentProcess(), 16, ctypes.byref(flags), ctypes.sizeof(flags)):
         return None

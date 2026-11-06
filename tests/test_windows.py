@@ -476,8 +476,67 @@ def test_junctions_on_windows():
     text = "\n".join(report)
     print(text)
     print("::notice title=Giunzioni e RedirectionGuard (Windows)::" + text.replace("\r", "").replace("\n", "%0A"))
-    assert text.count("junction-ok") == 2 * len([1 for r in report if " processo: " in r]), text
+    assert all("junction-ok" in r for r in report), text
     del app
+
+
+def test_codex_without_junctions():
+    """Codex: se lo script ufficiale si ferma su una giunzione «non attendibile» (RedirectionGuard), Helpix installa il
+    pacchetto ufficiale della release in una cartella normale."""
+    import io
+    import shutil
+    import subprocess
+    import zipfile
+    from helpix import agents
+    pss = [p for p in (shutil.which("pwsh"), shutil.which("powershell.exe") if WINDOWS else None) if p]
+    if not pss:
+        print("  (PowerShell non presente: saltato)")
+        return
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("codex-package.json", '{"version": "9.9.9", "entrypoint": "codex-x86_64-pc-windows-msvc.exe"}')
+        z.writestr("codex-x86_64-pc-windows-msvc.exe", b"MZ finto")
+        z.writestr("codex-path/rg.exe", b"MZ")
+    data = buf.getvalue()
+    import http.server
+    import threading
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802
+            self.send_response(200)
+            self.send_header("Content-Type", "application/zip")
+            self.end_headers()
+            self.wfile.write(data if "x86_64" in self.path else b"")
+
+        def log_message(self, *_a):
+            pass
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    saved = (agents.IS_WINDOWS, agents.AGENTS["codex"]["install_win"], agents.CODEX_ZIP_URL)
+    agents.IS_WINDOWS = True
+    agents.AGENTS["codex"]["install_win"] = ("throw [System.IO.IOException]::new('The path cannot be traversed because "
+                                             "it contains an untrusted mount point.', -2147023424)")
+    agents.CODEX_ZIP_URL = f"http://127.0.0.1:{srv.server_address[1]}/codex-{{arch}}-pc-windows-msvc.exe.zip"
+    try:
+        script = agents.windows_install_script("codex")
+        agents.AGENTS["codex"]["install_win"] = "throw 'altro errore'"
+        other = agents.windows_install_script("codex")
+    finally:
+        agents.IS_WINDOWS, agents.AGENTS["codex"]["install_win"], agents.CODEX_ZIP_URL = saved
+    for ps in pss:
+        local = tempfile.mkdtemp()
+        env = dict(os.environ, LOCALAPPDATA=local, PROCESSOR_ARCHITECTURE="AMD64", PROCESSOR_ARCHITEW6432="")
+        path = os.path.join(local, "s.ps1")
+        for text, want_rc in ((script, 0), (other, 1)):
+            with open(path, "w", encoding="utf-8-sig") as f:
+                f.write(text)
+            r = subprocess.run([ps, "-NoLogo", "-NoProfile", "-ExecutionPolicy", "RemoteSigned", "-File", path],
+                               capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120, env=env)
+            assert r.returncode == want_rc, (ps, want_rc, r.returncode, r.stdout[-1500:], r.stderr[-800:])
+        dest = os.path.join(local, "Helpix", "agents", "codex")
+        assert open(os.path.join(dest, "codex.exe"), "rb").read() == b"MZ finto", os.listdir(dest)
+        assert os.path.isfile(os.path.join(dest, "codex-path", "rg.exe"))
+    srv.shutdown()
 
 
 if __name__ == "__main__":

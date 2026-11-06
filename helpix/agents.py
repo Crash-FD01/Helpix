@@ -79,7 +79,8 @@ AGENTS: dict[str, dict] = {
 
 # dove finiscono di solito i programmi installati senza root
 _EXTRA_PATHS = ["~/.local/bin", "~/.npm-global/bin", "~/bin", "~/.local/share/pnpm", "/usr/local/bin"]
-_EXTRA_PATHS_WIN = ["~/.local/bin", "%APPDATA%/npm", "%LOCALAPPDATA%/Programs/nodejs", "%ProgramFiles%/nodejs"]
+_EXTRA_PATHS_WIN = ["~/.local/bin", "%APPDATA%/npm", "%LOCALAPPDATA%/Programs/nodejs", "%ProgramFiles%/nodejs",
+                    "%LOCALAPPDATA%/Helpix/agents/codex"]  # Codex installato da Helpix senza giunzioni
 
 
 def _registry_path() -> list[str]:
@@ -131,6 +132,57 @@ _OSARCH = r"\[(?:System\.)?(?:Runtime\.InteropServices\.)?RuntimeInformation\]::
 _IRM_IEX = re.compile(r"^irm (\S+) \| iex$")
 
 
+# Codex: lo script ufficiale crea giunzioni (junction) nella cartella dell'utente. Dove Windows applica RedirectionGuard
+# (Windows 11 recenti, criteri di sicurezza aziendali) non le può attraversare e si ferma con
+# ERROR_UNTRUSTED_MOUNT_POINT (448). Allora Helpix installa lo stesso pacchetto ufficiale della release GitHub di
+# Codex in una cartella normale, senza giunzioni: codex.exe è un collegamento fisso (hard link) al programma.
+CODEX_ZIP_URL = "https://github.com/openai/codex/releases/latest/download/codex-{arch}-pc-windows-msvc.exe.zip"
+_CODEX_FALLBACK = r"""
+function Test-HelpixUntrustedMount($err) {
+  $e = $err.Exception
+  while ($e) {
+    if ($e.HResult -eq -2147023424 -or $e.Message -match 'untrusted mount point|punto di montaggio non attendibile') {
+      return $true
+    }
+    $e = $e.InnerException
+  }
+  return $false
+}
+function Install-HelpixCodexPackage {
+  $arch = if ("$env:PROCESSOR_ARCHITEW6432 $env:PROCESSOR_ARCHITECTURE" -match 'ARM64') { 'aarch64' } else { 'x86_64' }
+  $url = %(url)s.Replace('{arch}', $arch)
+  $dest = Join-Path $env:LOCALAPPDATA 'Helpix\agents\codex'
+  $zip = Join-Path ([IO.Path]::GetTempPath()) ('helpix-codex-' + $arch + '.zip')
+  Write-Host ''
+  Write-Host (%(note)s.Replace('{dir}', $dest)) -ForegroundColor Yellow
+  Write-Host "> $url"
+  Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $zip
+  if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
+  Expand-Archive -Path $zip -DestinationPath $dest -Force
+  Remove-Item -Force $zip
+  $pkg = Get-Content -Raw (Join-Path $dest 'codex-package.json') | ConvertFrom-Json
+  $exe = Join-Path $dest 'codex.exe'
+  New-Item -ItemType HardLink -Path $exe -Target (Join-Path $dest $pkg.entrypoint) | Out-Null
+  $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+  if (-not (($userPath -split ';') -contains $dest)) {
+    [Environment]::SetEnvironmentVariable('Path', ((($userPath -split ';') + $dest | Where-Object { $_ }) -join ';'), 'User')
+  }
+  $env:Path = "$dest;$env:Path"
+  Write-Host (%(done)s.Replace('{version}', [string]$pkg.version))
+}
+"""
+
+
+def _codex_fallback() -> str:
+    return _CODEX_FALLBACK % {
+        "url": _ps(CODEX_ZIP_URL),
+        "note": _ps(tr("Lo script ufficiale non può usare le giunzioni (junction) su questo PC: Windows le blocca "
+                       "(RedirectionGuard). Installo lo stesso pacchetto ufficiale di Codex, dalla sua release su "
+                       "GitHub, in una cartella normale: {dir}")),
+        "done": _ps(tr("Codex {version} installato.")),
+    }
+
+
 def windows_install_script(key: str, steps: list[str] | None = None) -> str:
     """Script PowerShell per installare l'agente su Windows.
 
@@ -160,8 +212,16 @@ def windows_install_script(key: str, steps: list[str] | None = None) -> str:
         )
     else:
         install = cmd + f"\nif ($LASTEXITCODE) {{ throw ({_ps(tr('codice di uscita {rc}'))}.Replace('{{rc}}', $LASTEXITCODE)) }}"
+    prelude = ""
+    if key == "codex":
+        prelude = _codex_fallback()
+        install = ("try {\n" + install + "\n} catch {\n"
+                   "  if (-not (Test-HelpixUntrustedMount $_)) { throw }\n"
+                   f"  Write-Host ({_ps(tr('Errore:'))} + ' ' + $_.Exception.Message) -ForegroundColor DarkGray\n"
+                   "  Install-HelpixCodexPackage\n"
+                   "}")
     log = _ps(str(install_log(key)))
-    body = "\n".join([*(steps or []), install])
+    body = "\n".join([prelude, *(steps or []), install])
     return (
         "$ErrorActionPreference = 'Stop'\n"
         "$ProgressPreference = 'SilentlyContinue'\n"

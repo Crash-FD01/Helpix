@@ -1285,4 +1285,6 @@ EN: dict[str, str] = {
     'PowerShell: {path}\n\n': 'PowerShell: {path}\n\n',
     '{name} non è installato: installalo dalla finestra di Helpix.': "{name} isn't installed: install it from the Helpix window.",
     'Nuovo task (chat nuova)': 'New task (new chat)',
+    'Lo script ufficiale non può usare le giunzioni (junction) su questo PC: Windows le blocca (RedirectionGuard). Installo lo stesso pacchetto ufficiale di Codex, dalla sua release su GitHub, in una cartella normale: {dir}': "The official script can't use junctions on this PC: Windows blocks them (RedirectionGuard). Installing the same official Codex package, from its GitHub release, in a normal folder: {dir}",
+    'Codex {version} installato.': 'Codex {version} installed.',
 }
