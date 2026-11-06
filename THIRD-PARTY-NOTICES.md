@@ -57,7 +57,7 @@ L'installer di Windows (`Helpix-<versione>-Setup.exe`) contiene, oltre a Helpix:
 | PowerShell 7.6 (con il runtime .NET e i moduli inclusi da Microsoft) | `pwsh\` | MIT (componenti inclusi: vedi `PowerShell-ThirdPartyNotices.txt`) | Microsoft Corporation |
 | Python (CPython, preparato con PyInstaller) con le sue librerie | `_internal\` | PSF-2.0 e licenze delle librerie, tutte permissive | Python Software Foundation e altri |
 | Qt 6, Qt WebEngine (Chromium), PySide6, Shiboken6 | `_internal\PySide6\` | LGPL-3.0-only (Chromium: BSD e altre) | The Qt Company e altri |
-| pywinpty, winrt (Windows SDK per Python), requests, keyring, cryptography e le loro dipendenze | `_internal\` | MIT, Apache-2.0, BSD | i rispettivi autori |
+| pywinpty (con `conpty.dll` e `OpenConsole.exe` di Windows Terminal), winrt (Windows SDK per Python), requests, keyring, cryptography e le loro dipendenze | `_internal\` | MIT, Apache-2.0, BSD | i rispettivi autori (Windows Terminal: Microsoft Corporation) |
 
 PowerShell è quello pubblicato da Microsoft nelle [release ufficiali](https://github.com/PowerShell/PowerShell/releases),
 senza modifiche: la build controlla l'impronta SHA-256 dell'archivio e la firma digitale di Microsoft su `pwsh.exe`.

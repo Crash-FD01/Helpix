@@ -24,9 +24,11 @@ $version = (python packaging\windows\make_assets.py $assets).Trim()
 Write-Host "-> Helpix $version"
 
 Write-Host '-> Helpix.exe (PyInstaller)'
+# --collect-all winpty: oltre al modulo servono conpty.dll e OpenConsole.exe, che pywinpty carica a runtime per il
+# terminale degli agenti (PyInstaller da solo non li vede: senza, il terminale resta vuoto)
 python -m PyInstaller --noconfirm --clean --windowed --name Helpix `
     --icon "$assets\helpix.ico" --version-file "$assets\version.txt" `
-    --collect-data helpix --collect-submodules helpix --collect-submodules winrt --hidden-import winpty `
+    --collect-data helpix --collect-submodules helpix --collect-submodules winrt --collect-all winpty `
     --exclude-module tkinter --exclude-module unittest --exclude-module pydoc `
     --distpath dist\windows --workpath build\pyinstaller --specpath build\pyinstaller `
     packaging\windows\helpix_main.py

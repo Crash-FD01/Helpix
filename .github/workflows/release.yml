@@ -115,8 +115,13 @@ jobs:
             if (-not (Test-Path "$env:LOCALAPPDATA\Programs\Helpix\$f")) { throw "manca $f nel programma installato" }
           }
           $env:QT_QPA_PLATFORM = 'offscreen'
+          $env:HELPIX_SELF_TEST_LOG = "$env:RUNNER_TEMP\self-test.log"
           $t = Start-Process $exe -ArgumentList '--self-test' -Wait -PassThru
-          if ($t.ExitCode) { throw "prova del programma installato non riuscita ($($t.ExitCode))" }
+          if ($t.ExitCode) {
+            $msg = if (Test-Path $env:HELPIX_SELF_TEST_LOG) { (Get-Content -Raw $env:HELPIX_SELF_TEST_LOG) -replace "`r?`n", '%0A' } else { 'nessun messaggio' }
+            Write-Host "::error title=Self-test di Helpix.exe::$msg"
+            throw "prova del programma installato non riuscita ($($t.ExitCode))"
+          }
           Write-Host "Helpix installato e funzionante: $exe"
           $u = Start-Process "$env:LOCALAPPDATA\Programs\Helpix\unins000.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES' -Wait -PassThru
           if ($u.ExitCode) { throw "disinstallazione non riuscita ($($u.ExitCode))" }

@@ -92,6 +92,20 @@ Licenza GPL-3.0-or-later: è software libero, senza alcuna garanzia. Sorgenti: h
 
 
 def _self_test() -> int:
+    return _self_test_run()
+
+
+def _say(msg: str) -> None:
+    """Messaggio del self-test: su stdout e, se impostato, nel file HELPIX_SELF_TEST_LOG (Helpix.exe è un programma
+    a finestre: la sua console non si vede)."""
+    print(msg, flush=True)
+    log = os.environ.get("HELPIX_SELF_TEST_LOG")
+    if log:
+        with open(log, "a", encoding="utf-8") as f:
+            f.write(msg + "\n")
+
+
+def _self_test_run() -> int:
     """Apre il motore web su una pagina vuota e prova i moduli che dipendono dal sistema; codice 0 se va tutto.
 
     Lo usa la build (pacchetti Linux e installer di Windows) per controllare il programma pronto, senza toccare
@@ -110,16 +124,16 @@ def _self_test() -> int:
         import subprocess
         exe = winshell.bundled_powershell()
         if not exe:
-            print("self-test: PowerShell 7 incluso non trovato", flush=True)
+            _say("self-test: PowerShell 7 incluso non trovato")
             return 1
         if os.environ.get("PATH", "").split(os.pathsep)[0] != os.path.dirname(exe):
-            print("self-test: PowerShell 7 incluso non è il primo nel PATH", flush=True)
+            _say("self-test: PowerShell 7 incluso non è il primo nel PATH")
             return 1
         r = subprocess.run(winshell.argv(winshell.encode("$PSVersionTable.PSVersion.Major")), capture_output=True,
                            text=True, timeout=60, stdin=subprocess.DEVNULL,
                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         if r.returncode or r.stdout.strip() != "7":
-            print(f"self-test: PowerShell incluso non funziona ({r.returncode}): {r.stdout} {r.stderr}", flush=True)
+            _say(f"self-test: PowerShell incluso non funziona ({r.returncode}): {r.stdout} {r.stderr}")
             return 1
         # come nel pannello degli agenti: script .ps1 con -File nel terminale (ConPTY)
         import tempfile
@@ -136,7 +150,7 @@ def _self_test() -> int:
                   os.path.expanduser("~"))
         loop.exec()
         if codes != [3] or "helpix-pty-7" not in "".join(out):
-            print(f"self-test: PowerShell incluso nel terminale: {codes} {''.join(out)[-500:]!r}", flush=True)
+            _say(f"self-test: PowerShell incluso nel terminale (ConPTY): codici {codes}, output {''.join(out)[-500:]!r}")
             return 1
     result = {"ok": False}
     view = QWebEngineView()
@@ -149,6 +163,8 @@ def _self_test() -> int:
     view.setHtml("<p>Helpix</p>", QUrl("about:blank"))
     QTimer.singleShot(60000, app.quit)
     app.exec()
+    if not result["ok"]:
+        _say("self-test: il motore web non ha caricato la pagina di prova")
     return 0 if result["ok"] else 1
 
 
