@@ -309,27 +309,37 @@ def test_agent_install_script():
 
 
 def test_bundled_powershell():
-    """Programma installato: solo il PowerShell 7 incluso (cartella pwsh accanto a Helpix.exe)."""
+    """Programma installato: solo il PowerShell 7 incluso (cartella pwsh accanto a Helpix.exe), anche nel PATH."""
     import types
     from pathlib import Path
+    from helpix import system
     app_dir = Path(tempfile.mkdtemp())
     exe = app_dir / "pwsh" / "pwsh.exe"
     fake_sys = types.SimpleNamespace(frozen=True, executable=str(app_dir / "Helpix.exe"))
-    real_sys = winshell.sys
-    winshell.sys = fake_sys
+    real = (system.sys, system.IS_WINDOWS, os.environ.get("PATH", ""))
+    system.sys, system.IS_WINDOWS = fake_sys, True
     try:
         assert winshell.bundled_powershell() is None  # cartella pwsh mancante
         exe.parent.mkdir()
         exe.write_bytes(b"")
-        assert winshell.bundled_powershell() == str(exe.resolve())
-        assert winshell.powershell() == str(exe.resolve())
-        assert winshell.argv("QQ==")[0] == str(exe.resolve())
+        bundled = str(exe.resolve())
+        assert winshell.bundled_powershell() == bundled
+        assert winshell.powershell() == bundled
+        assert winshell.argv("QQ==")[0] == bundled
         assert winshell.powershell_version_label() == "PowerShell 7"
-        assert str(exe.resolve()) in winshell.launcher_script("QQ==")  # anche i comandi come amministratore
+        assert bundled in winshell.launcher_script("QQ==")  # anche i comandi come amministratore
+        # per primo nel PATH che Helpix passa a ciò che avvia (installazione degli agenti, agenti), una volta sola
+        system.use_bundled_pwsh()
+        system.use_bundled_pwsh()
+        parts = os.environ["PATH"].split(os.pathsep)
+        assert parts[0] == str(exe.parent.resolve()) and parts.count(parts[0]) == 1, parts[:3]
+        from helpix import agents
+        assert agents.search_path().split(os.pathsep)[0] == parts[0]
+        assert os.environ["POWERSHELL_TELEMETRY_OPTOUT"] == "1"
     finally:
-        winshell.sys = real_sys
+        system.sys, system.IS_WINDOWS = real[0], real[1]
+        os.environ["PATH"] = real[2]
     assert winshell.bundled_powershell() is None  # dai sorgenti: PowerShell del sistema
-
 
 if __name__ == "__main__":
     for name, fn in list(globals().items()):

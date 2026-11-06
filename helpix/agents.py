@@ -168,7 +168,7 @@ def windows_install_script(key: str, steps: list[str] | None = None) -> str:
         f"$helpixLog = {log}\n"
         "try { New-Item -ItemType Directory -Force -Path (Split-Path $helpixLog) | Out-Null; "
         "Start-Transcript -LiteralPath $helpixLog -Force | Out-Null } catch {}\n"
-        "Write-Host (\"PowerShell \" + $PSVersionTable.PSVersion.ToString())\n"
+        "Write-Host (\"PowerShell \" + $PSVersionTable.PSVersion.ToString() + \" (\" + $PSHOME + \")\")\n"
         "try {\n" + body + "\n} catch {\n"
         "  Write-Host ''\n"
         f"  Write-Host ({_ps(tr('Errore:'))} + ' ' + $_.Exception.Message) -ForegroundColor Red\n"

@@ -69,6 +69,12 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.16.3" date="2026-11-06">
+      <description>
+        <p>Windows: the agent installers and the agents themselves find the included PowerShell 7 too, instead of
+          falling back to the system powershell.exe.</p>
+      </description>
+    </release>
     <release version="0.16.2" date="2026-11-06">
       <description>
         <p>Windows: PowerShell 7 is included in the installer and runs every command, instead of the system

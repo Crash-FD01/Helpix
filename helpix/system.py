@@ -12,10 +12,35 @@ import sys
 from pathlib import Path
 
 IS_WINDOWS = sys.platform == "win32"
-if IS_WINDOWS:
-    # PowerShell 7 (incluso nel programma) non invia dati d'uso a Microsoft e non cerca aggiornamenti per conto suo
+
+
+def bundled_pwsh_dir() -> Path | None:
+    """Cartella del PowerShell 7 incluso nel programma installato per Windows (accanto a Helpix.exe), se c'è."""
+    if not (IS_WINDOWS and getattr(sys, "frozen", False)):
+        return None
+    d = Path(sys.executable).resolve().parent / "pwsh"
+    return d if (d / "pwsh.exe").is_file() else None
+
+
+def use_bundled_pwsh() -> None:
+    """Mette il PowerShell 7 incluso per primo nel PATH di Helpix, che passa a tutto ciò che avvia.
+
+    Così chi cerca «pwsh» trova quello di Helpix e non ha bisogno di powershell.exe: gli script ufficiali
+    d'installazione degli agenti e gli agenti stessi (Codex e Claude Code usano PowerShell 7 se lo trovano).
+    """
+    if not IS_WINDOWS:
+        return
+    # PowerShell 7 non invia dati d'uso a Microsoft e non cerca aggiornamenti per conto suo
     os.environ.setdefault("POWERSHELL_TELEMETRY_OPTOUT", "1")
     os.environ.setdefault("POWERSHELL_UPDATECHECK", "Off")
+    d = bundled_pwsh_dir()
+    if d is None:
+        return
+    parts = [p for p in os.environ.get("PATH", "").split(os.pathsep) if p and Path(p) != d]
+    os.environ["PATH"] = os.pathsep.join([str(d), *parts])
+
+
+use_bundled_pwsh()
 IS_LINUX = sys.platform.startswith("linux")
 IS_MAC = sys.platform == "darwin"
 

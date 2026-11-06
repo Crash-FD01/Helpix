@@ -112,6 +112,9 @@ def _self_test() -> int:
         if not exe:
             print("self-test: PowerShell 7 incluso non trovato", flush=True)
             return 1
+        if os.environ.get("PATH", "").split(os.pathsep)[0] != os.path.dirname(exe):
+            print("self-test: PowerShell 7 incluso non è il primo nel PATH", flush=True)
+            return 1
         r = subprocess.run(winshell.argv(winshell.encode("$PSVersionTable.PSVersion.Major")), capture_output=True,
                            text=True, timeout=60, stdin=subprocess.DEVNULL,
                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))

@@ -15,18 +15,15 @@ import base64
 import os
 import re
 import shutil
-import sys
-from pathlib import Path
 
 from .i18n import tr
 
 
 def bundled_powershell() -> str | None:
     """PowerShell 7 incluso nel programma installato (cartella «pwsh» accanto a Helpix.exe), se c'è."""
-    if not getattr(sys, "frozen", False):
-        return None
-    exe = Path(sys.executable).resolve().parent / "pwsh" / "pwsh.exe"
-    return str(exe) if exe.is_file() else None
+    from .system import bundled_pwsh_dir
+    d = bundled_pwsh_dir()
+    return str(d / "pwsh.exe") if d else None
 
 
 def powershell() -> str:

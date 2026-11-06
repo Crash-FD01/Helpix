@@ -278,7 +278,9 @@ installarlo per tutti gli utenti), con la voce nel menu Start e la disinstallazi
 Cosa cambia rispetto a Linux:
 - I comandi girano in **PowerShell 7, incluso nel programma** (cartella `pwsh`, licenza MIT): Helpix non usa
   `powershell.exe` di Windows, che alcuni antivirus bloccano quando lo avvia un altro programma, e la versione è
-  sempre la stessa su ogni PC. PowerShell incluso non invia dati d'uso a Microsoft. Quando servono i permessi di
+  sempre la stessa su ogni PC. È anche il primo nel PATH dei programmi che Helpix avvia: gli script d'installazione
+  degli agenti e gli agenti stessi (Codex, Claude Code) trovano lui. Non invia dati d'uso a Microsoft. Quando
+  servono i permessi di
   amministratore l'IA scrive `sudo` davanti e Windows chiede conferma con il Controllo account utente; gli avvisi
   coprono anche i comandi rischiosi di Windows (`Remove-Item -Recurse`, `diskpart`, `reg delete`, `bcdedit`,
   disattivazione di antivirus o firewall…).
