@@ -36,6 +36,8 @@ for t in tests/test_*.py; do
     fi
     if (( rc == 0 )); then
         printf '  ok    %-28s %3ss\n' "$t" "$((SECONDS - start))"
+        # avvisi informativi del test (es. diagnosi su Windows), visibili anche dall'API di GitHub
+        [[ "${GITHUB_ACTIONS:-}" == true ]] && { printf '%s\n' "$out" | tr -d '\r' | grep '^::notice' || true; }
         summary+=("$(printf 'ok    %-28s %3ss' "$t" "$((SECONDS - start))")")
     else
         printf '  FAIL  %-28s %3ss (codice %s)\n' "$t" "$((SECONDS - start))" "$rc"

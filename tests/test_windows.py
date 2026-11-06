@@ -451,10 +451,32 @@ def test_junctions_on_windows():
         pty.start(argv, os.path.expanduser("~"))
         loop.exec()
         report.append(f"{os.path.basename(ps)} ConPTY: " + "".join(out)[-1200:])
+    # RedirectionGuard: criterio del processo prima e dopo il motore web (Chromium), e quello di un figlio
+    code = (
+        "import os, subprocess, sys\n"
+        "sys.path.insert(0, %r)\n"
+        "os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')\n"
+        "from helpix.system import redirection_trust_policy as pol\n"
+        "before = pol()\n"
+        "import PySide6.QtWebEngineWidgets\n"
+        "from PySide6.QtWidgets import QApplication\n"
+        "from PySide6.QtWebEngineWidgets import QWebEngineView\n"
+        "from PySide6.QtCore import QTimer\n"
+        "app = QApplication([]); v = QWebEngineView(); v.setHtml('<p>x</p>'); v.show()\n"
+        "QTimer.singleShot(4000, app.quit); app.exec()\n"
+        "child = subprocess.run([%r, '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'RemoteSigned', '-File', %r],"
+        " capture_output=True, text=True).stdout.strip().replace(chr(10), ' | ')\n"
+        "print('POLICY', before, pol(), child, flush=True)\n"
+        "os._exit(0)\n"
+    ) % (os.path.dirname(os.path.dirname(os.path.abspath(__file__))), shutil.which("pwsh") or "powershell.exe", ps1)
+    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, encoding="utf-8",
+                       errors="replace", timeout=180)
+    line = next((ln for ln in r.stdout.splitlines() if ln.startswith("POLICY")), r.stdout[-300:] + r.stderr[-300:])
+    report.append("motore web: criterio del processo prima/dopo e figlio: " + line)
     text = "\n".join(report)
     print(text)
+    print("::notice title=Giunzioni e RedirectionGuard (Windows)::" + text.replace("\r", "").replace("\n", "%0A"))
     assert text.count("junction-ok") == 2 * len([1 for r in report if " processo: " in r]), text
-    del app
 
 
 if __name__ == "__main__":

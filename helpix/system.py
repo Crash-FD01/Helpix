@@ -22,6 +22,20 @@ def bundled_pwsh_dir() -> Path | None:
     return d if (d / "pwsh.exe").is_file() else None
 
 
+def redirection_trust_policy() -> int | None:
+    """Flag di RedirectionGuard (ProcessRedirectionTrustPolicy) di questo processo: 1 = applicato, 2 = solo audit.
+    Con il criterio applicato, il processo e i suoi figli non attraversano le giunzioni create da un utente normale
+    (ERROR_UNTRUSTED_MOUNT_POINT). None se non si può leggere (Linux, Windows vecchi)."""
+    if not IS_WINDOWS:
+        return None
+    import ctypes
+    k = ctypes.windll.kernel32
+    flags = ctypes.c_uint32(0)
+    if not k.GetProcessMitigationPolicy(k.GetCurrentProcess(), 16, ctypes.byref(flags), ctypes.sizeof(flags)):
+        return None
+    return flags.value
+
+
 def use_bundled_pwsh() -> None:
     """Mette il PowerShell 7 incluso per primo nel PATH di Helpix, che passa a tutto ciò che avvia.
 
