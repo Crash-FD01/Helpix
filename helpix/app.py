@@ -105,6 +105,19 @@ def _self_test() -> int:
     if system.IS_WINDOWS:
         from . import global_shortcut, security, winshell  # noqa: F401
         import winpty  # noqa: F401
+    if system.IS_WINDOWS and getattr(sys, "frozen", False):
+        # il PowerShell 7 incluso c'è ed esegue i comandi (è l'unico che usa il programma installato)
+        import subprocess
+        exe = winshell.bundled_powershell()
+        if not exe:
+            print("self-test: PowerShell 7 incluso non trovato", flush=True)
+            return 1
+        r = subprocess.run(winshell.argv(winshell.encode("$PSVersionTable.PSVersion.Major")), capture_output=True,
+                           text=True, timeout=60, stdin=subprocess.DEVNULL,
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        if r.returncode or r.stdout.strip() != "7":
+            print(f"self-test: PowerShell incluso non funziona ({r.returncode}): {r.stdout} {r.stderr}", flush=True)
+            return 1
     result = {"ok": False}
     view = QWebEngineView()
 

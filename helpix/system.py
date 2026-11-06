@@ -12,6 +12,10 @@ import sys
 from pathlib import Path
 
 IS_WINDOWS = sys.platform == "win32"
+if IS_WINDOWS:
+    # PowerShell 7 (incluso nel programma) non invia dati d'uso a Microsoft e non cerca aggiornamenti per conto suo
+    os.environ.setdefault("POWERSHELL_TELEMETRY_OPTOUT", "1")
+    os.environ.setdefault("POWERSHELL_UPDATECHECK", "Off")
 IS_LINUX = sys.platform.startswith("linux")
 IS_MAC = sys.platform == "darwin"
 

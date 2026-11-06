@@ -77,6 +77,8 @@ script di installazione per importare la chiave nuova.
 **Windows:** l'installer lo costruisce il workflow di rilascio. A mano, su un PC Windows con Python 3.13:
 `pwsh packaging\windows\build.ps1` (crea `dist\packages\Helpix-<versione>-Setup.exe`). I test girano anche lì:
 `bash tests/run_all.sh python` da Git Bash.
+L'installer contiene PowerShell 7 (cartella `pwsh`): versione e SHA-256 sono in cima a `build.ps1`. Quando esce una
+correzione di sicurezza di PowerShell, aggiorna lì versione e impronta (la build controlla anche la firma di Microsoft).
 
 **Prova locale dei pacchetti:**
 

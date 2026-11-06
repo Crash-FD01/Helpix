@@ -111,6 +111,9 @@ jobs:
           if ($p.ExitCode) { throw "installazione non riuscita ($($p.ExitCode))" }
           $exe = "$env:LOCALAPPDATA\Programs\Helpix\Helpix.exe"
           if (-not (Test-Path $exe)) { throw "Helpix.exe non installato in $exe" }
+          foreach ($f in 'pwsh\pwsh.exe', 'licenses\PowerShell-LICENSE.txt', 'licenses\PowerShell-ThirdPartyNotices.txt') {
+            if (-not (Test-Path "$env:LOCALAPPDATA\Programs\Helpix\$f")) { throw "manca $f nel programma installato" }
+          }
           $env:QT_QPA_PLATFORM = 'offscreen'
           $t = Start-Process $exe -ArgumentList '--self-test' -Wait -PassThru
           if ($t.ExitCode) { throw "prova del programma installato non riuscita ($($t.ExitCode))" }

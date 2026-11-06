@@ -308,6 +308,29 @@ def test_agent_install_script():
         assert "passo preliminare" in r.stdout and "comando_inesistente_helpix" in r.stdout, (ps, r.stdout)
 
 
+def test_bundled_powershell():
+    """Programma installato: solo il PowerShell 7 incluso (cartella pwsh accanto a Helpix.exe)."""
+    import types
+    from pathlib import Path
+    app_dir = Path(tempfile.mkdtemp())
+    exe = app_dir / "pwsh" / "pwsh.exe"
+    fake_sys = types.SimpleNamespace(frozen=True, executable=str(app_dir / "Helpix.exe"))
+    real_sys = winshell.sys
+    winshell.sys = fake_sys
+    try:
+        assert winshell.bundled_powershell() is None  # cartella pwsh mancante
+        exe.parent.mkdir()
+        exe.write_bytes(b"")
+        assert winshell.bundled_powershell() == str(exe.resolve())
+        assert winshell.powershell() == str(exe.resolve())
+        assert winshell.argv("QQ==")[0] == str(exe.resolve())
+        assert winshell.powershell_version_label() == "PowerShell 7"
+        assert str(exe.resolve()) in winshell.launcher_script("QQ==")  # anche i comandi come amministratore
+    finally:
+        winshell.sys = real_sys
+    assert winshell.bundled_powershell() is None  # dai sorgenti: PowerShell del sistema
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

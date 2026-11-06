@@ -15,17 +15,33 @@ import base64
 import os
 import re
 import shutil
+import sys
+from pathlib import Path
 
 from .i18n import tr
 
 
+def bundled_powershell() -> str | None:
+    """PowerShell 7 incluso nel programma installato (cartella «pwsh» accanto a Helpix.exe), se c'è."""
+    if not getattr(sys, "frozen", False):
+        return None
+    exe = Path(sys.executable).resolve().parent / "pwsh" / "pwsh.exe"
+    return str(exe) if exe.is_file() else None
+
+
 def powershell() -> str:
-    """PowerShell 7 se c'è (sintassi più moderna: &&, ||, ?:), altrimenti Windows PowerShell 5.1, sempre presente."""
-    return shutil.which("pwsh") or shutil.which("powershell") or "powershell.exe"
+    """Il PowerShell con cui Helpix esegue tutto.
+
+    Nel programma installato è sempre il PowerShell 7 incluso: la versione è nota e non si passa da
+    powershell.exe di sistema, che alcuni antivirus bloccano quando lo avvia un altro programma.
+    Avviato dai sorgenti: PowerShell 7 se è installato, altrimenti Windows PowerShell 5.1.
+    """
+    return bundled_powershell() or shutil.which("pwsh") or shutil.which("powershell") or "powershell.exe"
 
 
 def powershell_version_label() -> str:
-    return "PowerShell 7" if shutil.which("pwsh") else "Windows PowerShell 5.1"
+    name = os.path.basename(powershell()).lower()
+    return "PowerShell 7" if name.startswith("pwsh") else "Windows PowerShell 5.1"
 
 
 def encode(script: str) -> str:

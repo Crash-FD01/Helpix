@@ -2,6 +2,7 @@
 ; SPDX-License-Identifier: GPL-3.0-or-later
 ;
 ; Programma di installazione di Helpix per Windows (Inno Setup 6).
+; Contiene PowerShell 7 (cartella pwsh, licenza MIT): Helpix lo usa al posto di powershell.exe di sistema.
 ; Si installa per l'utente, senza permessi di amministratore, in %LOCALAPPDATA%\Programs\Helpix (oppure, se lo
 ; scegli nella prima schermata, per tutti gli utenti). Impostazioni e accessi restano in %APPDATA% e
 ; %LOCALAPPDATA%\Helpix: aggiornare o disinstallare non li tocca.
@@ -52,6 +53,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [InstallDelete]
 ; aggiornamento: via i file della versione prima, così non restano librerie vecchie
 Type: filesandordirs; Name: "{app}\_internal"
+Type: filesandordirs; Name: "{app}\pwsh"
 
 [Files]
 Source: "..\..\dist\windows\Helpix\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs

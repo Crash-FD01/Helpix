@@ -276,7 +276,9 @@ installarlo per tutti gli utenti), con la voce nel menu Start e la disinstallazi
   mantenendo impostazioni e accessi. Si disattiva da *Impostazioni › Avvisami delle nuove versioni*.
 
 Cosa cambia rispetto a Linux:
-- I comandi girano in PowerShell (7 se è installato, altrimenti Windows PowerShell 5.1). Quando servono i permessi di
+- I comandi girano in **PowerShell 7, incluso nel programma** (cartella `pwsh`, licenza MIT): Helpix non usa
+  `powershell.exe` di Windows, che alcuni antivirus bloccano quando lo avvia un altro programma, e la versione è
+  sempre la stessa su ogni PC. PowerShell incluso non invia dati d'uso a Microsoft. Quando servono i permessi di
   amministratore l'IA scrive `sudo` davanti e Windows chiede conferma con il Controllo account utente; gli avvisi
   coprono anche i comandi rischiosi di Windows (`Remove-Item -Recurse`, `diskpart`, `reg delete`, `bcdedit`,
   disattivazione di antivirus o firewall…).
