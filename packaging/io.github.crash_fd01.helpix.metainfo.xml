@@ -69,6 +69,13 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.17.1" date="2026-11-06">
+      <description>
+        <p>Windows: agent installation runs PowerShell 7 with a script file instead of an encoded command, which
+          antivirus programs block less often; the terminal shows which PowerShell it uses and warns if it does not
+          start.</p>
+      </description>
+    </release>
     <release version="0.17.0" date="2026-11-06">
       <description>
         <p>Update check at every start on Windows and Linux, with “Update now”: on Windows it downloads, verifies and

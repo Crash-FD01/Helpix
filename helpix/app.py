@@ -121,6 +121,23 @@ def _self_test() -> int:
         if r.returncode or r.stdout.strip() != "7":
             print(f"self-test: PowerShell incluso non funziona ({r.returncode}): {r.stdout} {r.stderr}", flush=True)
             return 1
+        # come nel pannello degli agenti: script .ps1 con -File nel terminale (ConPTY)
+        import tempfile
+        from PySide6.QtCore import QEventLoop
+        from .pty_process import PtyProcess
+        ps1 = os.path.join(tempfile.mkdtemp(), "self-test.ps1")
+        with open(ps1, "w", encoding="utf-8-sig") as f:
+            f.write("Write-Host ('helpix-pty-' + $PSVersionTable.PSVersion.Major)\nexit 3\n")
+        pty, out, codes, loop = PtyProcess(), [], [], QEventLoop()
+        pty.output.connect(out.append)
+        pty.finished.connect(lambda rc: (codes.append(rc), loop.quit()))
+        QTimer.singleShot(90000, loop.quit)
+        pty.start([exe, "-NoLogo", "-NoProfile", "-ExecutionPolicy", "RemoteSigned", "-File", ps1],
+                  os.path.expanduser("~"))
+        loop.exec()
+        if codes != [3] or "helpix-pty-7" not in "".join(out):
+            print(f"self-test: PowerShell incluso nel terminale: {codes} {''.join(out)[-500:]!r}", flush=True)
+            return 1
     result = {"ok": False}
     view = QWebEngineView()
 

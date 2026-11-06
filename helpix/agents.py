@@ -182,6 +182,18 @@ def windows_install_script(key: str, steps: list[str] | None = None) -> str:
     )
 
 
+def windows_install_argv(key: str, steps: list[str] | None = None, exe: str | None = None) -> list[str]:
+    """Riga di comando per installare l'agente su Windows: lo script va in un file .ps1 ed è eseguito con -File.
+
+    Niente -EncodedCommand né -ExecutionPolicy Bypass: sono proprio i segnali che gli antivirus usano per bloccare
+    PowerShell. Un file .ps1 creato in locale è ammesso dalla politica RemoteSigned (predefinita su Windows)."""
+    from .winshell import powershell
+    path = DATA_DIR / "run" / f"install-{key}.ps1"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(windows_install_script(key, steps), encoding="utf-8-sig")  # con BOM: lo legge bene anche la 5.1
+    return [exe or powershell(), "-NoLogo", "-NoProfile", "-ExecutionPolicy", "RemoteSigned", "-File", str(path)]
+
+
 def needs(key: str) -> list[str]:
     a = AGENTS[key]
     return list(a.get("needs_win", []) if IS_WINDOWS else a.get("needs", []))

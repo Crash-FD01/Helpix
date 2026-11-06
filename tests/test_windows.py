@@ -338,6 +338,12 @@ def test_agent_install_script():
         assert str(agents.install_log("codex")) in script
         agents.AGENTS["gemini-cli"]["install_win"] = "comando_inesistente_helpix"
         failing = agents.windows_install_script("gemini-cli", ["Write-Host 'passo preliminare'"])
+        # lo script va in un file .ps1 (con BOM) e parte con -File: niente -EncodedCommand né -ExecutionPolicy Bypass
+        argv = agents.windows_install_argv("codex", exe="pwsh.exe")
+        assert argv[0] == "pwsh.exe" and argv[-2] == "-File" and argv[-1].endswith("install-codex.ps1"), argv
+        assert "-EncodedCommand" not in argv and "Bypass" not in argv, argv
+        assert open(argv[-1], "rb").read().startswith(b"\xef\xbb\xbf")
+        flags = argv[1:-1]
     finally:
         agents.AGENTS["codex"]["install_win"] = orig
         agents.AGENTS["gemini-cli"]["install_win"] = "npm install -g @google/gemini-cli"
@@ -348,19 +354,43 @@ def test_agent_install_script():
         print("  (PowerShell non presente: script non eseguito)")
         return
     env = dict(os.environ, PROCESSOR_ARCHITECTURE="AMD64")
+    work = tempfile.mkdtemp()
+
+    def script_file(text, ps):
+        if "powershell" not in os.path.basename(ps).lower():  # PowerShell 7: si prova anche il ramo per la 5.1
+            text = text.replace("$PSVersionTable.PSVersion.Major -lt 6", "$true")
+        path = os.path.join(work, f"s{len(os.listdir(work))}.ps1")
+        with open(path, "w", encoding="utf-8-sig") as f:
+            f.write(text)
+        return [ps, *flags, path]
     for ps in shells:
         def run(text, ps=ps):
-            if "powershell" not in os.path.basename(ps).lower():  # PowerShell 7: si prova anche il ramo per la 5.1
-                text = text.replace("$PSVersionTable.PSVersion.Major -lt 6", "$true")
-            return subprocess.run([ps, "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-OutputFormat",
-                                   "Text", "-EncodedCommand", winshell.encode(text)], capture_output=True, text=True,
-                                  encoding="utf-8", errors="replace", timeout=120, env=env)
+            return subprocess.run(script_file(text, ps), capture_output=True, text=True, encoding="utf-8",
+                                  errors="replace", timeout=120, env=env)
         r = run(script)
         assert r.returncode == 0 and "INSTALLATO target=x86_64-pc-windows-msvc" in r.stdout, (ps, r.stdout, r.stderr)
         assert "INSTALLATO" in agents.install_log("codex").read_text(encoding="utf-8", errors="replace")
         r = run(failing)
         assert r.returncode == 1, (ps, r.returncode, r.stdout, r.stderr)
         assert "passo preliminare" in r.stdout and "comando_inesistente_helpix" in r.stdout, (ps, r.stdout)
+    if not WINDOWS:
+        return
+    # nel terminale vero (ConPTY), come nel pannello degli agenti: deve scrivere subito e finire
+    from PySide6.QtCore import QCoreApplication, QEventLoop, QTimer
+    from helpix.pty_process import PtyProcess
+    app = QCoreApplication.instance() or QCoreApplication([])
+    for ps in shells:
+        pty = PtyProcess()
+        out, codes = [], []
+        loop = QEventLoop()
+        pty.output.connect(out.append)
+        pty.finished.connect(lambda rc, codes=codes, loop=loop: (codes.append(rc), loop.quit()))
+        QTimer.singleShot(90000, loop.quit)
+        pty.start(script_file(script, ps), os.path.expanduser("~"), {"PROCESSOR_ARCHITECTURE": "AMD64"})
+        loop.exec()
+        text = "".join(out)
+        assert codes == [0] and "INSTALLATO target=x86_64" in text, (ps, codes, text[-2000:])
+    del app
 
 
 def test_bundled_powershell():

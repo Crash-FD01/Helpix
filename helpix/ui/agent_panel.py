@@ -135,6 +135,7 @@ class AgentPanel(QWidget):
         self.install_page.retry.connect(self.ensure_started)
         self.term = TerminalView()
         self.term.pty.finished.connect(self._exited)
+        self.term.pty.output.connect(self._on_pty_output)
         self.stack.addWidget(self.install_page)
         self.stack.addWidget(self.term)
         v.addWidget(self.stack, 1)
@@ -155,7 +156,8 @@ class AgentPanel(QWidget):
                  "failed": tr("Installazione di {name} non riuscita")}
         self.status.setText(texts[self.state].format(name=self.label))
         self.btn_restart.setVisible(self.state in ("running", "exited"))
-        self.btn_retry.setVisible(self.state == "failed")
+        self.btn_retry.setVisible(self.state == "failed" or (self.state == "installing"
+                                                             and getattr(self, "_install_stalled", False)))
         self.status_changed.emit()
 
     def set_agent(self, key: str):
@@ -238,7 +240,6 @@ class AgentPanel(QWidget):
     def _install_windows(self):
         """Windows: installazione in PowerShell con il comando ufficiale; Node.js (per Gemini CLI) con winget."""
         import shutil
-        from ..winshell import encode, powershell
         a = agents.AGENTS[self.key]
         path = agents.search_path()
         steps = []
@@ -255,13 +256,33 @@ class AgentPanel(QWidget):
             name=a["label"], cmd=cmd))
         self.state = "installing"
         self._update_status()
-        script = agents.windows_install_script(self.key, steps)
-        # -EncodedCommand: lo script arriva intero, senza problemi di virgolette sulla riga di comando di Windows
-        self.term.pty.start([powershell(), "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-OutputFormat", "Text",
-                             "-EncodedCommand", encode(script)],
-                            os.path.expanduser("~"), {"PATH": path})
+        argv = agents.windows_install_argv(self.key, steps)
+        self.term.write_local(tr("PowerShell: {path}\n\n").format(path=argv[0]))
+        self._install_output = False
+        self._install_stalled = False
+        self.term.pty.start(argv, os.path.expanduser("~"), {"PATH": path})
+        QTimer.singleShot(20000, self._install_watchdog)
+
+    def _on_pty_output(self, _text: str):
+        self._install_output = True
+
+    def _install_watchdog(self):
+        """PowerShell non ha scritto nulla dopo 20 secondi: lo dice, invece di lasciare il terminale vuoto."""
+        if self.state != "installing" or getattr(self, "_install_output", True):
+            return
+        self.term.write_local(tr("PowerShell non ha ancora scritto nulla. La prima volta può volerci un minuto (il "
+                                 "controllo dell'antivirus); se resta così, probabilmente l'antivirus lo sta "
+                                 "bloccando: aggiungi un'eccezione per la cartella di PowerShell qui sopra, poi "
+                                 "premi «Riprova».\n"))
+        self._install_stalled = True  # resta in attesa (magari parte), ma si può riprovare
+        self._update_status()
 
     def _retry_install(self):
+        if self.term.pty.running:  # installazione ferma: si ferma il processo senza il messaggio di fine
+            self.term.pty.finished.disconnect(self._exited)
+            self.term.pty.stop()
+            self.term.pty.finished.connect(self._exited)
+        self._install_stalled = False
         self.state = "idle"
         self.ensure_started()
 
