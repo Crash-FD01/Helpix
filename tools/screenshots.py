@@ -78,7 +78,7 @@ def shoot(scene: str, theme: str) -> str:
     tmp = tempfile.mkdtemp()
     os.environ.update(XDG_CONFIG_HOME=os.path.join(tmp, "c"), XDG_DATA_HOME=os.path.join(tmp, "d"),
                       XDG_RUNTIME_DIR=os.path.join(tmp, "r"), QT_QPA_PLATFORM="offscreen",
-                      QTWEBENGINE_DISABLE_SANDBOX="1", QT_SCALE_FACTOR="1")
+                      QTWEBENGINE_DISABLE_SANDBOX="1", QT_SCALE_FACTOR="1", HELPIX_NO_UPDATE_CHECK="1")
     os.makedirs(os.environ["XDG_RUNTIME_DIR"], mode=0o700)
     sys.path.insert(0, ROOT)
     from helpix.app import _web_color_scheme

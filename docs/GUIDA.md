@@ -249,6 +249,8 @@ curl -fsSL https://crash-fd01.github.io/Helpix/setup.sh | sudo sh
 
 Aggiunge il repository firmato di Helpix e lo installa. Da lì gli aggiornamenti arrivano insieme a quelli del
 sistema: `sudo apt upgrade`, `sudo dnf upgrade`, `sudo zypper update`, o il centro aggiornamenti del desktop.
+In più, all'avvio Helpix controlla se c'è una versione nuova e propone *Aggiorna ora*: aggiorna solo Helpix con il
+gestore pacchetti (la password la chiede il sistema) e poi si riavvia. Vedi [Aggiornamenti](#aggiornamenti).
 - Funziona su Debian 12+, Ubuntu 22.04+, Mint 21+, Pop!_OS, Zorin, Fedora, RHEL/Alma/Rocky 9+, openSUSE
   Tumbleweed e Leap 15.6, Silverblue/Kinoite (con `rpm-ostree`). Serve glibc ≥ 2.34 su x86_64, ≥ 2.39 su ARM64.
 - Lo script si può leggere prima: [`site/setup.sh`](../site/setup.sh). Chi preferisce i comandi a mano li trova
@@ -271,9 +273,9 @@ installarlo per tutti gli utenti), con la voce nel menu Start e la disinstallazi
 - **SmartScreen:** il programma non è ancora firmato digitalmente, quindi al primo avvio Windows mostra «Windows ha
   protetto il PC». Premi *Ulteriori informazioni › Esegui comunque*. Puoi controllare il file con `SHA256SUMS`
   (firmato) della release.
-- **Aggiornamenti:** una volta al giorno Helpix chiede a GitHub qual è l'ultima versione, l'indirizzo pubblico delle
-  release senza inviare nulla di tuo. Se ce n'è una nuova te lo dice e scarichi il nuovo installer, che aggiorna
-  mantenendo impostazioni e accessi. Si disattiva da *Impostazioni › Avvisami delle nuove versioni*.
+- **Aggiornamenti:** all'avvio Helpix controlla se c'è una versione nuova e, con *Aggiorna ora*, scarica l'installer,
+  ne controlla l'impronta e lo avvia: Helpix si chiude, si aggiorna e si riapre, con impostazioni e accessi. Vedi
+  [Aggiornamenti](#aggiornamenti).
 
 Cosa cambia rispetto a Linux:
 - I comandi girano in **PowerShell 7, incluso nel programma** (cartella `pwsh`, licenza MIT): Helpix non usa
@@ -291,6 +293,23 @@ Cosa cambia rispetto a Linux:
 - Impostazioni in `%APPDATA%\Helpix`, dati e accessi in `%LOCALAPPDATA%\Helpix`.
 - Se l'installazione di un agente non riesce, l'errore resta nel terminale e il registro completo è in
   `%LOCALAPPDATA%\Helpix\logs\install-<agente>.log` (utile da allegare a una segnalazione).
+
+### Aggiornamenti
+
+All'avvio (e una volta al giorno, se Helpix resta aperto) Helpix chiede a GitHub qual è l'ultima versione:
+l'indirizzo pubblico delle release, senza inviare nulla di tuo. Se ce n'è una nuova compare un avviso con il link
+alle novità e tre scelte: *Aggiorna ora*, *Salta questa versione*, *Più tardi*.
+
+| Installato con | *Aggiorna ora* |
+|---|---|
+| Windows (installer) | scarica il nuovo installer, ne controlla l'impronta con `SHA256SUMS` della release, lo avvia: Helpix si chiude e si riapre aggiornato |
+| Pacchetto .deb (apt) | `apt-get install --only-upgrade helpix`, aggiornando solo il repository di Helpix |
+| Pacchetto .rpm (dnf, zypper) | `dnf upgrade --refresh helpix` / `zypper update helpix` |
+| Silverblue, Kinoite… | mostra il comando: `sudo rpm-ostree upgrade`, poi riavvio del PC |
+| Sorgenti (`install.sh`) | mostra il comando: `git pull && ./install.sh` |
+
+Per controllare subito: *Impostazioni › Controlla gli aggiornamenti*. Per spegnere il controllo automatico:
+*Impostazioni › Avvisami delle nuove versioni*.
 
 ### Dai sorgenti (Arch, sistemi più vecchi, sviluppo)
 
@@ -416,6 +435,7 @@ messa nel repository.
 - [x] v0.13 — Giro guidato a nuvolette e consiglio del giorno (disattivabili)
 - [x] v0.14.0 — Prima versione pubblica: licenza GPL-3.0-or-later (conforme REUSE), revisione finale
 - [x] v0.13.4 — Compatibilità con i desktop più usati (Cinnamon, MATE, Xfce, COSMIC, Hyprland/Sway…) e Qt 6.8/6.9 per le distribuzioni con glibc meno recente
+- [x] v0.17 — Controllo degli aggiornamenti all'avvio con *Aggiorna ora*, su Windows e Linux
 - [x] v0.16 — Versione per Windows: PowerShell con Controllo account utente, scorciatoia globale, agenti con ConPTY,
   Windows Hello, diagnosi, installer e avviso delle nuove versioni
 - [ ] Firma digitale dell'installer di Windows

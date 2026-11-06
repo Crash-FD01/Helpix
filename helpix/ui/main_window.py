@@ -426,12 +426,13 @@ class MainWindow(QMainWindow):
         menu.addAction(icon("lock", C["text"], 16), tr("Sicurezza…"), self.open_security)
         if not IS_WINDOWS:  # su Windows Qt è incluso nel programma: niente pacchetti di sistema da installare
             menu.addAction(icon("download", C["text"], 16), tr("Dipendenze di sistema…"), self.check_system_deps)
-        else:  # su Linux gli aggiornamenti arrivano dal gestore pacchetti
-            from .. import updates
-            act = menu.addAction(icon("download", C["text"], 16), tr("Avvisami delle nuove versioni"))
-            act.setCheckable(True)
-            act.setChecked(bool(self.settings.get("check_updates", updates.enabled_by_default())))
-            act.toggled.connect(lambda on: self.settings.set("check_updates", on))
+        from .. import updates
+        menu.addAction(icon("refresh", C["text"], 16), tr("Controlla gli aggiornamenti"),
+                       lambda: self._check_updates(manual=True))
+        act = menu.addAction(tr("Avvisami delle nuove versioni"))
+        act.setCheckable(True)
+        act.setChecked(bool(self.settings.get("check_updates", updates.enabled_by_default())))
+        act.toggled.connect(lambda on: self.settings.set("check_updates", on))
         menu.addAction(icon("info", C["text"], 16), tr("Guida rapida (giro guidato)"), self.start_tour)
         menu.addAction(icon("star", C["text"], 16), tr("Schermata iniziale…"), self.open_start_screen)
         self.act_start_screen = menu.addAction(tr("Mostra la schermata iniziale all'avvio"))
@@ -2064,48 +2065,154 @@ class MainWindow(QMainWindow):
         self.tour = None
         if self.settings.get("show_tips", True):
             QTimer.singleShot(900, self._startup_tips)
-        QTimer.singleShot(15000, self._check_updates)
+        QTimer.singleShot(4000, self._check_updates)  # all'avvio, poi una volta al giorno se Helpix resta aperto
+        from .. import updates as _updates
+        self._update_timer = QTimer(self)
+        self._update_timer.setInterval(_updates.CHECK_EVERY * 1000)
+        self._update_timer.timeout.connect(self._check_updates)
+        self._update_timer.start()
         choice = self.settings.get("quick_shortcut")  # None = non ancora chiesto
         if choice is None:
             QTimer.singleShot(2500, self._ask_global_shortcut)
         elif choice:
             QTimer.singleShot(1500, self._start_global_shortcut)
 
-    def _check_updates(self):
-        """Una volta al giorno chiede a GitHub l'ultima versione (disattivabile; su Linux spento)."""
+    def _check_updates(self, manual: bool = False):
+        """Chiede a GitHub l'ultima versione: all'avvio, una volta al giorno e da Impostazioni (disattivabile)."""
         from .. import updates
-        if not updates.due(self.settings):
+        if not manual and not updates.due(self.settings):
             return
-        self.settings.set("updates_checked_at", time.time())
+        if getattr(self, "_update_worker", None) is not None:
+            return
         w = FuncWorker(updates.latest_release, parent=self)
-        w.done.connect(self._update_found)
-        self._start(w)
+        self._update_worker = w
 
-    def _update_found(self, info):
+        def done(info):
+            self._update_worker = None
+            if info:
+                self.settings.set("updates_checked_at", time.time())
+            self._update_found(info, manual)
+        w.done.connect(done)
+        w.failed.connect(lambda _e: done(None))
+        self._start(w)
+        if manual:
+            self.notify(tr("Controllo gli aggiornamenti…"), 3000)
+
+    def _update_found(self, info, manual: bool = False):
         from .. import __version__, updates
-        if not info or not updates.is_newer(info["version"]) or info["version"] == self.settings.get("skip_version"):
+        if not info:
+            if manual:
+                QMessageBox.warning(self, tr("Aggiornamenti"), tr("Non riesco a contattare GitHub per controllare "
+                                                                 "gli aggiornamenti. Controlla la connessione e "
+                                                                 "riprova."))
             return
+        if not updates.is_newer(info["version"]):
+            if manual:
+                QMessageBox.information(self, tr("Aggiornamenti"),
+                                        tr("Hai già l'ultima versione di Helpix ({cur}).").format(cur=__version__))
+            return
+        if not manual and info["version"] == self.settings.get("skip_version"):
+            return
+        if not manual and (not self.isVisible() or getattr(self, "locked", False)
+                           or getattr(self, "tour", None) is not None):
+            QTimer.singleShot(60000, lambda: self._update_found(info))  # finestra nascosta o bloccata: più tardi
+            return
+        from ..sysdeps import detect_manager
+        kind = updates.install_kind()
+        pm = None if kind == "windows" else detect_manager()
+        argv = updates.linux_update_argv(pm) if kind == "package" else None
+        can_update = kind == "windows" and bool(info.get("setup")) or argv is not None
         box = QMessageBox(self)
         box.setWindowTitle(tr("Nuova versione di Helpix"))
         box.setIcon(QMessageBox.Icon.Information)
-        box.setText(tr("È disponibile Helpix {new} (hai la {cur}).").format(new=info["version"], cur=__version__))
-        box.setInformativeText(tr("Scarica il programma di installazione e aprilo: aggiorna Helpix mantenendo "
-                                  "impostazioni e accessi."))
-        get = box.addButton(tr("Scarica"), QMessageBox.ButtonRole.AcceptRole)
+        box.setTextFormat(Qt.TextFormat.RichText)
+        box.setText(tr("È disponibile Helpix {new} (hai la {cur}).").format(new=info["version"], cur=__version__)
+                    + f' <a href="{info["url"]}">{tr("Novità")}</a>')
+        if kind == "windows":
+            more = tr("Helpix scarica il programma di installazione, lo controlla e lo avvia: si chiude, si aggiorna "
+                      "e si riapre da solo. Impostazioni e accessi restano.")
+        elif can_update:
+            more = tr("Helpix aggiorna solo sé stesso con il gestore pacchetti ({pm}): la password di "
+                      "amministratore la chiede il sistema. Impostazioni e accessi restano.").format(pm=pm)
+        else:
+            more = tr("Per aggiornare usa questo comando:") + "\n" + (updates.manual_hint(kind, pm) or
+                                                                    tr("il gestore pacchetti del sistema"))
+        box.setInformativeText(more)
+        box.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
+        go = box.addButton(tr("Aggiorna ora"), QMessageBox.ButtonRole.AcceptRole) if can_update else None
         skip = box.addButton(tr("Salta questa versione"), QMessageBox.ButtonRole.DestructiveRole)
         box.addButton(tr("Più tardi"), QMessageBox.ButtonRole.RejectRole)
 
         def chosen(_result):
             clicked = box.clickedButton()
-            if clicked is get:
-                from PySide6.QtCore import QUrl
-                from PySide6.QtGui import QDesktopServices
-                QDesktopServices.openUrl(QUrl(info.get("setup") or info["url"]))
-            elif clicked is skip:
+            if clicked is skip:
                 self.settings.set("skip_version", info["version"])
+            elif go is not None and clicked is go:
+                if kind == "windows":
+                    self._update_windows(info)
+                else:
+                    self._update_linux(info, argv)
 
         box.finished.connect(chosen)
         box.open()
+
+    def _update_windows(self, info):
+        """Scarica e controlla l'installer, poi lo avvia e chiude Helpix (l'installer lo riapre alla fine)."""
+        from .. import updates
+        self.notify(tr("Scarico Helpix {new}… (qualche minuto: puoi continuare a usare Helpix)").format(
+            new=info["version"]), 8000)
+        w = FuncWorker(updates.download_setup, info, parent=self)
+
+        def ready(path):
+            argv = updates.setup_argv(path)
+            if not QProcess.startDetached(argv[0], argv[1:]):
+                QMessageBox.warning(self, tr("Aggiornamenti"), tr("Non riesco ad avviare il programma di "
+                                                                 "installazione: {path}").format(path=path))
+                return
+            self.quit_app()
+
+        w.done.connect(ready)
+        w.failed.connect(lambda e: QMessageBox.warning(
+            self, tr("Aggiornamenti"), tr("Download dell'aggiornamento non riuscito: {err}").format(err=e)))
+        self._start(w)
+
+    def _update_linux(self, info, argv):
+        """Aggiorna il pacchetto di Helpix con il gestore pacchetti (finestra della password del sistema)."""
+        from .. import sysdeps
+        cmd = sysdeps.elevate(argv, gui=True)
+        if not cmd:
+            QMessageBox.warning(self, tr("Aggiornamenti"), tr("Non trovo pkexec o sudo per aggiornare."))
+            return
+        proc = QProcess(self)
+        proc.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+        self._update_proc = proc
+        self.notify(tr("Aggiorno Helpix alla {new}…").format(new=info["version"]), 8000)
+
+        def finished(code, _status=None):
+            out = bytes(proc.readAll()).decode("utf-8", "replace")
+            self._update_proc = None
+            proc.deleteLater()
+            if code in (126, 127):  # finestra della password annullata o negata
+                self.notify(tr("Aggiornamento annullato."))
+                return
+            if code != 0:
+                QMessageBox.warning(self, tr("Aggiornamenti"), tr("Aggiornamento non riuscito.") + "\n\n" + out[-1500:])
+                return
+            box = QMessageBox(self)
+            box.setWindowTitle(tr("Aggiornamenti"))
+            box.setText(tr("Helpix è aggiornato alla {new}: riavvialo per usare la nuova versione.").format(
+                new=info["version"]))
+            now = box.addButton(tr("Riavvia ora"), QMessageBox.ButtonRole.AcceptRole)
+            box.addButton(tr("Più tardi"), QMessageBox.ButtonRole.RejectRole)
+            box.exec()
+            if box.clickedButton() is now:
+                from ..app import restart
+                self._quitting = True
+                self.close()
+                restart()
+
+        proc.finished.connect(finished)
+        proc.start(cmd[0], cmd[1:])
 
     def _ask_global_shortcut(self):
         """Prima volta: propone la scorciatoia globale della finestra rapida."""

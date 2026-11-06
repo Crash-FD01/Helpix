@@ -64,3 +64,11 @@ Name: "{autodesktop}\Helpix"; Filename: "{app}\Helpix.exe"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\Helpix.exe"; Description: "{cm:LaunchProgram,Helpix}"; Flags: nowait postinstall skipifsilent
+; aggiornamento avviato da Helpix (/SILENT /RELAUNCH=1): a fine installazione riapre il programma
+Filename: "{app}\Helpix.exe"; Flags: nowait runasoriginaluser; Check: Relaunch
+
+[Code]
+function Relaunch: Boolean;
+begin
+  Result := ExpandConstant('{param:RELAUNCH|0}') = '1';
+end;

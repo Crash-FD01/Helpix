@@ -198,6 +198,7 @@ def test_windows_hello_on_windows():
 
 
 def test_update_check():
+    import hashlib
     from unittest import mock
     from helpix import updates
     assert updates.is_newer("0.16.0", "0.15.2") and updates.is_newer("1.0", "0.99.9")
@@ -206,9 +207,15 @@ def test_update_check():
     class S(dict):
         def get(self, k, d=None):
             return super().get(k, d)
-    assert updates.due(S(check_updates=True)) and not updates.due(S(check_updates=False))
-    import time
-    assert not updates.due(S(check_updates=True, updates_checked_at=time.time() - 60))
+    no_check = os.environ.pop("HELPIX_NO_UPDATE_CHECK", None)
+    try:
+        # attivo di default su Windows e Linux, a ogni avvio (non più una volta ogni 20 ore)
+        assert updates.due(S()) and updates.due(S(check_updates=True, updates_checked_at=10**12))
+        assert not updates.due(S(check_updates=False))
+    finally:
+        if no_check is not None:
+            os.environ["HELPIX_NO_UPDATE_CHECK"] = no_check
+    assert not updates.due(S()) or not no_check
 
     class R:
         status_code = 200
@@ -217,12 +224,60 @@ def test_update_check():
         def json():
             return {"tag_name": "v9.1.0", "html_url": "https://github.com/x/y/releases/tag/v9.1.0", "assets": [
                 {"name": "helpix_9.1.0_amd64.deb", "browser_download_url": "https://x/deb"},
-                {"name": "Helpix-9.1.0-Setup.exe", "browser_download_url": "https://x/setup"}]}
+                {"name": "Helpix-9.1.0-Setup.exe", "browser_download_url": "https://x/Helpix-9.1.0-Setup.exe"},
+                {"name": "SHA256SUMS", "browser_download_url": "https://x/SHA256SUMS"}]}
     with mock.patch("requests.get", return_value=R()) as get:
         info = updates.latest_release()
     assert info == {"version": "9.1.0", "url": "https://github.com/x/y/releases/tag/v9.1.0",
-                    "setup": "https://x/setup"}, info
+                    "setup": "https://x/Helpix-9.1.0-Setup.exe", "sums": "https://x/SHA256SUMS"}, info
     assert "/repos/Crash-FD01/Helpix/releases/latest" in get.call_args[0][0]
+
+    # Windows: installer scaricato e controllato con SHA256SUMS; impronta sbagliata = niente installazione
+    payload = b"installer finto" * 1000
+
+    class Resp:
+        def __init__(self, text=b""):
+            self.content = text
+            self.text = text.decode()
+
+        def raise_for_status(self):
+            pass
+
+        def iter_content(self, _n):
+            yield self.content
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_a):
+            return False
+
+    def fake_get(sums_line):
+        return lambda url, **_k: Resp(sums_line if url.endswith("SHA256SUMS") else payload)
+    good = f"{hashlib.sha256(payload).hexdigest()}  Helpix-9.1.0-Setup.exe\n".encode()
+    with mock.patch("requests.get", side_effect=fake_get(good)):
+        path = updates.download_setup(info)
+    assert open(path, "rb").read() == payload
+    os.remove(path)
+    with mock.patch("requests.get", side_effect=fake_get(b"0" * 64 + b"  Helpix-9.1.0-Setup.exe\n")):
+        try:
+            updates.download_setup(info)
+            raise AssertionError("impronta sbagliata accettata")
+        except RuntimeError:
+            pass
+    assert not os.path.exists(path)
+    assert updates.setup_argv("C:/t/s.exe")[1:] == ["/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART",
+                                                     "/CLOSEAPPLICATIONS", "/RELAUNCH=1"]
+
+    # Linux: aggiorna solo Helpix con il gestore pacchetti; dai sorgenti o immutabile solo il comando da usare
+    apt = updates.linux_update_argv("apt")
+    assert apt[:2] == ["sh", "-c"] and "sources.list.d/helpix.list" in apt[2] and "--only-upgrade helpix" in apt[2]
+    assert updates.linux_update_argv("dnf") == ["dnf", "upgrade", "-y", "--refresh", "helpix"]
+    assert "zypper --non-interactive update helpix" in updates.linux_update_argv("zypper")[2]
+    assert updates.linux_update_argv("pacman") is None
+    assert updates.manual_hint("source", "apt") == "git pull && ./install.sh"
+    assert updates.manual_hint("immutable", "dnf") == "sudo rpm-ostree upgrade"
+    assert updates.install_kind() == ("windows" if WINDOWS else "source")  # i test girano dai sorgenti
 
 
 def test_window_list_on_windows():
