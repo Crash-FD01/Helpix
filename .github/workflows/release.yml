@@ -1,15 +1,16 @@
 # SPDX-FileCopyrightText: 2026 Crash
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Rilascio: parte quando pubblichi un tag «vX.Y.Z» (uguale alla versione di pyproject.toml).
+# Rilascio: parte quando su main cambia la versione di pyproject.toml (o quando pubblichi un tag «vX.Y.Z» uguale).
 #   1. costruisce i pacchetti .deb e .rpm per x86_64 e aarch64 e l'installer di Windows, e li prova;
 #   2. li firma con la chiave del secret HELPIX_GPG_PRIVATE_KEY;
 #   3. crea la release della versione con i pacchetti e SHA256SUMS firmato;
 #   4. aggiorna il repository APT (release «repo») e quello RPM + il sito (GitHub Pages).
 # Da lì «apt upgrade», «dnf upgrade» e «zypper update» trovano la nuova versione.
 # Per ripubblicare una versione (es. dopo aver cambiato il sito): Actions → Rilascio → Run workflow → tag.
-# Quando cambiano il programma o i file dei pacchetti su main fa solo la prova: costruisce e installa, senza
-# pubblicare nulla. L'installer di Windows di prova si scarica dalla pagina dell'esecuzione (Artifacts).
+# Push su main: se la versione di pyproject.toml non ha ancora il suo tag, costruisce, prova, aspetta che la CI
+# dello stesso commit sia verde, poi crea il tag e pubblica. Se il tag c'è già fa solo la prova: costruisce e
+# installa, senza pubblicare. L'installer di Windows di prova si scarica dalla pagina dell'esecuzione (Artifacts).
 name: Rilascio
 
 on:
@@ -36,8 +37,34 @@ concurrency:
 
 env:
   TAG: ${{ inputs.tag || github.ref_name }}
+  # commit da costruire: il tag scelto a mano, altrimenti esattamente quello del push
+  SRC: ${{ inputs.tag || github.sha }}
 
 jobs:
+  version:
+    name: Versione da pubblicare
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.v.outputs.tag }}
+      publish: ${{ steps.v.outputs.publish }}
+      new: ${{ steps.v.outputs.new }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SRC }}
+      - id: v
+        run: |
+          version="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] || [ "$GITHUB_REF_TYPE" = tag ]; then
+            echo "tag=$TAG" >> "$GITHUB_OUTPUT"; echo "publish=true" >> "$GITHUB_OUTPUT"; echo "new=false" >> "$GITHUB_OUTPUT"
+          elif git ls-remote --exit-code --tags origin "refs/tags/v$version" > /dev/null; then
+            echo "v$version è già pubblicata: solo prova"
+            echo "tag=v$version" >> "$GITHUB_OUTPUT"; echo "publish=false" >> "$GITHUB_OUTPUT"; echo "new=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Nuova versione v$version: verrà pubblicata se tutto è verde"
+            echo "tag=v$version" >> "$GITHUB_OUTPUT"; echo "publish=true" >> "$GITHUB_OUTPUT"; echo "new=true" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
     name: Pacchetti ${{ matrix.arch }}
     strategy:
@@ -52,7 +79,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ env.TAG }}
+          ref: ${{ env.SRC }}
       - name: Il tag corrisponde alla versione
         if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
         run: |
@@ -96,7 +123,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ env.TAG }}
+          ref: ${{ env.SRC }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
@@ -134,20 +161,40 @@ jobs:
 
   publish:
     name: Pubblica release e repository
-    needs: [build, windows]
-    if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
+    needs: [version, build, windows]
+    if: needs.version.outputs.publish == 'true'
     runs-on: ubuntu-24.04
     permissions:
       contents: write
       pages: write
       id-token: write
+      actions: read
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
+    env:
+      TAG: ${{ needs.version.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ env.TAG }}
+          ref: ${{ env.SRC }}
+      - name: Nuova versione da main - CI verde, poi tag
+        if: needs.version.outputs.new == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for _ in $(seq 1 80); do
+            state="$(gh run list -R "$GITHUB_REPOSITORY" --workflow ci.yml --commit "$GITHUB_SHA" \
+                     --json status,conclusion -q '.[0] | "\(.status) \(.conclusion)"')"
+            case "$state" in
+              "completed success") break ;;
+              completed*) echo "::error::La CI di questo commit non è verde ($state): non pubblico"; exit 1 ;;
+            esac
+            sleep 30
+          done
+          [ "$state" = "completed success" ] || { echo "::error::La CI non ha finito in tempo: non pubblico"; exit 1; }
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$TAG" -f sha="$GITHUB_SHA" > /dev/null
+          echo "Creato il tag $TAG su $GITHUB_SHA"
       - uses: actions/download-artifact@v4
         with:
           pattern: packages-*

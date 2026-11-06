@@ -53,18 +53,17 @@ Contribuendo accetti che il tuo codice sia distribuito con la licenza del proget
 
 1. Aggiorna `version` in `pyproject.toml` e `__version__` in `helpix/__init__.py`, aggiungi la release in
    `packaging/io.github.crash_fd01.helpix.metainfo.xml` e la riga nella Roadmap di `docs/GUIDA.md`.
-2. Commit e push su `main`; aspetta che la CI sia verde.
-3. Tag e push:
-   ```bash
-   git tag -a v0.15.1 -m "Helpix 0.15.1" && git push origin v0.15.1
-   ```
-4. Il workflow **Rilascio** (circa 15 minuti):
-   - costruisce i pacchetti x86_64 e aarch64 e li prova installati;
-   - li firma e crea la release con `SHA256SUMS` firmato;
+2. Commit e push su `main`. Il workflow **Rilascio** vede che la versione non ha ancora il suo tag e (circa 20
+   minuti):
+   - costruisce i pacchetti x86_64 e aarch64 e l'installer di Windows, e li prova installati;
+   - aspetta che la CI dello stesso commit sia verde (altrimenti si ferma senza pubblicare nulla);
+   - crea il tag `vX.Y.Z`, firma i pacchetti e crea la release con `SHA256SUMS` firmato;
    - aggiorna il repository APT (release `repo`), i metadati RPM e il sito su GitHub Pages.
 
    Da quel momento `apt upgrade`, `dnf upgrade` e `zypper update` trovano la nuova versione (dnf entro 6 ore,
-   o subito con `dnf upgrade --refresh`).
+   o subito con `dnf upgrade --refresh`), e Helpix la propone all'avvio su Windows e Linux.
+
+   Funziona ancora anche il vecchio modo: `git tag -a vX.Y.Z -m "Helpix X.Y.Z" && git push origin vX.Y.Z`.
 
 Per ripubblicare una versione già taggata (per esempio dopo aver cambiato il sito): *Actions › Rilascio ›
 Run workflow*, indicando il tag.
