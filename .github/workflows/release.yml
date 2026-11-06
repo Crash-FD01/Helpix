@@ -49,7 +49,7 @@ jobs:
       publish: ${{ steps.v.outputs.publish }}
       new: ${{ steps.v.outputs.new }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ env.SRC }}
       - id: v
@@ -77,7 +77,7 @@ jobs:
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ env.SRC }}
       - name: Il tag corrisponde alla versione
@@ -121,7 +121,7 @@ jobs:
     name: Installer Windows
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ env.SRC }}
       - uses: actions/setup-python@v5
@@ -175,7 +175,7 @@ jobs:
     env:
       TAG: ${{ needs.version.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ env.SRC }}
       - name: Nuova versione da main - CI verde, poi tag

@@ -22,7 +22,7 @@ jobs:
     name: Controlli (ruff, REUSE, script)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
@@ -43,7 +43,7 @@ jobs:
         # 3.10: la più vecchia supportata da Qt 6.12 (Ubuntu 22.04, Debian 12 hanno 3.10/3.11)
         python: ["3.10", "3.13"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
@@ -64,7 +64,7 @@ jobs:
     name: Windows (Python 3.13)
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
