@@ -477,6 +477,7 @@ def test_junctions_on_windows():
     print(text)
     print("::notice title=Giunzioni e RedirectionGuard (Windows)::" + text.replace("\r", "").replace("\n", "%0A"))
     assert text.count("junction-ok") == 2 * len([1 for r in report if " processo: " in r]), text
+    del app
 
 
 if __name__ == "__main__":
