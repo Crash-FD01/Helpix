@@ -591,6 +591,33 @@ class WebPanel(QWidget):
 
         self.page.runJavaScript(_ANSWER_JS, QWebEngineScript.ScriptWorldId.ApplicationWorld, got)
 
+    def when_ready(self, callback, timeout: float = 45.0):
+        """callback(True) appena la pagina del servizio visibile ha finito di caricare e ha la casella della chat;
+        callback(False) se non succede entro timeout secondi."""
+        site, until = self.site, time.monotonic() + timeout
+
+        def poll():
+            tab = self._tabs.get(site)
+            if not tab or tab[1] is None:
+                callback(False)
+                return
+            if self._loading.get(site):
+                if time.monotonic() < until:
+                    QTimer.singleShot(400, poll)
+                else:
+                    callback(False)
+                return
+
+            def ready(result):
+                if result in ("ok", "focused"):
+                    callback(True)
+                elif time.monotonic() < until:
+                    QTimer.singleShot(400, poll)
+                else:
+                    callback(False)
+            tab[1].runJavaScript(_READY_JS, QWebEngineScript.ScriptWorldId.ApplicationWorld, ready)
+        QTimer.singleShot(300, poll)
+
     def send_current(self):
         """Invia il messaggio presente nella casella della chat (pulsante di invio del sito)."""
         if self.view and self.page:

@@ -100,11 +100,13 @@ Per tecnici e uso con i clienti: Helpix parla direttamente con l'IA (Claude, Ope
 Ollama in locale), esegue i comandi proposti con un clic e rimanda l'output da solo. Si cambia IA a metà
 task mantenendo il contesto; le sessioni sono salvate in locale.
 
-**Finestra rapida** (Ctrl+Alt+H, anche con Helpix in secondo piano): un riquadro in basso a destra per
-chiedere al volo. La stessa scorciatoia la mostra e la nasconde (ce n'è sempre una sola, e ricorda la
-conversazione). Scrivi e premi Invio: il messaggio parte nella chat dell'assistente attivo (web, agente nel
-terminale o API) e la risposta compare nella finestra rapida mentre arriva, in una piccola area che scorre;
-la finestra principale resta dov'è (pulsante ↗ per aprirla, + per una richiesta nuova). Se la risposta non
+**Finestra rapida** (Ctrl+Alt+H, anche con Helpix in secondo piano o chiuso): un riquadro in basso a destra per
+chiedere al volo. La stessa scorciatoia la mostra e la nasconde (ce n'è sempre una sola). **Ogni apertura è un
+task nuovo**: la finestra è pulita e il primo messaggio apre una chat nuova nell'assistente attivo (web, agente
+nel terminale, che riparte, o API); i messaggi successivi restano nello stesso task finché non la chiudi (×, Esc o
+la scorciatoia) o premi +. La risposta compare nella finestra rapida mentre arriva, in una piccola area che scorre,
+anche con Helpix nascosto nell'area di notifica; la finestra principale resta dov'è (pulsante ↗ per aprirla).
+Se Helpix è chiuso, la scorciatoia lo avvia in background: compare solo la finestra rapida. Se la risposta non
 arriva entro un paio di minuti la finestra si sblocca da sola e rimanda a Helpix.
 È ancorata all'angolo in basso a destra: con il lucchetto in alto si sblocca, la trascini dove vuoi e,
 richiudendo il lucchetto, resta ancorata lì (anche alle aperture successive).
@@ -435,6 +437,7 @@ messa nel repository.
 - [x] v0.13 — Giro guidato a nuvolette e consiglio del giorno (disattivabili)
 - [x] v0.14.0 — Prima versione pubblica: licenza GPL-3.0-or-later (conforme REUSE), revisione finale
 - [x] v0.13.4 — Compatibilità con i desktop più usati (Cinnamon, MATE, Xfce, COSMIC, Hyprland/Sway…) e Qt 6.8/6.9 per le distribuzioni con glibc meno recente
+- [x] v0.18 — Finestra rapida: un task nuovo a ogni apertura, risposte anche con Helpix nascosto o chiuso
 - [x] v0.17 — Controllo degli aggiornamenti all'avvio con *Aggiorna ora*, su Windows e Linux
 - [x] v0.16 — Versione per Windows: PowerShell con Controllo account utente, scorciatoia globale, agenti con ConPTY,
   Windows Hello, diagnosi, installer e avviso delle nuove versioni

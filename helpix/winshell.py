@@ -19,6 +19,27 @@ import shutil
 from .i18n import tr
 
 
+# Prova delle giunzioni (junction) come le crea l'installer di Codex: una giunzione «current» verso la versione e una
+# seconda che passa da lei. Su Windows 11 con RedirectionGuard attivo per il processo fallisce con
+# ERROR_UNTRUSTED_MOUNT_POINT; stampa anche il criterio di mitigazione del processo (ProcessRedirectionTrustPolicy).
+JUNCTION_PROBE = r"""
+$ErrorActionPreference = 'Stop'
+try {
+  Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class HxMit {
+    [DllImport("kernel32.dll")] public static extern bool GetProcessMitigationPolicy(IntPtr h, int p, out uint f, UIntPtr s); }'
+  $f = [uint32]0
+  $ok = [HxMit]::GetProcessMitigationPolicy([IntPtr]::new(-1), 16, [ref]$f, [UIntPtr]::new(4))
+  Write-Host "redirection-trust-policy ok=$ok flags=$f"
+} catch { Write-Host "redirection-trust-policy n/d: $($_.Exception.Message)" }
+$base = Join-Path ([IO.Path]::GetTempPath()) ('hx-junction-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Force (Join-Path $base 'v1\bin') | Out-Null
+New-Item -ItemType Junction -Path (Join-Path $base 'current') -Target (Join-Path $base 'v1') | Out-Null
+New-Item -ItemType Junction -Path (Join-Path $base 'binlink') -Target (Join-Path $base 'current\bin') | Out-Null
+Get-ChildItem (Join-Path $base 'binlink') | Out-Null
+Write-Host 'junction-ok'
+"""
+
+
 def bundled_powershell() -> str | None:
     """PowerShell 7 incluso nel programma installato (cartella «pwsh» accanto a Helpix.exe), se c'è."""
     from .system import bundled_pwsh_dir

@@ -1312,7 +1312,7 @@ class MainWindow(QMainWindow):
     def _ai_done(self, text: str, pid: str, model: str):
         w = getattr(self, "_quick_watch", None)
         if w and w.get("kind") == "api":
-            self._quick_watch = None
+            self._quick_stop()
             self.instance.reply(w["sock"], {"type": "answer", "text": text, "done": True})
         self.chat.hide_thinking()
         self._set_busy(False)
@@ -1323,7 +1323,7 @@ class MainWindow(QMainWindow):
     def _ai_failed(self, exc):
         w = getattr(self, "_quick_watch", None)
         if w and w.get("kind") == "api":
-            self._quick_watch = None
+            self._quick_stop()
             self.instance.reply(w["sock"], {"type": "answer", "text": tr("Errore dall'IA: {exc}").format(exc=exc),
                                             "done": True})
         self.chat.hide_thinking()
@@ -1475,7 +1475,7 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------ giro guidato e suggerimenti
     def _startup_tips(self):
         """Primo avvio: giro completo. Poi, finché la spunta è attiva: un consiglio del giorno."""
-        if getattr(self, "locked", False) or not self.isVisible():
+        if getattr(self, "locked", False) or not self._on_screen():
             QTimer.singleShot(3000, self._startup_tips)
             return
         if not self.settings.get("show_tips", True) or self.tour is not None:
@@ -1883,7 +1883,7 @@ class MainWindow(QMainWindow):
     def _tray_activated(self, reason):
         from PySide6.QtWidgets import QSystemTrayIcon
         if reason == QSystemTrayIcon.ActivationReason.Trigger:  # clic: mostra o nasconde Helpix
-            if self.isVisible() and not self.isMinimized() and self.isActiveWindow():
+            if self._on_screen() and not self.isMinimized() and self.isActiveWindow():
                 self.hide()
             else:
                 self.show_from_tray()
@@ -2113,7 +2113,7 @@ class MainWindow(QMainWindow):
             return
         if not manual and info["version"] == self.settings.get("skip_version"):
             return
-        if not manual and (not self.isVisible() or getattr(self, "locked", False)
+        if not manual and (not self._on_screen() or getattr(self, "locked", False)
                            or getattr(self, "tour", None) is not None):
             QTimer.singleShot(60000, lambda: self._update_found(info))  # finestra nascosta o bloccata: più tardi
             return
@@ -2216,7 +2216,7 @@ class MainWindow(QMainWindow):
 
     def _ask_global_shortcut(self):
         """Prima volta: propone la scorciatoia globale della finestra rapida."""
-        if getattr(self, "locked", False) or not self.isVisible() or getattr(self, "tour", None) is not None:
+        if getattr(self, "locked", False) or not self._on_screen() or getattr(self, "tour", None) is not None:
             QTimer.singleShot(5000, self._ask_global_shortcut)
             return
         box = QMessageBox(self)
@@ -2400,16 +2400,19 @@ class MainWindow(QMainWindow):
             if note:
                 self.instance.reply(sock, {"type": "note", "text": note})
         elif kind == "cancel":
-            self._quick_watch = None
+            self._quick_stop()
             self._quick_seq = getattr(self, "_quick_seq", 0) + 1
         elif kind == "shot":
             if self.shots.busy:
                 self.instance.reply(sock, {"type": "shot_done", "ok": False})
                 return
-            self._quick_shot = {"sock": sock, "_visible": self.isVisible() and not self.isMinimized()}
+            self._quick_shot = {"sock": sock, "_visible": self._on_screen() and not self.isMinimized()}
             self.shots.start("smart")
         elif kind == "send":
-            self._quick_send(str(msg.get("text", "")), sock)
+            if msg.get("new"):  # primo messaggio di una finestra rapida appena aperta: task nuovo
+                self._quick_new_task(lambda: self._quick_send(str(msg.get("text", "")), sock), sock)
+            else:
+                self._quick_send(str(msg.get("text", "")), sock)
             self.instance.reply(sock, {"type": "sent"})
 
     # ------------------------------------------------------------ modello ed effort
@@ -2490,12 +2493,54 @@ class MainWindow(QMainWindow):
             self._ext_shot_restore(req)
             self.instance.reply(req["sock"], {"type": "shot_done", "ok": False})
 
+    def _quick_new_task(self, then, sock=None):
+        """Task nuovo per la finestra rapida (chat nuova, agente riavviato, sessione API nuova), poi then()."""
+        self._quick_seq = seq = getattr(self, "_quick_seq", 0) + 1
+
+        def go(_ok=True):
+            if self._quick_seq == seq:
+                then()
+        if self.busy:  # l'IA (API) sta ancora rispondendo: non interrompo, continuo nello stesso task
+            go()
+            return
+        self._quick_awake(True)  # prima di aprire la chat nuova: la pagina nuova deve poter disegnare
+        self.new_session()
+        if self.engine == "web" and not self.web.is_external():
+            self.web.when_ready(go, timeout=45)
+        elif self.engine == "agent" and self.agent:
+            if not agents.find_cli(self.agent.key):
+                self.instance.reply(sock, {"type": "error", "text": tr("{name} non è installato: installalo dalla "
+                                                                       "finestra di Helpix.").format(
+                    name=self.agent.label)})
+                return
+            self._wait_agent_ready(go, seq, time.monotonic() + 40, None, 0)
+        else:
+            go()
+
+    def _wait_agent_ready(self, then, seq, until, last, stable):
+        """L'agente riavviato è pronto quando il suo schermo smette di cambiare (o dopo il tempo massimo)."""
+        if self._quick_seq != seq:
+            return
+
+        def got(screen: str):
+            if self._quick_seq != seq:
+                return
+            same = bool(screen.strip()) and screen == last
+            n = stable + 1 if same else 0
+            if (self.agent.running and n >= 2) or time.monotonic() > until:
+                then()
+            else:
+                QTimer.singleShot(700, lambda: self._wait_agent_ready(then, seq, until, screen, n))
+        self._quick_awake(True)
+        self.agent.term.screen_text(got)
+
     def _quick_send(self, text: str, sock=None):
         """Il messaggio della finestra rapida va all'assistente attivo e viene inviato; la risposta
         torna alla finestra rapida mentre arriva (Helpix resta dov'è)."""
         text = self._private(text)  # con lo scudo acceso vale anche per la finestra rapida
         self._quick_watch = None
         self._quick_seq = seq = getattr(self, "_quick_seq", 0) + 1  # una «cancel» successiva annulla questo invio
+        self._quick_awake(True)
         if self.engine == "agent" and self.agent:
             if not text:
                 return
@@ -2528,21 +2573,68 @@ class MainWindow(QMainWindow):
             self.prompt.setPlainText(text)
             self.send_message()
 
+    def _quick_awake(self, on: bool):
+        """Con la finestra di Helpix nascosta il motore web smette di disegnare la pagina: requestAnimationFrame si
+        ferma e le chat (React) non scrivono la risposta finché non riapri Helpix, quindi la finestra rapida non la
+        vede. Mentre la finestra rapida aspetta, Helpix è «mostrato» senza comparire sullo schermo
+        (WA_DontShowOnScreen): la pagina continua a lavorare come se fosse aperta. Poi torna nascosto."""
+        needs_page = (self.engine == "web" and not self.web.is_external()) or (self.engine == "agent" and self.agent)
+        if on:
+            if needs_page and not self.isVisible() and not getattr(self, "_ghost", False):
+                self._ghost = True
+                self.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+                super().show()
+        elif getattr(self, "_ghost", False):
+            self._unghost(hide=True)
+
+    def _unghost(self, hide: bool = False):
+        if not getattr(self, "_ghost", False):
+            return
+        self._ghost = False
+        super().hide()
+        self.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, False)
+        if not hide:
+            super().show()
+
+    def _on_screen(self) -> bool:
+        """La finestra si vede davvero (non è nascosta, né solo «mostrata» per la finestra rapida)."""
+        return self.isVisible() and not getattr(self, "_ghost", False)
+
+    def show(self):  # noqa: D102 - mostrata dall'utente: niente più modalità invisibile
+        if getattr(self, "_ghost", False):
+            self._unghost(hide=True)
+        super().show()
+
+    def showNormal(self):  # noqa: N802
+        if getattr(self, "_ghost", False):
+            self._unghost(hide=True)
+        super().showNormal()
+
+    def hide(self):
+        self._ghost = False
+        super().hide()
+        self.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, False)
+
+    def _quick_stop(self):
+        self._quick_watch = None
+        self._quick_awake(False)
+
     def _quick_poll(self):
         """Segue la risposta e la manda alla finestra rapida finché non è completa."""
         w = getattr(self, "_quick_watch", None)
         if not w or w["kind"] == "api":
             return
         if time.monotonic() > w["until"]:
-            self._quick_watch = None
+            self._quick_stop()
             return
+        self._quick_awake(True)  # se nel frattempo la finestra è stata nascosta
 
         def push(text: str, done: bool):
             if text != w.get("sent_text") or done:
                 w["sent_text"] = text
                 self.instance.reply(w["sock"], {"type": "answer", "text": text, "done": done})
             if done:
-                self._quick_watch = None
+                self._quick_stop()
             else:
                 QTimer.singleShot(900, self._quick_poll)
 
@@ -2555,7 +2647,7 @@ class MainWindow(QMainWindow):
                     w["count"] = count
                 if count <= w["count"]:  # la risposta non è ancora comparsa
                     if time.monotonic() - w.get("t0", time.monotonic()) > 120:
-                        self._quick_watch = None
+                        self._quick_stop()
                         self.instance.reply(w["sock"], {"type": "answer_unavailable", "text": tr(
                             "_Non vedo la risposta nella pagina: guardala in Helpix (↗)._")})
                         return
@@ -2661,7 +2753,7 @@ class MainWindow(QMainWindow):
         if self.shots.busy:
             self.bridge.notify(msg, tr("C'è già uno screenshot in corso."))
             return
-        msg["_visible"] = self.isVisible() and not self.isMinimized()
+        msg["_visible"] = self._on_screen() and not self.isMinimized()
         self._ext_shot = msg
         self.shots.start("smart")
 
@@ -2701,7 +2793,7 @@ class MainWindow(QMainWindow):
         if not self.btn_diag.isEnabled():
             self.bridge.notify(msg, tr("La diagnosi è già in corso."))
             return
-        msg["_visible"] = self.isVisible() and not self.isMinimized()
+        msg["_visible"] = self._on_screen() and not self.isMinimized()
         self._ext_diag = msg
         self.quick_diagnostics()
 

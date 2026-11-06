@@ -58,9 +58,14 @@ Problema: il wifi non va</code></pre>
       const words = ('Risposta finta: controlla il driver del wifi con nmcli device status e riavvia ' +
                      'NetworkManager.').split(' ');
       let w = 0;
+      // come le chat vere (React): il testo si aggiorna al prossimo fotogramma, che con la pagina nascosta non arriva
       const t2 = setInterval(() => {
-        msg.textContent = words.slice(0, ++w).join(' ');
-        if (w === words.length) { clearInterval(t2); setTimeout(() => stop.remove(), 400); }
+        const n = ++w;
+        if (n >= words.length) clearInterval(t2);
+        requestAnimationFrame(() => {
+          msg.textContent = words.slice(0, n).join(' ');
+          if (n >= words.length) setTimeout(() => stop.remove(), 400);
+        });
       }, 120);
       return;
     }

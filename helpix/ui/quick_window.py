@@ -3,7 +3,8 @@
 """Finestra rapida: un riquadro piccolo in basso a destra per chiedere al volo.
 
 Si apre e si chiude con la scorciatoia globale (o `helpix --quick`): c'è sempre una sola
-finestra rapida, che resta pronta in un processo a parte. Parla con la finestra principale di
+finestra rapida, che resta pronta in un processo a parte. Ogni apertura è un task nuovo: il primo messaggio
+apre una chat nuova nell'assistente. Se Helpix è chiuso lo avvia in background (senza la finestra principale). Parla con la finestra principale di
 Helpix tramite il socket dell'istanza: il testo va all'assistente attivo e la risposta torna
 qui, in una piccola area che scorre. Da qui si scelgono anche modello ed effort.
 
@@ -95,6 +96,7 @@ class QuickWindow(QWidget):
         self._tries = 0
         self._sending = False
         self._history: list[tuple[str, str]] = []   # (domanda, risposta) di questa finestra
+        self._fresh = True  # il prossimo messaggio apre un task nuovo (chat nuova) nell'assistente
         self._answer = ""
         self._filling = False
         pos = _load_pos()
@@ -124,7 +126,7 @@ class QuickWindow(QWidget):
                                    color_key="secondary")
         self.btn_open.clicked.connect(lambda: self._send({"type": "show"}))
         head.addWidget(self.btn_open)
-        self.btn_clear = IconButton("plus", tr("Nuova richiesta (pulisce questa finestra)"), size=26, icon_size=14,
+        self.btn_clear = IconButton("plus", tr("Nuovo task (chat nuova)"), size=26, icon_size=14,
                                     color_key="secondary")
         self.btn_clear.clicked.connect(self.clear_conversation)
         self.btn_clear.hide()
@@ -265,6 +267,7 @@ class QuickWindow(QWidget):
                 self._connect(launch=True)
             else:
                 self._send({"type": "hello"})  # assistente, modello ed effort aggiornati
+            self.clear_conversation()  # ogni apertura è un task nuovo e pulito
             self.place()
             self.show()
             self.place()
@@ -306,7 +309,8 @@ class QuickWindow(QWidget):
             env = dict(os.environ)
             env.pop("QT_QPA_PLATFORM", None)  # la finestra principale usa la piattaforma normale
             from ..system import helpix_argv
-            subprocess.Popen(helpix_argv(), env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            # in background: si vede solo la finestra rapida (la principale si apre con ↗ o dal menu)
+            subprocess.Popen(helpix_argv("--background"), env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                              stderr=subprocess.DEVNULL, start_new_session=True,
                              creationflags=getattr(subprocess, "DETACHED_PROCESS", 0))
         if self._tries > 60:
@@ -456,6 +460,8 @@ class QuickWindow(QWidget):
         self._idle_status()
         self._history.clear()
         self._answer = ""
+        self._fresh = True
+        self.input.clear()
         self.answers.clear()
         self.answers.hide()
         self.btn_clear.hide()
@@ -471,8 +477,9 @@ class QuickWindow(QWidget):
         text = self.input.toPlainText().strip()
         if self._sending or not text:
             return
-        if not self._send({"type": "send", "text": text}):
+        if not self._send({"type": "send", "text": text, "new": self._fresh}):
             return
+        self._fresh = False
         self._sending = True
         self.btn_send.setEnabled(False)
         self.status.setText(tr("Invio…"))

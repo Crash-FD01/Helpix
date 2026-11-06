@@ -46,7 +46,7 @@ def restart() -> None:
     from PySide6.QtCore import QProcess
     from PySide6.QtWidgets import QApplication
     from .system import helpix_argv
-    argv = helpix_argv(*[a for a in sys.argv[1:] if a != "--setup"])
+    argv = helpix_argv(*[a for a in sys.argv[1:] if a not in ("--setup", "--background")])
     QProcess.startDetached(argv[0], argv[1:])
     app = QApplication.instance()
     if app:
@@ -82,6 +82,7 @@ Uso: helpix [opzione]
   (nessuna)              apre Helpix (o porta in primo piano quello già aperto)
   --setup                apre la schermata iniziale (assistente, lingua, tema)
   --quick                mostra o nasconde la finestra rapida (da usare come scorciatoia del desktop)
+  --background           avvia Helpix senza mostrare la finestra principale (lo usa la finestra rapida)
   --test-shortcut        prova la scorciatoia globale con il desktop (con Helpix chiuso)
   --version              mostra la versione
   -h, --help             mostra questo aiuto
@@ -151,6 +152,21 @@ def _self_test_run() -> int:
         loop.exec()
         if codes != [3] or "helpix-pty-7" not in "".join(out):
             _say(f"self-test: PowerShell incluso nel terminale (ConPTY): codici {codes}, output {''.join(out)[-500:]!r}")
+            return 1
+        # giunzioni come quelle dell'installer di Codex, nel terminale (ConPTY)
+        with open(ps1, "w", encoding="utf-8-sig") as f:
+            f.write(winshell.JUNCTION_PROBE)
+        out.clear()
+        codes.clear()
+        loop = QEventLoop()
+        pty.finished.disconnect()
+        pty.finished.connect(lambda rc: (codes.append(rc), loop.quit()))
+        QTimer.singleShot(120000, loop.quit)
+        pty.start([exe, "-NoLogo", "-NoProfile", "-ExecutionPolicy", "RemoteSigned", "-File", ps1],
+                  os.path.expanduser("~"))
+        loop.exec()
+        if "junction-ok" not in "".join(out):
+            _say(f"self-test: giunzioni nel terminale: codici {codes}, output {''.join(out)[-1500:]!r}")
             return 1
     result = {"ok": False}
     view = QWebEngineView()
@@ -233,7 +249,11 @@ def main(argv: list[str] | None = None) -> int:
         provider = "anthropic"
     model = settings.start_model(provider)
 
-    need_start = "--setup" in argv or not settings.get("skip_setup")
+    # --background (dalla finestra rapida con Helpix chiuso): niente finestra principale né schermata iniziale,
+    # se l'assistente è già stato scelto almeno una volta
+    background = "--background" in argv and "--setup" not in argv and bool(
+        settings.get("default_engine") or settings.get("engine"))
+    need_start = "--setup" in argv or (not settings.get("skip_setup") and not background)
     if not need_start and engine == "web" and not WEBENGINE:
         need_start = True
     if not need_start and engine == "api" and PROVIDERS[provider]["needs_key"] and not secrets.get(provider):
@@ -254,7 +274,10 @@ def main(argv: list[str] | None = None) -> int:
             provider, model = dlg.provider, dlg.model
 
     win = MainWindow(settings, secrets, engine, provider, model)
-    win.show()
+    if background:
+        app.setQuitOnLastWindowClosed(False)  # nascosta resta attiva per la finestra rapida
+    else:
+        win.show()
     return app.exec()
 
 

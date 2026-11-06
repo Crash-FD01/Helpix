@@ -1283,4 +1283,6 @@ EN: dict[str, str] = {
     'Aggiornamento non riuscito.': 'Update failed.',
     "PowerShell non ha ancora scritto nulla. La prima volta può volerci un minuto (il controllo dell'antivirus); se resta così, probabilmente l'antivirus lo sta bloccando: aggiungi un'eccezione per la cartella di PowerShell qui sopra, poi premi «Riprova».\n": "PowerShell hasn't written anything yet. The first time it can take a minute (the antivirus scan); if it stays like this, the antivirus is probably blocking it: add an exception for the PowerShell folder above, then press “Try again”.\n",
     'PowerShell: {path}\n\n': 'PowerShell: {path}\n\n',
+    '{name} non è installato: installalo dalla finestra di Helpix.': "{name} isn't installed: install it from the Helpix window.",
+    'Nuovo task (chat nuova)': 'New task (new chat)',
 }

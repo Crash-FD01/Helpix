@@ -426,6 +426,37 @@ def test_bundled_powershell():
         os.environ["PATH"] = real[2]
     assert winshell.bundled_powershell() is None  # dai sorgenti: PowerShell del sistema
 
+def test_junctions_on_windows():
+    """Giunzioni come quelle dell'installer di Codex: dal PowerShell avviato normalmente e nel terminale (ConPTY)."""
+    if not WINDOWS:
+        print("  (solo su Windows: saltato)")
+        return
+    import shutil
+    import subprocess
+    from PySide6.QtCore import QCoreApplication, QEventLoop, QTimer
+    from helpix.pty_process import PtyProcess
+    app = QCoreApplication.instance() or QCoreApplication([])
+    ps1 = os.path.join(tempfile.mkdtemp(), "probe.ps1")
+    with open(ps1, "w", encoding="utf-8-sig") as f:
+        f.write(winshell.JUNCTION_PROBE)
+    report = []
+    for ps in [p for p in (shutil.which("pwsh"), shutil.which("powershell.exe")) if p]:
+        argv = [ps, "-NoLogo", "-NoProfile", "-ExecutionPolicy", "RemoteSigned", "-File", ps1]
+        r = subprocess.run(argv, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
+        report.append(f"{os.path.basename(ps)} processo: {r.stdout.strip()} {r.stderr.strip()[-400:]}")
+        pty, out, loop = PtyProcess(), [], QEventLoop()
+        pty.output.connect(out.append)
+        pty.finished.connect(lambda _rc, loop=loop: loop.quit())
+        QTimer.singleShot(120000, loop.quit)
+        pty.start(argv, os.path.expanduser("~"))
+        loop.exec()
+        report.append(f"{os.path.basename(ps)} ConPTY: " + "".join(out)[-1200:])
+    text = "\n".join(report)
+    print(text)
+    assert text.count("junction-ok") == 2 * len([1 for r in report if " processo: " in r]), text
+    del app
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

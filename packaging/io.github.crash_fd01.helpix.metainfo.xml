@@ -69,6 +69,13 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.18.0" date="2026-11-06">
+      <description>
+        <p>Quick window: every Ctrl+Alt+H opens a new, clean task (a new chat in the assistant); answers show up
+          there even with Helpix hidden in the tray; with Helpix closed the shortcut starts it in the background and
+          shows only the quick window.</p>
+      </description>
+    </release>
     <release version="0.17.1" date="2026-11-06">
       <description>
         <p>Windows: agent installation runs PowerShell 7 with a script file instead of an encoded command, which

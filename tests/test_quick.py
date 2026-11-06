@@ -119,24 +119,38 @@ def test_quick_window():
     q.send()
     assert q._sending and not q.btn_send.isEnabled()
     q.clear_conversation()
-    assert not q._sending and q.btn_send.isEnabled()
+    assert not q._sending and q.btn_send.isEnabled() and q._fresh
     pump(300)
     assert win._quick_watch is None, "Helpix smette di aspettare la risposta annullata"
     pump(3000)
-    n_sent = js(gpt, "window.sent.length")  # annullata subito: di norma non parte nemmeno
 
-    # invio: il testo va nella chat e il messaggio parte
+    # invio con Helpix nascosto (nell'area di notifica): primo messaggio = task nuovo, cioè chat nuova
+    win.hide()
+    pump(300)
+    assert not gpt.isVisible() and not win._on_screen()
+    js(gpt, "window.marker = 'chat-vecchia'")
     q.input.setPlainText("perché il wifi è lento?")
     q.send()
-    until(lambda: js(gpt, "window.sent.length") == n_sent + 1, what="messaggio inviato")
-    assert "perché il wifi è lento?" in js(gpt, f"window.sent[{n_sent}]")
-    # la risposta arriva nella finestra rapida, che resta aperta in modalità ridotta
+    assert not q._fresh, "i messaggi successivi restano nello stesso task"
+    until(lambda: js(gpt, "window.sent && window.sent.length") == 1, what="messaggio inviato nella chat nuova")
+    assert js(gpt, "window.marker || ''") == "", "il primo messaggio della finestra rapida apre una chat nuova"
+    assert "perché il wifi è lento?" in js(gpt, "window.sent[0]")
+    # la risposta arriva nella finestra rapida anche se la pagina disegna con requestAnimationFrame
     until(lambda: "NetworkManager" in q.answers.toPlainText(), timeout=20, what="risposta nella finestra rapida")
     until(lambda: q.btn_send.isEnabled(), timeout=15, what="risposta completa")
     assert q.isVisible() and q.answers.isVisible()
     assert "perché il wifi è lento?" in q.answers.toPlainText()
+    until(lambda: not win.isVisible() and not gpt.isVisible(), timeout=5, what="Helpix torna nascosto")
+    assert not win._on_screen()
 
-    # una sola finestra rapida: la scorciatoia la nasconde e la rimostra
+    # secondo messaggio: stessa chat
+    q.input.setPlainText("e se non basta?")
+    q.send()
+    until(lambda: js(gpt, "window.sent.length") == 2, what="secondo messaggio nella stessa chat")
+    until(lambda: q.btn_send.isEnabled(), timeout=25, what="seconda risposta completa")
+    win.show()
+
+    # una sola finestra rapida: la scorciatoia la nasconde e la rimostra, ogni volta con un task nuovo
     from helpix.ui.quick_window import _QuickServer, quick_socket_path
     server = _QuickServer(q)
     assert server.listen(quick_socket_path())
@@ -144,8 +158,11 @@ def test_quick_window():
     until(lambda: not q.isVisible(), what="nascosta con la scorciatoia")
     pump(400)  # due pressioni a meno di 0,35 s contano come una sola
     assert instance.send_once({"type": "toggle"}, quick_socket_path())
-    until(lambda: q.isVisible(), what="mostrata di nuovo, con la conversazione")
-    assert "NetworkManager" in q.answers.toPlainText()
+    until(lambda: q.isVisible(), what="mostrata di nuovo")
+    assert q.answers.isHidden() and not q._history and q._fresh, "riaperta: task nuovo e pulito"
+    q.hide_now()  # anche chiusa con × o Esc
+    q.toggle()
+    assert q._fresh and not q._history
     server.close()
     win.close()
 
