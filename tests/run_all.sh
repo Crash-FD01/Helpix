@@ -21,6 +21,14 @@ for t in tests/test_*.py; do
     out="$(timeout "${TEST_TIMEOUT:-300}" "${wrap[@]}" "$PY" "$t" 2>&1)"; rc=$?
     # RETRY_CRASHED=1: un test chiuso da un crash (codice >= 128, non un'asserzione fallita né il timeout) si ripete
     # una volta. Serve su Windows, dove il motore web di Qt a volte va in crash mentre il processo esce.
+    # Il test aveva già chiesto di uscire con successo (ultima riga «[hardexit 0]», scritta da tests/hardexit.py) e il
+    # crash è arrivato mentre Windows chiudeva il processo: verifiche tutte passate, quindi è solo un avviso.
+    if [[ -n "${RETRY_CRASHED:-}" ]] && (( rc >= 128 && rc != 124 )) \
+            && [[ "$(printf '%s\n' "$out" | tr -d '\r' | grep -v '^$' | tail -1)" == "[hardexit 0]" ]]; then
+        echo "  crash (codice $rc) in $t dopo l'uscita riuscita del test: avviso"
+        [[ "${GITHUB_ACTIONS:-}" == true ]] && echo "::warning title=$t::crash (codice $rc) dopo che il test era uscito con successo"
+        rc=0
+    fi
     if [[ -n "${RETRY_CRASHED:-}" ]] && (( rc >= 128 && rc != 124 )); then
         echo "  crash (codice $rc) in $t: ripeto"
         [[ "${GITHUB_ACTIONS:-}" == true ]] && echo "::warning title=$t::crash (codice $rc), test ripetuto"

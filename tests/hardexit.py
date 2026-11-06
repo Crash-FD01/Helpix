@@ -14,7 +14,11 @@ if sys.platform == "win32":  # preparato subito: fra la fine del test e l'uscita
     _process = _kernel32.GetCurrentProcess()
 
 
+MARK = "[hardexit {code}]"  # ultima riga: run_all.sh riconosce un crash avvenuto DOPO l'uscita richiesta dal test
+
+
 def now(code: int = 0) -> None:
+    print(MARK.format(code=code), flush=True)
     sys.stdout.flush()
     sys.stderr.flush()
     if sys.platform == "win32":
