@@ -115,6 +115,73 @@ def install_command(key: str) -> str:
     return a["install_win"] if IS_WINDOWS else a["install"]
 
 
+def install_log(key: str) -> Path:
+    """Registro dell'ultima installazione dell'agente (Windows: %LOCALAPPDATA%\\Helpix\\logs)."""
+    return DATA_DIR / "logs" / f"install-{key}.log"
+
+
+def _ps(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+# Lo script ufficiale di Codex legge [RuntimeInformation]::OSArchitecture, che con Windows PowerShell 5.1 non
+# esiste: in modalità strict si ferma con PropertyNotFoundStrict (issue #6). Lì Helpix scarica lo script e mette
+# al suo posto l'architettura letta dalle variabili di Windows; con PowerShell 7 lo esegue così com'è.
+_OSARCH = r"\[(?:System\.)?(?:Runtime\.InteropServices\.)?RuntimeInformation\]::OSArchitecture"
+_IRM_IEX = re.compile(r"^irm (\S+) \| iex$")
+
+
+def windows_install_script(key: str, steps: list[str] | None = None) -> str:
+    """Script PowerShell per installare l'agente su Windows.
+
+    Esegue i passi preliminari e il comando ufficiale; se qualcosa va storto mostra l'errore con la riga e la
+    traccia, esce con codice 1 e lascia tutto nel registro install_log(key).
+    """
+    cmd = install_command(key)
+    m = _IRM_IEX.match(cmd)
+    if m:
+        url = _ps(m.group(1))
+        note = _ps(tr("(Windows PowerShell 5.1: uso l'architettura del PC letta da Windows, {arch}, perché lo script "
+                      "ufficiale qui non riesce a leggerla)"))
+        install = (
+            "if ($PSVersionTable.PSVersion.Major -lt 6) {\n"
+            "  [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor "
+            "[Net.SecurityProtocolType]::Tls12\n"
+            "  $helpixArch = $(if (\"$env:PROCESSOR_ARCHITEW6432 $env:PROCESSOR_ARCHITECTURE\" -match 'ARM64') "
+            "{ 'Arm64' } elseif (\"$env:PROCESSOR_ARCHITEW6432 $env:PROCESSOR_ARCHITECTURE\" -match 'AMD64') "
+            "{ 'X64' } else { 'X86' })\n"
+            f"  $helpixScript = Invoke-RestMethod {url}\n"
+            f"  $helpixFixed = $helpixScript -replace {_ps(_OSARCH)}, '$$helpixArch'\n"
+            "  if ($helpixFixed -ne $helpixScript) {\n"
+            f"    Write-Host ({note}.Replace('{{arch}}', $helpixArch))\n"
+            "  }\n"
+            "  Invoke-Expression $helpixFixed\n"
+            f"}} else {{ {cmd} }}"
+        )
+    else:
+        install = cmd + f"\nif ($LASTEXITCODE) {{ throw ({_ps(tr('codice di uscita {rc}'))}.Replace('{{rc}}', $LASTEXITCODE)) }}"
+    log = _ps(str(install_log(key)))
+    body = "\n".join([*(steps or []), install])
+    return (
+        "$ErrorActionPreference = 'Stop'\n"
+        "$ProgressPreference = 'SilentlyContinue'\n"
+        f"$helpixLog = {log}\n"
+        "try { New-Item -ItemType Directory -Force -Path (Split-Path $helpixLog) | Out-Null; "
+        "Start-Transcript -LiteralPath $helpixLog -Force | Out-Null } catch {}\n"
+        "Write-Host (\"PowerShell \" + $PSVersionTable.PSVersion.ToString())\n"
+        "try {\n" + body + "\n} catch {\n"
+        "  Write-Host ''\n"
+        f"  Write-Host ({_ps(tr('Errore:'))} + ' ' + $_.Exception.Message) -ForegroundColor Red\n"
+        "  if ($_.InvocationInfo -and $_.InvocationInfo.PositionMessage) { Write-Host $_.InvocationInfo.PositionMessage }\n"
+        "  if ($_.ScriptStackTrace) { Write-Host $_.ScriptStackTrace }\n"
+        "  try { Stop-Transcript | Out-Null } catch {}\n"
+        "  exit 1\n"
+        "}\n"
+        "try { Stop-Transcript | Out-Null } catch {}\n"
+        "exit 0\n"
+    )
+
+
 def needs(key: str) -> list[str]:
     a = AGENTS[key]
     return list(a.get("needs_win", []) if IS_WINDOWS else a.get("needs", []))

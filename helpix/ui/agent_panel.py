@@ -100,7 +100,7 @@ class AgentPanel(QWidget):
     def __init__(self, key: str = "claude-code", parent=None):
         super().__init__(parent)
         self.key = key if key in agents.AGENTS else "claude-code"
-        self.state = "idle"        # idle | running | installing | exited
+        self.state = "idle"        # idle | running | installing | failed | exited
         self.model = "default"     # modello ed effort scelti (dalle impostazioni di Helpix)
         self.effort = "auto"
         self._summary_until = 0.0
@@ -121,6 +121,9 @@ class AgentPanel(QWidget):
                                       icon_size=15)
         self.btn_restart.clicked.connect(lambda: self.start())
         bh.addWidget(self.btn_restart)
+        self.btn_retry = IconButton("refresh", tr("Torna all'installazione"), text=tr("Riprova"), icon_size=15)
+        self.btn_retry.clicked.connect(self._retry_install)
+        bh.addWidget(self.btn_retry)
         self.btn_folder = IconButton("folder", tr("Apri la cartella di lavoro dell'agente"), icon_size=15)
         self.btn_folder.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(agents.workspace()))))
         bh.addWidget(self.btn_folder)
@@ -148,9 +151,11 @@ class AgentPanel(QWidget):
 
     def _update_status(self):
         texts = {"idle": tr("Non avviato"), "running": tr("{name} nel terminale · accesso con il tuo account"),
-                 "installing": tr("Installazione di {name}…"), "exited": tr("{name} si è chiuso")}
+                 "installing": tr("Installazione di {name}…"), "exited": tr("{name} si è chiuso"),
+                 "failed": tr("Installazione di {name} non riuscita")}
         self.status.setText(texts[self.state].format(name=self.label))
         self.btn_restart.setVisible(self.state in ("running", "exited"))
+        self.btn_retry.setVisible(self.state == "failed")
         self.status_changed.emit()
 
     def set_agent(self, key: str):
@@ -233,10 +238,10 @@ class AgentPanel(QWidget):
     def _install_windows(self):
         """Windows: installazione in PowerShell con il comando ufficiale; Node.js (per Gemini CLI) con winget."""
         import shutil
-        from ..winshell import powershell
+        from ..winshell import encode, powershell
         a = agents.AGENTS[self.key]
         path = agents.search_path()
-        steps = ["$ErrorActionPreference = 'Stop'", "$ProgressPreference = 'SilentlyContinue'"]
+        steps = []
         if "npm" in agents.needs(self.key) and not shutil.which("npm", path=path):
             self.term.write_local(tr("Prima installo Node.js con winget (Windows può chiedere il permesso di "
                                      "amministratore):\n> winget install OpenJS.NodeJS.LTS\n\n"))
@@ -248,12 +253,17 @@ class AgentPanel(QWidget):
         cmd = agents.install_command(self.key)
         self.term.write_local(tr("Installo {name} con il comando ufficiale:\n> {cmd}\n\n").format(
             name=a["label"], cmd=cmd))
-        steps.append(cmd)
         self.state = "installing"
         self._update_status()
-        script = "\n".join(steps) + "\nexit 0"
-        self.term.pty.start([powershell(), "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
+        script = agents.windows_install_script(self.key, steps)
+        # -EncodedCommand: lo script arriva intero, senza problemi di virgolette sulla riga di comando di Windows
+        self.term.pty.start([powershell(), "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-OutputFormat", "Text",
+                             "-EncodedCommand", encode(script)],
                             os.path.expanduser("~"), {"PATH": path})
+
+    def _retry_install(self):
+        self.state = "idle"
+        self.ensure_started()
 
     def _exited(self, rc: int):
         if self.state == "installing":
@@ -261,10 +271,14 @@ class AgentPanel(QWidget):
                 self.term.write_local(tr("\n✓ {name} installato. Lo avvio…\n").format(name=self.label))
                 QTimer.singleShot(1200, lambda: self.start())
                 return
-            self.term.write_local(tr("\nInstallazione non riuscita (codice {rc}). Controlla il messaggio qui sopra o "
-                                     "usa le istruzioni ufficiali.\n").format(rc=rc))
-            self.state = "idle"
-            QTimer.singleShot(4000, self.ensure_started)
+            # resta sul terminale, con l'errore in vista: si torna all'installazione con «Riprova»
+            self.term.write_local(tr("\nInstallazione non riuscita (codice {rc}). Il messaggio d'errore è qui sopra; "
+                                     "premi «Riprova» per tornare all'installazione o usa le istruzioni ufficiali.\n"
+                                     ).format(rc=rc))
+            log = agents.install_log(self.key)
+            if IS_WINDOWS and log.exists():
+                self.term.write_local(tr("Registro completo: {path}\n").format(path=log))
+            self.state = "failed"
         else:
             self.term.write_local(tr("\n[{name} si è chiuso: premi «Riavvia» per una nuova conversazione]\n").format(
                 name=self.label))

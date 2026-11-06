@@ -752,8 +752,18 @@ EN: dict[str, str] = {
         'Look at the screenshot {path} ',
     'Leggi la diagnosi del PC nel file {path}. Il problema è: ':
         'Read the PC diagnostics in the file {path}. The problem is: ',
-    '\nInstallazione non riuscita (codice {rc}). Controlla il messaggio qui sopra o usa le istruzioni ufficiali.\n':
-        '\nInstallation failed (code {rc}). Check the message above or use the official instructions.\n',
+    "(Windows PowerShell 5.1: uso l'architettura del PC letta da Windows, {arch}, perché lo script ufficiale qui non riesce a leggerla)":
+        "(Windows PowerShell 5.1: using the PC architecture reported by Windows, {arch}, because the official script can't read it here)",
+    'Errore:':
+        'Error:',
+    "\nInstallazione non riuscita (codice {rc}). Il messaggio d'errore è qui sopra; premi «Riprova» per tornare all'installazione o usa le istruzioni ufficiali.\n":
+        '\nInstallation failed (code {rc}). The error message is above; press “Try again” to go back to the installation or use the official instructions.\n',
+    'Registro completo: {path}\n':
+        'Full log: {path}\n',
+    'Installazione di {name} non riuscita':
+        '{name} installation failed',
+    "Torna all'installazione":
+        'Back to the installation',
     '\n[{name} si è chiuso: premi «Riavvia» per una nuova conversazione]\n':
         '\n[{name} has exited: press “Restart” for a new conversation]\n',
     '{name} non è in esecuzione: premi «Riavvia».':

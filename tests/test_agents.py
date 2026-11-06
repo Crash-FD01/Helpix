@@ -149,6 +149,21 @@ def test_agents_flow():
     assert win.agent.stack.currentWidget() is win.agent.install_page
     assert "@google/gemini-cli" in win.agent.install_page.cmd.text()
 
+    # 6b) installazione non riuscita: il terminale con l'errore resta in vista, «Riprova» torna all'installazione
+    gem = agents.AGENTS["gemini-cli"]
+    saved = {k: gem[k] for k in ("install", "needs", "precheck")}
+    gem.update(install="echo 'ERRORE DI PROVA'; exit 3", needs=[], precheck=None)  # niente gestore pacchetti
+    try:
+        win.agent.install()
+        until(lambda: win.agent.state == "failed", what="installazione fallita")
+        pump(4500)  # prima, dopo 4 secondi, il messaggio spariva
+        assert win.agent.stack.currentWidget() is win.agent.term
+        assert win.agent.btn_retry.isVisibleTo(win.agent) and not win.agent.btn_restart.isVisibleTo(win.agent)
+        win.agent.btn_retry.click()
+        assert win.agent.stack.currentWidget() is win.agent.install_page and win.agent.state == "idle"
+    finally:
+        gem.update(saved)
+
     # 7) di nuovo nel motore web: le scorciatoie tornano attive
     win._choose_site("chatgpt")
     assert win.engine == "web" and win._sc_new.isEnabled()

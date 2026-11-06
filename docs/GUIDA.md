@@ -285,6 +285,8 @@ Cosa cambia rispetto a Linux:
 - Gli agenti nel terminale usano ConPTY; Helpix li installa con i comandi ufficiali per Windows (Node.js, per Gemini
   CLI, con winget).
 - Impostazioni in `%APPDATA%\Helpix`, dati e accessi in `%LOCALAPPDATA%\Helpix`.
+- Se l'installazione di un agente non riesce, l'errore resta nel terminale e il registro completo è in
+  `%LOCALAPPDATA%\Helpix\logs\install-<agente>.log` (utile da allegare a una segnalazione).
 
 ### Dai sorgenti (Arch, sistemi più vecchi, sviluppo)
 

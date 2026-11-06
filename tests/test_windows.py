@@ -235,6 +235,79 @@ def test_window_list_on_windows():
     print("  finestre visibili:", len(rects))
 
 
+# installer finto con lo stesso rilevamento dell'architettura dello script ufficiale di Codex (issue #6)
+_FAKE_INSTALLER = """param([string]$Version = "latest")
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+$architecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture
+switch ($architecture) {
+  "Arm64" { $target = "aarch64-pc-windows-msvc" }
+  "X64" { $target = "x86_64-pc-windows-msvc" }
+  default { throw "Unsupported architecture: $architecture" }
+}
+Write-Host "INSTALLATO target=$target"
+"""
+
+
+def _serve(body: str) -> str:
+    import http.server
+    import threading
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(body.encode())
+
+        def log_message(self, *_a):
+            pass
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return f"http://127.0.0.1:{srv.server_address[1]}/install.ps1"
+
+
+def test_agent_install_script():
+    """Installazione degli agenti: compatibilità con Windows PowerShell 5.1, errori visibili, registro."""
+    import shutil
+    import subprocess
+    from helpix import agents
+    agents.IS_WINDOWS = True
+    try:
+        orig = agents.AGENTS["codex"]["install_win"]
+        assert orig == "irm https://chatgpt.com/codex/install.ps1 | iex"
+        agents.AGENTS["codex"]["install_win"] = f"irm {_serve(_FAKE_INSTALLER)} | iex"
+        script = agents.windows_install_script("codex")
+        assert "PSVersion.Major -lt 6" in script and "Tls12" in script and "Start-Transcript" in script
+        assert str(agents.install_log("codex")) in script
+        agents.AGENTS["gemini-cli"]["install_win"] = "comando_inesistente_helpix"
+        failing = agents.windows_install_script("gemini-cli", ["Write-Host 'passo preliminare'"])
+    finally:
+        agents.AGENTS["codex"]["install_win"] = orig
+        agents.AGENTS["gemini-cli"]["install_win"] = "npm install -g @google/gemini-cli"
+        agents.IS_WINDOWS = WINDOWS
+    # Windows: il PowerShell 5.1 vero (powershell.exe), quello dove lo script ufficiale si fermava
+    shells = [s for s in (shutil.which("powershell.exe") if WINDOWS else None, shutil.which("pwsh")) if s]
+    if not shells:
+        print("  (PowerShell non presente: script non eseguito)")
+        return
+    env = dict(os.environ, PROCESSOR_ARCHITECTURE="AMD64")
+    for ps in shells:
+        def run(text, ps=ps):
+            if "powershell" not in os.path.basename(ps).lower():  # PowerShell 7: si prova anche il ramo per la 5.1
+                text = text.replace("$PSVersionTable.PSVersion.Major -lt 6", "$true")
+            return subprocess.run([ps, "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-OutputFormat",
+                                   "Text", "-EncodedCommand", winshell.encode(text)], capture_output=True, text=True,
+                                  encoding="utf-8", errors="replace", timeout=120, env=env)
+        r = run(script)
+        assert r.returncode == 0 and "INSTALLATO target=x86_64-pc-windows-msvc" in r.stdout, (ps, r.stdout, r.stderr)
+        assert "INSTALLATO" in agents.install_log("codex").read_text(encoding="utf-8", errors="replace")
+        r = run(failing)
+        assert r.returncode == 1, (ps, r.returncode, r.stdout, r.stderr)
+        assert "passo preliminare" in r.stdout and "comando_inesistente_helpix" in r.stdout, (ps, r.stdout)
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):
