@@ -95,6 +95,8 @@ class AgentPanel(QWidget):
     status_changed = Signal()
     summary_ready = Signal(str)
     summary_failed = Signal(str)
+    project_ready = Signal(object)   # aggiornamento del progetto (project.Update) scritto dall'agente
+    project_failed = Signal(str)
     hint = Signal(str)
 
     def __init__(self, key: str = "claude-code", parent=None):
@@ -378,8 +380,43 @@ class AgentPanel(QWidget):
             self.summary_failed.emit(tr("{name} non ha scritto il riepilogo nel file {file}.").format(
                 name=self.label, file=agents.SUMMARY_FILE))
 
+    # ------------------------------------------------------------ aggiornamento del progetto (beta)
+    def request_project(self, text: str, timeout: float = 300.0):
+        """Incolla la richiesta di aggiornamento del progetto: l'agente lo scrive in HELPIX-PROJECT.md."""
+        if not self.running:
+            self.project_failed.emit(tr("{name} non è in esecuzione: avvialo e riprova.").format(name=self.label))
+            return
+        self._project_until = time.monotonic() + timeout
+        self._project_last = None
+        self.paste(text, enter=True)
+        QTimer.singleShot(2000, self._project_poll)
+
+    @property
+    def project_pending(self) -> bool:
+        return time.monotonic() < getattr(self, "_project_until", 0.0)
+
+    def cancel_project(self):
+        self._project_until = 0.0
+
+    def _project_poll(self):
+        if not self.project_pending:
+            return
+        up = agents.read_project_update()
+        key = repr(up) if up else None
+        if key and key == self._project_last:  # uguale a due controlli di fila: l'agente ha finito di scriverlo
+            self._project_until = 0.0
+            self.project_ready.emit(up)
+            return
+        self._project_last = key
+        if time.monotonic() < self._project_until:
+            QTimer.singleShot(1500, self._project_poll)
+        else:
+            self.project_failed.emit(tr("{name} non ha scritto l'aggiornamento del progetto nel file {file}.").format(
+                name=self.label, file=agents.PROJECT_FILE))
+
     def shutdown(self):
         self._summary_until = 0.0
+        self._project_until = 0.0
         self.term.pty.stop()
 
     def icon_key(self) -> str:

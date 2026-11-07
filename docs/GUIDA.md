@@ -241,6 +241,34 @@ oscura i dati sensibili in **tutto il testo che arriva a un'IA passando da Helpi
 (rm -r, mkfs, dd, rimozione pacchetti, curl | sh…) richiedono conferma; le chiavi API stanno nel
 portachiavi di sistema.
 
+**Progetti e vault (beta)** — spenti di default: *Impostazioni › Funzioni sperimentali › Progetti e vault (beta)*.
+Un progetto è un lavoro che continua in più sessioni, anche con IA diverse. Helpix tiene un file breve con lo stato
+attuale (`PROJECT.md`) e lo dà all'IA all'inizio di ogni chat nuova: si riparte senza rispiegare e il contesto resta
+piccolo (circa 1000 token) invece di una cronologia che cresce. Specifica completa: [`PROGETTI.md`](PROGETTI.md).
+- **Selettore *Progetto*** nella barra: scegli un progetto o *Nuovo progetto…* (puoi incollare un riepilogo fatto da
+  un'altra IA; *Copia la richiesta per un'altra IA* te lo fa preparare nel formato giusto). Aprendolo, Helpix avvia un
+  task nuovo con il contesto: lo incolla nella chat web (tu premi Invio), lo mette nel messaggio di sistema del motore
+  API o nelle istruzioni degli agenti nel terminale.
+- **Salva progetto**: Helpix chiede all'IA solo le modifiche a `PROJECT.md` e una nota della sessione (blocco
+  `HELPIX-PROJECT`), le applica e ti mostra l'anteprima modificabile; si salva solo quando premi *Salva*. In
+  alternativa *Automatico con annullamento* (Impostazioni dei progetti). *Compatta il progetto* lo riscrive più corto
+  quando supera il limite. Le versioni precedenti restano (le ultime 20) e si ripristinano dal pannello Vault.
+- **Note**: le note vecchie non vanno all'IA. Se gliene serve una scrive `HELPIX-NOTA: titolo`: copia la riga e
+  compare la barra *L'IA chiede la nota… — Incolla nella chat*. Gli agenti la leggono da soli con
+  `helpix vault cat "titolo"` e `helpix vault search "parole"` (Helpix aperto).
+- **Solo per me**: la sezione di `PROJECT.md` che non viene mai inviata a nessuna IA.
+- **Bozza della sessione** ogni 10 minuti (comandi, output, diagnosi: niente IA, niente token) e **promemoria**
+  «Salvare nel progetto?» quando cambi progetto, apri un task nuovo, passi a un'altra IA o esci.
+- **Pannello Vault** (*Progetto › Apri il vault…*): progetti e note, *Leggi/Modifica*, link `[[ ]]`, ricerca,
+  «Citata da», versioni, peso del contesto in token.
+- **Il vault** è una cartella di file Markdown (`~/.local/share/helpix/vault`, `%LOCALAPPDATA%\Helpix\vault`),
+  leggibile anche con un editor o con Obsidian. **Cifratura facoltativa** (*Impostazioni dei progetti › Cifra il
+  vault…*): password, 8 codici usa e getta per reimpostarla se la dimentichi, file di recupero facoltativo, sblocco
+  facoltativo con il portachiavi (dopo la conferma di polkit o Windows Hello). Il vault cifrato si blocca insieme a
+  Helpix (blocco di Impostazioni › Sicurezza, anche per inattività), con *Progetto › Blocca il vault* o chiudendo
+  Helpix. *Esporta in chiaro* ne fa una copia leggibile; `helpix/vault_crypto.py` lo decifra anche senza Helpix.
+  Persi password, codici e file, i dati non si recuperano.
+
 ## Installazione
 
 ### Dal repository (consigliato)
@@ -399,6 +427,8 @@ messa nel repository.
 | `helpix/data/fonts/` | Inter e JetBrains Mono (SIL Open Font License, testo della licenza incluso) |
 | `helpix/data/icons/` | Icona dell'app in 8 dimensioni (16–512 px) |
 | `helpix/i18n.py` | Lingue: catalogo italiano → inglese e funzione `tr()` |
+| `helpix/vault.py`, `vault_crypto.py`, `project.py`, `passwords.py` | Progetti e vault (beta): archivio in chiaro o cifrato, slot delle chiavi, aggiornamenti `HELPIX-PROJECT`, codici di recupero (`data/parole-it.txt`) |
+| `helpix/ui/project_mixin.py`, `ui/vault_panel.py`, `ui/vault_dialogs.py` | Selettore e salvataggio dei progetti, pannello Vault, cifratura, sblocco e recupero |
 
 ## Limiti noti
 
@@ -444,6 +474,7 @@ messa nel repository.
 - [x] v0.17 — Controllo degli aggiornamenti all'avvio con *Aggiorna ora*, su Windows e Linux
 - [x] v0.16 — Versione per Windows: PowerShell con Controllo account utente, scorciatoia globale, agenti con ConPTY,
   Windows Hello, diagnosi, installer e avviso delle nuove versioni
+- [ ] Progetti e vault (beta): progetti che continuano tra sessioni e IA, vault Markdown con cifratura facoltativa ([`PROGETTI.md`](PROGETTI.md))
 - [ ] Firma digitale dell'installer di Windows
 - [ ] Versione per macOS (piano in [`audit-roadmap.md`](audit-roadmap.md))
 
