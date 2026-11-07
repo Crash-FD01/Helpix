@@ -151,14 +151,31 @@ def test_quick_window():
     until(lambda: q.btn_send.isEnabled(), timeout=25, what="seconda risposta completa")
     win.show()
 
+    # la pagina ridisegna la conversazione all'invio (le risposte di prima spariscono, la nuova compare subito):
+    # la risposta deve arrivare lo stesso alla finestra rapida (bug su Linux Mint: rispondeva solo la grande)
+    js(gpt, "for (let i = 0; i < 3; i++) { const d = document.createElement('div'); "
+            "d.setAttribute('data-message-author-role', 'assistant'); d.textContent = 'vecchia risposta ' + i; "
+            "document.getElementById('thread').appendChild(d); } window.remount = true; 0")
+    before = q.answers.toPlainText().count("NetworkManager")
+    q.input.setPlainText("domanda con la pagina ridisegnata")
+    q.send()
+    until(lambda: q.answers.toPlainText().count("NetworkManager") > before, timeout=25,
+          what="risposta vista dopo che la pagina ha ridisegnato la conversazione")
+    until(lambda: q.btn_send.isEnabled(), timeout=25, what="risposta completa (pagina ridisegnata)")
+    js(gpt, "window.remount = false; 0")
+    from helpix.config import DATA_DIR
+    log = (DATA_DIR / "logs" / "finestra-rapida.log").read_text(encoding="utf-8")
+    assert "pagina cambiata durante l'attesa" in log and "risposta completa alla finestra rapida" in log, log[-1500:]
+    assert "domanda con la pagina" not in log, "il registro non contiene il testo dei messaggi"
+
     # Helpix ridotto a icona: la pagina resta «visibile» per il motore web finché arriva la risposta
     win.showMinimized()
     pump(800)
     q.input.setPlainText("terza domanda")
     q.send()
-    until(lambda: js(gpt, "window.sent.length") == 3, timeout=20, what="messaggio con Helpix ridotto a icona")
+    until(lambda: js(gpt, "window.sent.length") == 4, timeout=20, what="messaggio con Helpix ridotto a icona")
     until(lambda: q.btn_send.isEnabled(), timeout=25, what="risposta con Helpix ridotto a icona")
-    assert q.answers.toPlainText().count("NetworkManager") >= 3
+    assert q.answers.toPlainText().count("NetworkManager") >= 4
     win.showNormal()
     pump(300)
 

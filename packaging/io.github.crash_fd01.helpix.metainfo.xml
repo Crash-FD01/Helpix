@@ -69,6 +69,13 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.18.2" date="2026-11-07">
+      <description>
+        <p>Quick window: the answer reaches it even when the chat page redraws the conversation while answering
+          (it showed up only in the main window). A log of the quick window steps, without message text, helps
+          with bug reports.</p>
+      </description>
+    </release>
     <release version="0.18.1" date="2026-11-07">
       <description>
         <p>Quick window with web chats: Helpix checks that the message really left the chat box and retries the

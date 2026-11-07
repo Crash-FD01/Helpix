@@ -107,7 +107,9 @@ nel terminale, che riparte, o API); i messaggi successivi restano nello stesso t
 la scorciatoia) o premi +. La risposta compare nella finestra rapida mentre arriva, in una piccola area che scorre,
 anche con Helpix nascosto nell'area di notifica; la finestra principale resta dov'è (pulsante ↗ per aprirla).
 Se Helpix è chiuso, la scorciatoia lo avvia in background: compare solo la finestra rapida. Se la risposta non
-arriva entro un paio di minuti la finestra si sblocca da sola e rimanda a Helpix.
+arriva entro un paio di minuti la finestra si sblocca da sola e rimanda a Helpix. Per le segnalazioni, cosa è
+successo (senza il testo dei messaggi) è in `~/.local/share/helpix/logs/finestra-rapida.log`
+(Windows: `%LOCALAPPDATA%\Helpix\logs\finestra-rapida.log`).
 È ancorata all'angolo in basso a destra: con il lucchetto in alto si sblocca, la trascini dove vuoi e,
 richiudendo il lucchetto, resta ancorata lì (anche alle aperture successive).
 Da qui si scelgono anche **modello ed effort**: per gli agenti nel terminale (Claude Code li cambia subito con

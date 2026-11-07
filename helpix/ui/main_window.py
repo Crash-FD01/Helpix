@@ -161,6 +161,29 @@ def stop_quick_window(only_if_stale: bool = False) -> None:
         logging.getLogger(__name__).info("finestra rapida di un'altra versione terminata (pid %s)", pid)
 
 
+def _qlog(fmt: str, *args) -> None:
+    """Registro della finestra rapida (niente testo dei messaggi, solo lunghezze e stati): serve a capire dove si
+    ferma una risposta che non arriva. In ~/.local/share/helpix/logs/finestra-rapida.log (Windows: %LOCALAPPDATA%)."""
+    try:
+        from ..config import DATA_DIR
+        path = DATA_DIR / "logs" / "finestra-rapida.log"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.exists() and path.stat().st_size > 512 * 1024:
+            path.replace(path.with_suffix(".log.1"))
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(time.strftime("%Y-%m-%d %H:%M:%S ") + (fmt % args) + "\n")
+    except OSError:
+        pass
+
+
+def _connected(sock) -> bool:
+    from PySide6.QtNetwork import QLocalSocket
+    try:
+        return sock is not None and sock.state() == QLocalSocket.LocalSocketState.ConnectedState
+    except (RuntimeError, AttributeError):  # connessione già chiusa (o finta, nei test)
+        return False
+
+
 class MainWindow(QMainWindow):
     def __init__(self, settings, secrets, engine: str | None = None,
                  provider: str | None = None, model: str | None = None):
@@ -2409,6 +2432,8 @@ class MainWindow(QMainWindow):
             self._quick_shot = {"sock": sock, "_visible": self._on_screen() and not self.isMinimized()}
             self.shots.start("smart")
         elif kind == "send":
+            _qlog("messaggio dalla finestra rapida (%d caratteri, task nuovo: %s, motore %s)",
+                  len(str(msg.get("text", ""))), bool(msg.get("new")), self.engine)
             if msg.get("new"):  # primo messaggio di una finestra rapida appena aperta: task nuovo
                 self._quick_new_task(lambda: self._quick_send(str(msg.get("text", "")), sock), sock)
             else:
@@ -2506,7 +2531,7 @@ class MainWindow(QMainWindow):
         self._quick_awake(True)  # prima di aprire la chat nuova: la pagina nuova deve poter disegnare
         self.new_session()
         if self.engine == "web" and not self.web.is_external():
-            self.web.when_ready(go, timeout=45)
+            self.web.when_ready(lambda ok: (_qlog("chat nuova pronta: %s", ok), go(ok)), timeout=45)
         elif self.engine == "agent" and self.agent:
             if not agents.find_cli(self.agent.key):
                 self.instance.reply(sock, {"type": "error", "text": tr("{name} non è installato: installalo dalla "
@@ -2564,9 +2589,12 @@ class MainWindow(QMainWindow):
                 if text:
                     self.web.paste_text(text, None)
                 self._quick_watch = {"sock": sock, "kind": "web", "count": before.get("count", 0), "last": None,
+                                     "base_text": before.get("text", ""), "page_changed": False,
                                      "stable": 0, "until": time.monotonic() + 600, "t0": time.monotonic()}
+                _qlog("invio: %d risposte nella pagina prima del messaggio", before.get("count", 0))
 
                 def sent(ok: bool):
+                    _qlog("messaggio %s", "partito" if ok else "NON partito (resta nella casella)")
                     if self._quick_seq != seq:
                         return
                     if not ok:  # il testo è rimasto nella casella (o non ci è arrivato): lo dico, non aspetto
@@ -2663,6 +2691,10 @@ class MainWindow(QMainWindow):
         def push(text: str, done: bool):
             if text != w.get("sent_text") or done:
                 w["sent_text"] = text
+                if done or not w.get("first_push"):
+                    w["first_push"] = True
+                    _qlog("risposta %s alla finestra rapida (%d caratteri, collegata: %s)",
+                          "completa" if done else "iniziata", len(text), _connected(w["sock"]))
                 self.instance.reply(w["sock"], {"type": "answer", "text": text, "done": done})
             if done:
                 self._quick_stop()
@@ -2673,18 +2705,28 @@ class MainWindow(QMainWindow):
             def got(data: dict):
                 if self._quick_watch is not w:
                     return
-                count = data.get("count", 0)
-                if count < w["count"]:  # pagina ricaricata o chat nuova: riparto da qui
-                    w["count"] = count
-                if count <= w["count"]:  # la risposta non è ancora comparsa
+                count, text = data.get("count", 0), data.get("text", "")
+                if count < w["count"]:
+                    # la pagina è cambiata sotto (chat nuova, il sito ha ridisegnato la conversazione): da qui in
+                    # poi conta come risposta qualunque messaggio dell'IA diverso da quello di prima. Prima il
+                    # punto di partenza diventava il numero attuale, e se la risposta era già comparsa (PC lento,
+                    # chat nuova) non veniva mai vista: la finestra principale rispondeva, quella rapida no.
+                    w["count"], w["page_changed"] = 0, True
+                    _qlog("pagina cambiata durante l'attesa (%d risposte): riparto da zero", count)
+                fresh = count > w["count"] and not (w["page_changed"] and text and text == w["base_text"])
+                if w.get("logged") != (count, bool(text), data.get("busy")):
+                    w["logged"] = (count, bool(text), data.get("busy"))
+                    _qlog("pagina: %d risposte (prima %d), testo %d caratteri, sta scrivendo %s",
+                          count, w["count"], len(text), bool(data.get("busy")))
+                if not fresh:  # la risposta non è ancora comparsa
                     if time.monotonic() - w.get("t0", time.monotonic()) > 120:
+                        _qlog("nessuna risposta vista in 2 minuti")
                         self._quick_stop()
                         self.instance.reply(w["sock"], {"type": "answer_unavailable", "text": tr(
                             "_Non vedo la risposta nella pagina: guardala in Helpix (↗)._")})
                         return
                     QTimer.singleShot(900, self._quick_poll)
                     return
-                text = data.get("text", "")
                 w["stable"] = w["stable"] + 1 if text == w["last"] and not data.get("busy") else 0
                 w["last"] = text
                 push(text, w["stable"] >= 2)

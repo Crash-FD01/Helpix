@@ -45,6 +45,8 @@ Problema: il wifi non va</code></pre>
     if (window.dropClicks > 0) { window.dropClicks--; return; }
     const text = box.textContent;
     window.sent.push(text);
+    // come ChatGPT quando ridisegna la conversazione: i messaggi di prima spariscono e la risposta compare subito
+    if (window.remount) document.querySelectorAll('[data-message-author-role="assistant"]').forEach(e => e.remove());
     box.textContent = '';
     const thread = document.getElementById('thread');
     const fence = text.indexOf('```');
