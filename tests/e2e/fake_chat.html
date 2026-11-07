@@ -58,8 +58,21 @@ Problema: il wifi non va</code></pre>
     if (!text.includes('HELPIX-TASK')) {  // risposta normale, scritta a pezzi come fanno le chat
       const stop = document.createElement('button'); stop.setAttribute('data-testid', 'stop-button');
       stop.textContent = 'Stop'; document.body.appendChild(stop);
-      const msg = document.createElement('div'); msg.setAttribute('data-message-author-role', 'assistant');
-      thread.appendChild(msg);
+      let msg = document.createElement('div');
+      if (window.plainMarkup) {
+        // come ChatGPT senza account: nessun contrassegno sui messaggi, solo il turno dell'utente e quello dell'IA
+        const user = document.createElement('div'); user.className = 'turn';
+        const bubble = document.createElement('div'); bubble.className = 'bubble'; bubble.textContent = text;
+        const copy = document.createElement('button'); copy.textContent = 'Copia';
+        user.append(bubble, copy); thread.appendChild(user);
+        const turn = document.createElement('div'); turn.className = 'turn';
+        msg.className = 'markdown'; turn.appendChild(msg);
+        const tools = document.createElement('button'); tools.textContent = 'Copia'; turn.appendChild(tools);
+        thread.appendChild(turn);
+      } else {
+        msg.setAttribute('data-message-author-role', 'assistant');
+        thread.appendChild(msg);
+      }
       const words = ('Risposta finta: controlla il driver del wifi con nmcli device status e riavvia ' +
                      'NetworkManager.').split(' ');
       let w = 0;

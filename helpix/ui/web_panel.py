@@ -174,7 +174,7 @@ _SUMMARY_JS = r"""
 # Ultima risposta dell'assistente nella pagina (per la finestra rapida): quante risposte ci sono,
 # il testo dell'ultima e se sta ancora scrivendo.
 _ANSWER_JS = r"""
-(function () {
+(function (sent) {
   const sels = ['[data-message-author-role="assistant"]', '[data-is-streaming]', '.font-claude-response',
                 '[data-testid="assistant-message"]', 'model-response message-content', 'model-response',
                 '[data-content="ai-message"]', '.ds-markdown'];
@@ -222,8 +222,40 @@ _ANSWER_JS = r"""
     const clean = raw.replace(/ /g, ' ').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
     return JSON.stringify({ count: els.length, text: clean, busy });
   }
+  // Nessun selettore noto (sito cambiato, ChatGPT senza account…): la risposta è ciò che segue il messaggio
+  // appena inviato. Trovo il punto più interno della pagina con quel testo (l'ultima volta che compare), poi salgo
+  // finché qualcosa dopo di lui ha del testo, senza mai arrivare alla casella in cui si scrive.
+  const norm = s => (s || '').replace(/\s+/g, ' ').trim();
+  const want = norm(sent);
+  if (want) {
+    const key = want.slice(0, 120);
+    const root = document.querySelector('main') || document.body;
+    const EDIT = 'textarea, input, form, [contenteditable="true"]';
+    const composer = document.querySelector('#prompt-textarea, [contenteditable="true"], textarea');
+    let user = null;
+    for (const el of root.querySelectorAll('*')) {
+      if (el.matches(SKIP) || el.closest(EDIT)) continue;
+      const t = norm(el.innerText);
+      if (t && t.length <= want.length + 40 && t.includes(key)) user = el;
+    }
+    for (let a = user, depth = 0; a && a !== root && depth < 10; a = a.parentElement, depth++) {
+      const parts = [];
+      for (let sib = a.nextElementSibling; sib; sib = sib.nextElementSibling) {
+        if (sib.matches(EDIT) || sib.querySelector(EDIT) || (composer && sib.contains(composer))) break;
+        if (sib.matches(SKIP) || hidden(sib)) continue;
+        const t = body(sib).map(e => text(e, false)).join('\n');
+        if (norm(t)) parts.push(t);
+      }
+      if (parts.length) {
+        const clean = parts.join('\n').replace(/\u00a0/g, ' ').replace(/[ \t]+\n/g, '\n')
+            .replace(/\n{3,}/g, '\n\n').trim();
+        return JSON.stringify({ count: 1, text: clean, busy, fallback: true });
+      }
+      if (composer && a.parentElement && a.parentElement.contains(composer)) break;
+    }
+  }
   return JSON.stringify({ count: 0, text: '', busy });
-})();
+})(__SENT__);
 """
 
 # Come _FOCUS_JS, ma solo a pagina caricata: serve per incollare dopo un cambio di sito.
@@ -595,8 +627,11 @@ class WebPanel(QWidget):
         script = _INSERT_JS % json.dumps(payload)
         page.runJavaScript(script, QWebEngineScript.ScriptWorldId.ApplicationWorld, after_insert)
 
-    def last_answer(self, callback):
-        """callback(dict) con count, text, busy dell'ultima risposta nella pagina visibile."""
+    def last_answer(self, callback, sent: str = ""):
+        """callback(dict) con count, text, busy dell'ultima risposta nella pagina visibile.
+
+        sent: il messaggio appena inviato; se la pagina non ha i contrassegni noti dei messaggi dell'IA, la risposta
+        è il testo che lo segue (fallback: True)."""
         if not (self.view and self.page):
             callback({"count": 0, "text": "", "busy": False})
             return
@@ -607,7 +642,8 @@ class WebPanel(QWidget):
             except ValueError:
                 callback({"count": 0, "text": "", "busy": False})
 
-        self.page.runJavaScript(_ANSWER_JS, QWebEngineScript.ScriptWorldId.ApplicationWorld, got)
+        self.page.runJavaScript(_ANSWER_JS.replace("__SENT__", json.dumps(sent or "")),
+                                QWebEngineScript.ScriptWorldId.ApplicationWorld, got)
 
     def when_ready(self, callback, timeout: float = 45.0):
         """callback(True) appena la pagina del servizio visibile ha finito di caricare e ha la casella della chat;

@@ -168,14 +168,28 @@ def test_quick_window():
     assert "pagina cambiata durante l'attesa" in log and "risposta completa alla finestra rapida" in log, log[-1500:]
     assert "domanda con la pagina" not in log, "il registro non contiene il testo dei messaggi"
 
+    # pagina senza contrassegni sui messaggi (ChatGPT senza account, Linux Mint: la rapida restava in attesa):
+    # la risposta è il testo che segue il messaggio inviato
+    js(gpt, "document.querySelectorAll('[data-message-author-role]').forEach(e => e.remove()); "
+            "window.plainMarkup = true; 0")
+    before = q.answers.toPlainText().count("NetworkManager")
+    q.input.setPlainText("domanda su una pagina senza contrassegni")
+    q.send()
+    until(lambda: q.answers.toPlainText().count("NetworkManager") > before, timeout=25,
+          what="risposta letta dopo il messaggio inviato")
+    until(lambda: q.btn_send.isEnabled(), timeout=25, what="risposta completa (senza contrassegni)")
+    last = q._history[-1][1]
+    assert last.startswith("Risposta finta") and "Copia" not in last and "senza contrassegni" not in last, last
+    js(gpt, "window.plainMarkup = false; 0")
+
     # Helpix ridotto a icona: la pagina resta «visibile» per il motore web finché arriva la risposta
     win.showMinimized()
     pump(800)
     q.input.setPlainText("terza domanda")
     q.send()
-    until(lambda: js(gpt, "window.sent.length") == 4, timeout=20, what="messaggio con Helpix ridotto a icona")
+    until(lambda: js(gpt, "window.sent.length") == 5, timeout=20, what="messaggio con Helpix ridotto a icona")
     until(lambda: q.btn_send.isEnabled(), timeout=25, what="risposta con Helpix ridotto a icona")
-    assert q.answers.toPlainText().count("NetworkManager") >= 4
+    assert q.answers.toPlainText().count("NetworkManager") >= 5
     win.showNormal()
     pump(300)
 

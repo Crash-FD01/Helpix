@@ -2589,7 +2589,7 @@ class MainWindow(QMainWindow):
                 if text:
                     self.web.paste_text(text, None)
                 self._quick_watch = {"sock": sock, "kind": "web", "count": before.get("count", 0), "last": None,
-                                     "base_text": before.get("text", ""), "page_changed": False,
+                                     "base_text": before.get("text", ""), "page_changed": False, "sent": text,
                                      "stable": 0, "until": time.monotonic() + 600, "t0": time.monotonic()}
                 _qlog("invio: %d risposte nella pagina prima del messaggio", before.get("count", 0))
 
@@ -2605,7 +2605,7 @@ class MainWindow(QMainWindow):
                         return
                     QTimer.singleShot(1500, self._quick_poll)
                 self.web.send_verified(sent)
-            self.web.last_answer(sent_web)
+            self.web.last_answer(sent_web, text)
         else:
             self._quick_watch = {"sock": sock, "kind": "api"}
             self.prompt.setPlainText(text)
@@ -2713,7 +2713,13 @@ class MainWindow(QMainWindow):
                     # chat nuova) non veniva mai vista: la finestra principale rispondeva, quella rapida no.
                     w["count"], w["page_changed"] = 0, True
                     _qlog("pagina cambiata durante l'attesa (%d risposte): riparto da zero", count)
-                fresh = count > w["count"] and not (w["page_changed"] and text and text == w["base_text"])
+                if data.get("fallback"):  # pagina senza contrassegni noti: risposta = testo dopo il messaggio inviato
+                    fresh = bool(text) and text != w["base_text"]
+                    if not w.get("fallback_logged"):
+                        w["fallback_logged"] = True
+                        _qlog("contrassegni dei messaggi non trovati: leggo il testo dopo il messaggio inviato")
+                else:
+                    fresh = count > w["count"] and not (w["page_changed"] and text and text == w["base_text"])
                 if w.get("logged") != (count, bool(text), data.get("busy")):
                     w["logged"] = (count, bool(text), data.get("busy"))
                     _qlog("pagina: %d risposte (prima %d), testo %d caratteri, sta scrivendo %s",
@@ -2730,7 +2736,7 @@ class MainWindow(QMainWindow):
                 w["stable"] = w["stable"] + 1 if text == w["last"] and not data.get("busy") else 0
                 w["last"] = text
                 push(text, w["stable"] >= 2)
-            self.web.last_answer(got)
+            self.web.last_answer(got, w.get("sent", ""))
         else:
             def got_screen(screen: str):
                 if self._quick_watch is not w:
