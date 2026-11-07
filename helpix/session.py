@@ -48,6 +48,7 @@ class Session:
         self.model = model
         self.cwd = cwd
         self.site: str | None = None  # servizio web usato per ultimo (motore web)
+        self.project: str | None = None  # progetto del vault a cui appartiene il task (beta)
         self.messages: list[Message] = []
 
     @property
@@ -66,6 +67,7 @@ class Session:
         return {"version": self.VERSION, "id": self.id, "title": self.title,
                 "created": self.created, "updated": self.updated,
                 "provider": self.provider, "model": self.model, "cwd": self.cwd, "site": self.site,
+                **({"project": self.project} if self.project else {}),
                 "messages": [asdict(m) for m in self.messages]}
 
     def save(self) -> None:
@@ -84,6 +86,7 @@ class Session:
         s.created = data.get("created", s.created)
         s.updated = data.get("updated", s.updated)
         s.site = data.get("site")
+        s.project = data.get("project")
         s.messages = [Message.from_dict(m) for m in data.get("messages", [])]
         return s
 

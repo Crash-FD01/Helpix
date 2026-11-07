@@ -64,6 +64,14 @@ DEFAULT_SETTINGS = {
     "show_tree": True,
     "command_timeout": 120,
     "last_cwd": str(Path.home()),
+    # progetti e vault (beta, spenti di default): docs/PROGETTI.md
+    "projects_beta": False,
+    "vault_dir": None,              # None = cartella dati di Helpix / vault
+    "active_project": None,         # ultimo progetto aperto
+    "project_autosave_min": 10,     # bozza della sessione nel progetto (0 = spento)
+    "project_update_mode": "ask",   # ask (anteprima) | auto (salva subito, con annullamento)
+    "project_reminder": True,       # «Salvare nel progetto?» nei momenti naturali
+    "project_versions": 20,         # versioni di PROJECT.md da conservare
 }
 
 

@@ -84,6 +84,10 @@ Uso: helpix [opzione]
   --quick                mostra o nasconde la finestra rapida (da usare come scorciatoia del desktop)
   --background           avvia Helpix senza mostrare la finestra principale (lo usa la finestra rapida)
   --test-shortcut        prova la scorciatoia globale con il desktop (con Helpix chiuso)
+  vault cat "nota"       testo di una nota del progetto attivo (beta; Helpix aperto e vault sbloccato)
+  vault search "parole"  righe delle note che contengono le parole (beta)
+  vault project          PROJECT.md del progetto attivo, senza «Solo per me» (beta)
+                         con --out FILE il risultato va anche nel file (serve su Windows)
   --version              mostra la versione
   -h, --help             mostra questo aiuto
 
@@ -184,8 +188,41 @@ def _self_test_run() -> int:
     return 0 if result["ok"] else 1
 
 
+def _vault_cli(args: list[str]) -> int:
+    """`helpix vault cat|search|project …`: chiede la nota a Helpix aperto (canale locale dell'utente).
+
+    Lo usano gli agenti nel terminale per leggere le note del progetto attivo senza file in chiaro su disco."""
+    from . import instance
+    out_file = None
+    if "--out" in args:
+        i = args.index("--out")
+        out_file = args[i + 1] if i + 1 < len(args) else None
+        args = args[:i] + args[i + 2:]
+    op = args[0] if args else ""
+    query = " ".join(args[1:]).strip()
+    if op not in ("cat", "search", "project") or (op != "project" and not query):
+        text, code = 'Uso: helpix vault cat "titolo della nota" | vault search "parole" | vault project [--out FILE]', 2
+    else:
+        reply = instance.request({"type": "vault", "op": op, "q": query}, instance.socket_path(), timeout=15)
+        if reply is None:
+            text, code = "Helpix non è aperto: aprilo e apri il progetto.", 1
+        else:
+            text, code = str(reply.get("text", "")), 0 if reply.get("ok") else 1
+    if out_file:
+        with open(out_file, "w", encoding="utf-8") as fh:
+            fh.write(text + "\n")
+    if sys.stdout is not None:  # Helpix.exe su Windows è un programma a finestre: niente console
+        try:
+            print(text, flush=True)
+        except (OSError, UnicodeEncodeError):
+            sys.stdout.buffer.write((text + "\n").encode("utf-8", "replace"))
+    return code
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv if argv is None else argv)
+    if len(argv) > 1 and argv[1] == "vault":  # progetti (beta): note per gli agenti nel terminale
+        return _vault_cli(argv[2:])
     if "--version" in argv:
         print(f"Helpix {__version__}")
         return 0
