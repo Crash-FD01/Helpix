@@ -23,6 +23,9 @@ from .task import SUMMARY_MARKER
 WORKSPACE = DATA_DIR / "agent"
 SUMMARY_FILE = "HELPIX-SUMMARY.md"
 TASK_FILE = "HELPIX-TASK.md"
+PROJECT_FILE = "HELPIX-PROJECT.md"   # aggiornamento del progetto scritto dall'agente (beta)
+NOTE_FILE = "HELPIX-NOTA.md"         # nota letta con «helpix vault cat … --out» (Windows)
+_project_context: dict = {"text": None}
 
 AGENTS: dict[str, dict] = {
     "claude-code": {
@@ -350,6 +353,8 @@ def write_context(key: str, task_text: str | None = None) -> Path:
     ws = workspace()
     text = _TEMPLATE.get(current(), _TEMPLATE["it"]).format(
         task=TASK_FILE, summary=SUMMARY_FILE, marker=SUMMARY_MARKER, pc=_pc_lines())
+    if _project_context["text"]:
+        text = text.rstrip("\n") + "\n\n" + _project_context["text"].strip() + "\n"
     from . import privacy
     text = privacy.filter_paste(text, notify=False)  # scudo acceso: l'agente non riceve utente e nome del PC
     for agent in AGENTS.values():  # tutti e tre: si può cambiare agente nella stessa cartella
@@ -411,3 +416,47 @@ def choice_args(key: str, model: str | None, effort: str | None) -> list[str]:
     if effort and effort != "auto" and effort in a.get("efforts", []) and "effort_args" in a:
         out += a["effort_args"](effort)
     return out
+
+
+# ------------------------------------------------------------------ progetti (beta)
+def set_project_context(text: str | None) -> None:
+    """Testo del progetto attivo da aggiungere alle istruzioni (None = nessun progetto). Vale dalla prossima
+    write_context; senza «Solo per me» (lo toglie chi lo prepara)."""
+    _project_context["text"] = text
+
+
+def vault_commands() -> tuple[str, str]:
+    """Esempi di comando con cui l'agente legge e cerca le note del progetto attivo.
+
+    Su Windows Helpix.exe è un programma a finestre: non scrive nella console, e PowerShell non lo aspetta.
+    Lì la nota va in un file e «| Out-Null» fa aspettare la fine del comando."""
+    import shlex
+    import sys
+    from .system import helpix_argv
+    if IS_WINDOWS:
+        exe = helpix_argv()
+        exe = [e.replace("pythonw.exe", "python.exe") for e in exe]
+        prefix = "& " + " ".join(f'"{e}"' for e in exe)
+        return (f'{prefix} vault cat "titolo della nota" --out {NOTE_FILE} | Out-Null; Get-Content {NOTE_FILE}',
+                f'{prefix} vault search "parole" --out {NOTE_FILE} | Out-Null; Get-Content {NOTE_FILE}')
+    found = shutil.which("helpix")
+    base = "helpix" if found else " ".join(shlex.quote(a) for a in (sys.executable, "-m", "helpix"))
+    return f'{base} vault cat "titolo della nota"', f'{base} vault search "parole"'
+
+
+def project_update_request(compact: bool = False, project_text: str = "") -> str:
+    from . import project
+    (workspace() / PROJECT_FILE).unlink(missing_ok=True)
+    if compact:
+        return project.compact_request(project_text, for_agent=True)
+    return project.update_request(project_text, for_agent=True)
+
+
+def read_project_update():
+    """L'aggiornamento del progetto scritto dall'agente (project.Update), o None se non c'è ancora."""
+    from . import project
+    try:
+        text = (workspace() / PROJECT_FILE).read_text(encoding="utf-8")
+    except OSError:
+        return None
+    return project.parse_update(text)

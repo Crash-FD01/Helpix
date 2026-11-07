@@ -143,6 +143,8 @@ _AD_CONTAINERS = {"users", "computers", "builtin", "system", "configuration", "s
 # nomi di rete interni (Active Directory, rete di casa o dell'ufficio): dicono chi è il cliente
 _INTERNAL_FQDN = re.compile(r"(?i)(?<![\w.@-])((?:[a-z0-9-]+\.)+(?:local|lan|internal|intranet|corp|home\.arpa|"
                             r"localdomain))\b(?![\w-])")
+_VAULT_KEY = re.compile(r"(?im)^(\s*key:\s*)([A-Za-z0-9_-]{40,})\s*$")
+_RECOVERY_CODE = re.compile(r"(?i)(?<![\w-])[a-z]{3,10}(?:-[a-z]{3,10}){5}(?![\w-])")
 _EMAIL = re.compile(r"(?<![\w.+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}(?![\w-])")
 _MAC = re.compile(r"(?<![\w:-])(?:[0-9A-Fa-f]{2}([:-]))(?:[0-9A-Fa-f]{2}\1){4}[0-9A-Fa-f]{2}(?![\w:-])")
 _IPV4 = re.compile(r"(?<![\w.])(\d{1,3}(?:\.\d{1,3}){3})(?!\w|\.\d)")
@@ -342,6 +344,15 @@ class Redactor:
         for hint, rx in _TOKEN_RULES:
             if hint in text:
                 sub(rx, "token", lambda m: "[TOKEN]")
+        # vault dei progetti: chiave del file di recupero e codici usa e getta (6 parole dell'elenco di Helpix)
+        sub(_VAULT_KEY, "secret", lambda m: m.group(1) + "[" + tr("SEGRETO") + "]", hints=("key:",), per_line=True)
+
+        def recovery_code(m):
+            from .passwords import words
+            wl = set(words())
+            return "[" + tr("CODICE DI RECUPERO") + "]" if all(w in wl for w in m.group(0).lower().split("-")) \
+                else m.group(0)
+        sub(_RECOVERY_CODE, "secret", recovery_code)
 
         def kv_quoted(m):
             if m.group(4).strip().lower() in _HARMLESS_VALUES:
