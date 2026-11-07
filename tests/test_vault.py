@@ -1,0 +1,413 @@
+# SPDX-FileCopyrightText: 2026 Crash
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Progetti e vault (beta): archivio, cifratura, recupero, aggiornamenti dei progetti (python tests/test_vault.py).
+
+Senza Qt: è la parte che non deve mai perdere dati. scrypt usa parametri bassi per far girare i test in fretta;
+il valore vero è controllato a parte.
+"""
+import json
+import os
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import hardexit  # noqa: E402 - uscita immediata anche su Windows
+_tmp = tempfile.mkdtemp()
+os.environ["XDG_CONFIG_HOME"] = os.path.join(_tmp, "config")
+os.environ["XDG_DATA_HOME"] = os.path.join(_tmp, "data")
+
+from helpix import passwords, project as pj, vault_crypto as vc  # noqa: E402
+from helpix.i18n import set_language  # noqa: E402
+from helpix.session import Message, Session  # noqa: E402
+from helpix.vault import EncryptedStore, PlainStore, Vault, VaultError, WrongSecret, clean_relpath, in_onedrive  # noqa: E402
+
+set_language("it")
+REAL_SCRYPT = dict(vc.SCRYPT)
+vc.SCRYPT = {"n": 2 ** 10, "r": 8, "p": 1}
+PASSWORD = "una frase lunga per il vault di prova"
+
+
+def new_root() -> Path:
+    return Path(tempfile.mkdtemp(dir=_tmp))
+
+
+def plain_vault_with_project():
+    v = Vault(new_root())
+    v.create_plain("Lavoro")
+    p = v.create_project("Cliente Rossi — firewall", pj.template("Cliente Rossi — firewall", "VPN stabile", "XGS"))
+    p.write_text(p.rel("file", "config.txt"), "set vpn …\n")
+    p.add_note("Prima sessione", pj.note_text("Prima sessione", "Tunnel IPsec configurato.", "Claude"),
+               "Tunnel IPsec configurato.")
+    return v, p
+
+
+def test_parametri_reali():
+    assert REAL_SCRYPT["n"] >= 2 ** 17 and REAL_SCRYPT["r"] == 8, "scrypt del vault vero: almeno 128 MiB"
+
+
+def test_percorsi_sicuri():
+    for bad in ("../x", "a/../../b", "C:/x", "", "a//b/.."):
+        try:
+            clean_relpath(bad)
+        except VaultError:
+            continue
+        raise AssertionError(bad)
+    assert clean_relpath("progetti\\x\\PROJECT.md") == "progetti/x/PROJECT.md"
+    assert clean_relpath("/etc/passwd") == "etc/passwd", "sempre dentro la cartella del vault"
+    v, _ = plain_vault_with_project()
+    for bad in ("helpix-vault.json", ".backup/x", "dati/x.hxv"):
+        try:
+            v.store.write(bad, b"x")
+        except VaultError:
+            continue
+        raise AssertionError(bad)
+    try:
+        v.project("../..")
+    except KeyError:
+        pass
+    assert in_onedrive("/home/u/OneDrive/vault") and not in_onedrive("/home/u/vault")
+
+
+def test_vault_in_chiaro():
+    v, p = plain_vault_with_project()
+    assert (v.root / "progetti" / p.slug / "PROJECT.md").read_text(encoding="utf-8").startswith("# Cliente Rossi")
+    assert [i.slug for i in v.projects()] == [p.slug]
+    assert p.notes()[0].title == "Prima sessione" and p.notes()[0].summary == "Tunnel IPsec configurato."
+    assert p.resolve("prima sessione") == p.notes()[0].rel
+    assert p.resolve("file/config.txt").endswith("file/config.txt")
+    assert p.resolve("PROJECT") == p.rel("PROJECT.md")
+    assert p.resolve("argomento che non esiste affatto") is None
+    assert p.search("ipsec") and all("ipsec" in line.lower() for _, line in p.search("IPSEC"))
+    # file temporanei rimasti da una scrittura interrotta: non compaiono
+    (v.root / "progetti" / p.slug / ".PROJECT.md.123.abc.tmp").write_text("resto", encoding="utf-8")
+    assert not any(r.endswith(".tmp") for r in v.store.list())
+    # un altro progetto con lo stesso nome non sovrascrive il primo
+    p2 = v.create_project("Cliente Rossi — firewall", "# Cliente Rossi — firewall\n")
+    assert p2.slug != p.slug and len(v.projects()) == 2
+
+
+def test_versioni_e_ripristino():
+    v, p = plain_vault_with_project()
+    first = p.text()
+    for i in range(25):
+        p.save_text(first + f"\nmodifica {i}\n", keep=20)
+    assert len(p.versions()) == 20, len(p.versions())
+    saved = p.save_text("# Cliente Rossi — firewall\n\nnuovo\n")
+    assert saved and "modifica 24" in p.read_text(saved)
+    p.restore_version(saved)
+    assert "modifica 24" in p.text()
+
+
+def test_aggiornamento_progetto():
+    text = pj.template("Helpix", "App", "Python") + "Idea segreta\n"
+    up = pj.parse_update("""Ecco:
+```
+HELPIX-PROJECT
+NOTA: Struttura dei progetti
+Deciso il vault. Restano da fare i test.
+MODIFICHE:
++ Decisioni in vigore: Cifratura per singolo progetto
++ Prossimi passi: Scrivere i test
+= Stato: Prima versione
+del vault.
++ Solo per me: non dovrebbe entrare
+- Riferimenti: riga che non c'è
+```""")
+    assert up and up.title == "Struttura dei progetti" and len(up.ops) == 5
+    r = pj.apply_update(text, up, today="2026-11-07")
+    assert "- 2026-11-07 Cifratura per singolo progetto" in r.text
+    assert "Prima versione\ndel vault." in r.text
+    assert "non dovrebbe entrare" not in r.text and "Idea segreta" in r.text
+    assert len(r.warnings) == 2 and len(r.applied) == 3
+    up2 = pj.parse_update("HELPIX-PROJECT\nNOTA: Cambio\nx\nMODIFICHE:\n"
+                          "~ decisioni: cifratura per SINGOLO progetto. => Vault cifrato per intero\n"
+                          "- prossimi passi: scrivere i test\n+ Decisioni in vigore: Vault cifrato per intero")
+    r2 = pj.apply_update(r.text, up2, today="2026-11-08")
+    assert "- 2026-11-08 Vault cifrato per intero" in r2.text and "singolo progetto" not in r2.text
+    assert r2.superseded == [("Cifratura per singolo progetto", "Vault cifrato per intero")]
+    assert "Scrivere i test" not in r2.text
+    assert any("Già presente" in w for w in r2.warnings), "una decisione già scritta non si duplica"
+    note = pj.note_text(up2.title, up2.body, "Claude", r2.superseded, r2.warnings, date="2026-11-08")
+    assert "## Decisioni superate" in note and "→ Vault cifrato per intero" in note
+    # la richiesta copiata per sbaglio non è un aggiornamento; il testo senza marcatore nemmeno
+    assert pj.parse_update(pj.update_request(text)) is None
+    assert pj.parse_update("NOTA: x\nMODIFICHE:\n+ Stato: y") is None
+    # la richiesta non manda «Solo per me» all'IA
+    assert "Idea segreta" not in pj.update_request(text) and "Idea segreta" not in pj.compact_request(text)
+    assert "Idea segreta" not in pj.context_text("Helpix", text, "")
+    # compattazione: PROJECT.md intero, «Solo per me» resta quella di prima
+    full = pj.parse_update("HELPIX-PROJECT\nCOMPLETO\n## Obiettivo\nApp\n## Solo per me\nfinto\n")
+    r3 = pj.apply_update(text, full)
+    assert r3.text.startswith("# Helpix") and "Idea segreta" in r3.text and "finto" not in r3.text
+
+
+def test_richiesta_nota():
+    assert pj.parse_note_request("HELPIX-NOTA: Scelta del formato") == "Scelta del formato"
+    assert pj.parse_note_request("Mi serve:\n`HELPIX-NOTA: «2026-10-28 · Qt»`") == "2026-10-28 · Qt"
+    assert pj.parse_note_request("**HELPIX-NOTE: Windows**") == "Windows"
+    assert pj.parse_note_request("HELPIX-NOTA: titolo della nota") is None
+    assert pj.parse_note_request("niente da vedere") is None
+
+
+def test_bozza_della_sessione():
+    s = Session("anthropic", "m", "/tmp")
+    s.messages.append(Message("user", "", kind="output", meta={"cmd": "ip a", "rc": 0, "output": "eth0 up"}))
+    s.messages.append(Message("assistant", "Problema: VPN", kind="summary"))
+    md = pj.session_markdown(s)
+    assert "$ ip a" in md and "eth0 up" in md and "Problema: VPN" in md
+
+
+def test_password_e_codici():
+    assert len(passwords.words()) >= 2048 and passwords.code_bits() >= 66
+    codes = passwords.generate_codes()
+    assert len(codes) == 8 and len(set(codes)) == 8 and all(len(c.split("-")) == 6 for c in codes)
+    for weak in ("corta", "password1234", "qwertyuiopas", "aaaaaaaaaaaaaa", "abcabcabcabc", "Juventus2024!",
+                 "123456789012"):
+        assert not passwords.check(weak)["ok"], weak
+    for good in ("vela-torre-muschio-faro-cedro-lampo", passwords.generate_passphrase(),
+                 "Il mio gatto dorme sul divano rosso"):
+        assert passwords.check(good)["ok"], good
+    assert vc.normalize_code("  Vela Torre_MUSCHIO-faro ") == "vela-torre-muschio-faro"
+
+
+def test_cifratura_e_sblocco():
+    v, p = plain_vault_with_project()
+    before = {r: v.store.read(r) for r in v.store.list()}
+    codes = passwords.generate_codes()
+    rec = v.create_encrypted(PASSWORD, codes, recovery=True)
+    assert rec and vc.RECOVERY_MAGIC in rec
+    root = v.root
+    # niente in chiaro: né contenuti né nomi dei progetti
+    assert not (root / "progetti").exists(), "le copie in chiaro vanno tolte"
+    for f in (root / "dati").iterdir():
+        blob = f.read_bytes()
+        assert b"Rossi" not in blob and b"IPsec" not in blob and b"PROJECT" not in blob
+        assert "rossi" not in f.name
+    header = json.loads((root / "helpix-vault.json").read_text())
+    assert header["encrypted"] and {s["kind"] for s in header["slots"]} == {"password", "code", "recovery"}
+    assert "Rossi" not in json.dumps(header) and PASSWORD not in json.dumps(header)
+    v.lock()
+    assert not v.is_open
+    # password sbagliata, poi quella giusta: contenuti identici
+    v2 = Vault(root)
+    try:
+        v2.unlock("password", "sbagliata sbagliata")
+        raise AssertionError("password sbagliata accettata")
+    except WrongSecret:
+        pass
+    v2.unlock("password", PASSWORD)
+    assert {r: v2.store.read(r) for r in v2.store.list()} == before
+    # codice usa e getta: funziona una volta (maiuscole e spazi non contano), poi no
+    info = Vault(root).unlock("code", codes[3].upper().replace("-", "  "))
+    assert info["used_code"] and info["codes_left"] == 7
+    try:
+        Vault(root).unlock("code", codes[3])
+        raise AssertionError("codice riusato")
+    except WrongSecret:
+        pass
+    # file di recupero: apre e permette di reimpostare la password senza ricifrare i file
+    names = sorted(f.name for f in (root / "dati").iterdir())
+    v3 = Vault(root)
+    v3.unlock("recovery", rec)
+    v3.change_password("nuova frase ancora più lunga di prima")
+    assert sorted(f.name for f in (root / "dati").iterdir()) == names
+    try:
+        Vault(root).unlock("password", PASSWORD)
+        raise AssertionError("la vecchia password apre ancora")
+    except WrongSecret:
+        pass
+    Vault(root).unlock("password", "nuova frase ancora più lunga di prima")
+    # un file di recupero di un altro vault non va
+    other = vc.recovery_text(os.urandom(32), "altro-vault")
+    try:
+        Vault(root).unlock("recovery", other)
+        raise AssertionError("file di un altro vault accettato")
+    except WrongSecret:
+        pass
+
+
+def test_rigenera_revoca_portachiavi():
+    v = Vault(new_root())
+    codes = passwords.generate_codes()
+    v.create_encrypted(PASSWORD, codes)
+    assert not v.has_recovery()
+    rec = v.create_recovery()
+    assert v.has_recovery()
+    new_codes = passwords.generate_codes()
+    v.regenerate_codes(new_codes)
+    for old in codes[:2]:
+        try:
+            Vault(v.root).unlock("code", old)
+            raise AssertionError("codice vecchio dopo la rigenerazione")
+        except WrongSecret:
+            pass
+    Vault(v.root).unlock("code", new_codes[0])
+    v.revoke_recovery()
+    try:
+        Vault(v.root).unlock("recovery", rec)
+        raise AssertionError("file di recupero revocato accettato")
+    except WrongSecret:
+        pass
+    # portachiavi finto: la chiave sta lì, lo slot nel vault
+    store = {}
+
+    class FakeKeyring:
+        def get_password(self, s, u):
+            return store.get((s, u))
+
+        def set_password(self, s, u, val):
+            store[(s, u)] = val
+
+        def delete_password(self, s, u):
+            store.pop((s, u), None)
+
+    import helpix.vault as hv
+    real = hv._keyring
+    hv._keyring = lambda: FakeKeyring()
+    try:
+        v.enable_keyring()
+        assert v.keyring_enabled() and Vault(v.root).unlock_keyring()["kind"] == "keyring"
+        v.disable_keyring()
+        try:
+            Vault(v.root).unlock_keyring()
+            raise AssertionError("portachiavi disattivato ma ancora valido")
+        except WrongSecret:
+            pass
+    finally:
+        hv._keyring = real
+
+
+def test_backup_intestazione():
+    v = Vault(new_root())
+    v.create_encrypted(PASSWORD, passwords.generate_codes())
+    for _ in range(14):
+        v.change_password(PASSWORD)
+    backups = list((v.root / ".backup").glob("helpix-vault-*.json"))
+    assert len(backups) == vc.KEEP_BACKUPS
+    # intestazione rovinata: si recupera dall'ultima copia
+    good = sorted(backups)[-1]
+    (v.root / "helpix-vault.json").write_text("{rotto", encoding="utf-8")
+    try:
+        Vault(v.root)
+        raise AssertionError("intestazione rotta accettata")
+    except VaultError:
+        pass
+    (v.root / "helpix-vault.json").write_bytes(good.read_bytes())
+    Vault(v.root).unlock("password", PASSWORD)
+
+
+def test_file_rovinati_o_scambiati():
+    v, p = plain_vault_with_project()
+    v.create_encrypted(PASSWORD, passwords.generate_codes())
+    files = sorted((v.root / "dati").iterdir())
+    a, b = files[0], files[1]
+    blob = bytearray(a.read_bytes())
+    blob[-5] ^= 0x01
+    a.write_bytes(bytes(blob))
+    tmp = b.read_bytes()
+    c = files[2]
+    b.write_bytes(c.read_bytes())  # contenuto di un altro file con il nome di questo
+    c.write_bytes(tmp)
+    info = Vault(v.root).unlock("password", PASSWORD)
+    assert set(info["damaged"]) == {a.name, b.name, c.name}, info["damaged"]
+
+
+def test_scrittura_verificata():
+    root = new_root()
+    target = root / "f.txt"
+    vc.atomic_write(target, b"versione 1")
+    try:
+        vc.atomic_write(target, b"versione 2", verify=lambda _b: False)  # la rilettura non torna
+        raise AssertionError("scrittura non verificata accettata")
+    except VaultError:
+        pass
+    assert target.read_bytes() == b"versione 1" and len(list(root.iterdir())) == 1
+    # processo terminato a metà salvataggio: il file vero resta quello di prima
+    code = ("import os,sys; sys.path.insert(0, sys.argv[2]); from helpix import vault_crypto as vc\n"
+            "orig = os.replace\n"
+            "def killed(*a): os._exit(9)\n"
+            "os.replace = killed\n"
+            "vc.atomic_write(sys.argv[1], b'versione 3')\n")
+    r = subprocess.run([sys.executable, "-c", code, str(target), str(Path(__file__).resolve().parents[1])],
+                       timeout=60)
+    assert r.returncode == 9 and target.read_bytes() == b"versione 1"
+    v = Vault(root)  # i .tmp rimasti non disturbano
+    assert not v.exists
+
+
+def test_cifratura_interrotta():
+    # crash dopo l'intestazione cifrata ma prima di togliere i file in chiaro: al primo sblocco si finisce
+    v, p = plain_vault_with_project()
+    copies = {r: v.store.read(r) for r in v.store.list()}
+    v.create_encrypted(PASSWORD, passwords.generate_codes())
+    plain = PlainStore(v.root)
+    for rel, data in copies.items():
+        plain.write(rel, data)
+    plain.write("progetti/x/extra.md", b"scritto dopo")
+    v2 = Vault(v.root)
+    v2.unlock("password", PASSWORD)
+    assert not (v.root / "progetti").exists()
+    assert v2.store.read("progetti/x/extra.md") == b"scritto dopo"
+    # crash prima dell'intestazione: il vault è ancora in chiaro e i resti in dati/ si ignorano
+    w, _ = plain_vault_with_project()
+    (w.root / "dati").mkdir()
+    (w.root / "dati" / "resto.hxv").write_bytes(b"HXV1 resto")
+    assert not Vault(w.root).encrypted
+    w.create_encrypted(PASSWORD, passwords.generate_codes())
+    assert not (w.root / "dati" / "resto.hxv").exists()
+
+
+def test_esporta_e_script_autonomo():
+    v, p = plain_vault_with_project()
+    before = {r: v.store.read(r) for r in v.store.list()}
+    codes = passwords.generate_codes()
+    v.create_encrypted(PASSWORD, codes)
+    dest = new_root() / "export"
+    assert v.export_plain(dest) == len(before)
+    out = Vault(dest)
+    assert not out.encrypted and {r: out.store.read(r) for r in out.store.list()} == before
+    try:
+        v.export_plain(dest)
+        raise AssertionError("esportato in una cartella non vuota")
+    except VaultError:
+        pass
+    # lo script funziona da solo: copiato altrove, senza il resto di Helpix
+    alone = new_root()
+    (alone / "vault_crypto.py").write_bytes(Path(vc.__file__).read_bytes())
+    sys.path.insert(0, str(alone))
+    import importlib
+    standalone = importlib.import_module("vault_crypto")
+    assert standalone is not vc and standalone.__file__.startswith(str(alone))
+    header = standalone.Header.load(v.root)
+    master, _ = header.unlock("code", codes[5])
+    target = new_root() / "decifrato"
+    assert standalone.decrypt_vault(v.root, header.keys(master), target) == len(before)
+    for rel, data in before.items():
+        assert (target / rel).read_bytes() == data
+
+
+def test_store_cifrato_scrive_e_cancella():
+    v = Vault(new_root())
+    v.create_encrypted(PASSWORD, passwords.generate_codes())
+    assert isinstance(v.store, EncryptedStore)
+    p = v.create_project("Casa — Wi-Fi", pj.template("Casa — Wi-Fi"))
+    rel = p.add_note("Router", "# Router\n", "nota")
+    assert v.store.exists(rel)
+    p.delete_note(rel)
+    assert not v.store.exists(rel) and "Router" not in p.index_text()
+    v.lock()
+    try:
+        v.projects()
+        raise AssertionError("vault bloccato ma leggibile")
+    except VaultError:
+        pass
+
+
+if __name__ == "__main__":
+    for name, fn in list(globals().items()):
+        if name.startswith("test_"):
+            fn()
+            print("ok", name, flush=True)
+    hardexit.now(0)

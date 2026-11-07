@@ -412,6 +412,9 @@ class WebPanel(QWidget):
     summary_copied = Signal(str)  # l'utente ha copiato il riepilogo del task scritto dall'IA
     summary_failed = Signal(str)  # riepilogo automatico non riuscito (resta la copia a mano)
     package_done = Signal(bool)   # pacchetto del task incollato (True) o casella non trovata (False)
+    project_copied = Signal(object)  # aggiornamento del progetto (project.Update), letto o copiato (beta)
+    project_failed = Signal(str)
+    note_requested = Signal(str)  # l'utente ha copiato «HELPIX-NOTA: titolo» (beta)
     site_changed = Signal(str)
     google_signin = Signal(str)   # è comparsa la pagina di accesso Google nel browser integrato
     use_integrated = Signal(str)  # l'utente vuole riportare il servizio nel browser integrato
@@ -777,16 +780,20 @@ class WebPanel(QWidget):
             self.page.runJavaScript(_SEND_JS, QWebEngineScript.ScriptWorldId.ApplicationWorld)
 
     # ------------------------------------------------------------ riepilogo automatico
-    def request_summary(self, text: str, timeout: float = 240.0):
+    def request_summary(self, text: str, timeout: float = 240.0, marker: str | None = None):
         """Incolla la richiesta di riepilogo, la invia e legge la risposta appena l'IA ha finito.
 
         Il riepilogo arriva con summary_copied (come se l'utente l'avesse copiato); se non arriva
         entro il tempo massimo, summary_failed e resta la copia a mano con il pulsante Copia.
         """
+        from ..task import SUMMARY_MARKER
+        marker = marker or SUMMARY_MARKER
         if not self.view:
-            self.summary_failed.emit(tr("Browser non disponibile."))
+            (self.summary_failed if marker == SUMMARY_MARKER else self.project_failed).emit(
+                tr("Browser non disponibile."))
             return
-        self._summary_job = {"site": self.site, "until": time.monotonic() + timeout, "last": "", "stable": 0}
+        self._summary_job = {"site": self.site, "until": time.monotonic() + timeout, "last": "", "stable": 0,
+                             "marker": marker}
         self._set_clipboard(text=text)
         self._paste(None, {"kind": "text", "text": text})
         QTimer.singleShot(1200, self._summary_send)
@@ -828,20 +835,28 @@ class WebPanel(QWidget):
             else:
                 job["stable"] = 0
             job["last"] = text
-            from ..task import parse_summary
-            summary = parse_summary(text) if text else None
-            if summary and job["stable"] >= 1:  # testo uguale per due controlli di fila: l'IA ha finito
+            from ..task import SUMMARY_MARKER, parse_summary
+            is_summary = job["marker"] == SUMMARY_MARKER
+            if is_summary:
+                result = parse_summary(text) if text else None
+            else:
+                from ..project import parse_update
+                result = parse_update(text) if text else None
+            if result and job["stable"] >= 1:  # testo uguale per due controlli di fila: l'IA ha finito
                 self._summary_job = None
-                self.summary_copied.emit(summary)
+                (self.summary_copied if is_summary else self.project_copied).emit(result)
             elif time.monotonic() < job["until"]:
                 QTimer.singleShot(2000, self._summary_poll)
-            else:
+            elif is_summary:
                 self._summary_job = None
                 self.summary_failed.emit(tr("Non ho trovato il riepilogo nella risposta: copialo tu con il pulsante "
                                             "Copia del blocco di codice."))
+            else:
+                self._summary_job = None
+                self.project_failed.emit(tr("Non ho trovato l'aggiornamento del progetto nella risposta: copialo tu "
+                                            "con il pulsante Copia del blocco di codice."))
 
-        from ..task import SUMMARY_MARKER
-        tab[1].runJavaScript(_SUMMARY_JS % json.dumps(SUMMARY_MARKER), QWebEngineScript.ScriptWorldId.ApplicationWorld,
+        tab[1].runJavaScript(_SUMMARY_JS % json.dumps(job["marker"]), QWebEngineScript.ScriptWorldId.ApplicationWorld,
                              got)
 
     # ------------------------------------------------------------ pacchetto del task
@@ -987,6 +1002,15 @@ class WebPanel(QWidget):
         summary = parse_summary(text)
         if summary:
             self.summary_copied.emit(summary)
+            return
+        from ..project import parse_note_request, parse_update
+        update = parse_update(text)
+        if update:
+            self.project_copied.emit(update)
+            return
+        note = parse_note_request(text) if len(text) < 400 else None
+        if note:
+            self.note_requested.emit(note)
             return
         from ..executor import looks_like_command
         cmd = looks_like_command(text)

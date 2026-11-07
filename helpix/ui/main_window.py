@@ -42,6 +42,7 @@ from .controls import Capsule, IconButton, Toast, VSep, WindowControls
 from .dialogs import SessionsDialog
 from .frameless import FramelessHelper, RoundedCentral
 from .handoff_dialog import HandoffDialog
+from .project_mixin import ProjectsMixin
 from .transfer_bar import TransferBar
 from .. import site_icons
 from ..task import EXTENSION, export_task, import_task, record_summary, summary_request
@@ -196,7 +197,7 @@ def _connected(sock) -> bool:
         return False
 
 
-class MainWindow(QMainWindow):
+class MainWindow(ProjectsMixin, QMainWindow):
     def __init__(self, settings, secrets, engine: str | None = None,
                  provider: str | None = None, model: str | None = None):
         super().__init__()
@@ -236,6 +237,7 @@ class MainWindow(QMainWindow):
         self._start_bridge()
         self._start_instance()
         self._setup_lock()
+        self._setup_projects()
         self._setup_tray()
         if self.frameless:
             self._frameless = FramelessHelper(self, self.toolbar)
@@ -352,6 +354,11 @@ class MainWindow(QMainWindow):
         tw.addWidget(self.transfer_bar)
         wl.addWidget(transfer_wrap)
         self.transfer_bar.setVisible(False)
+        self._note_wrap = QWidget()  # barra «L'IA chiede la nota…» dei progetti (beta)
+        self._note_wrap.setObjectName("transferWrap")
+        nw = QHBoxLayout(self._note_wrap)
+        nw.setContentsMargins(16, 10, 16, 0)
+        wl.addWidget(self._note_wrap)
         bar_wrap = QWidget()
         bar_wrap.setObjectName("commandWrap")
         bw = QHBoxLayout(bar_wrap)
@@ -514,6 +521,12 @@ class MainWindow(QMainWindow):
         quick = theme.prepare_menu(menu.addMenu(tr("Finestra rapida")))
         quick.addAction(tr("Apri la finestra rapida"), self.open_quick)
         self.act_quick_info = quick.addAction(tr("Scorciatoia globale…"), self.quick_shortcut_info)
+        lab = theme.prepare_menu(menu.addMenu(tr("Funzioni sperimentali")))
+        self.act_projects_beta = lab.addAction(tr("Progetti e vault (beta)"))
+        self.act_projects_beta.setCheckable(True)
+        self.act_projects_beta.setChecked(bool(self.settings.get("projects_beta", False)))
+        self.act_projects_beta.toggled.connect(self.toggle_projects_beta)
+        lab.addAction(tr("Impostazioni dei progetti…"), self.open_project_settings)
         menu.addSeparator()
         self.act_rounded = menu.addAction(tr("Angoli arrotondati"))
         self.act_rounded.setCheckable(True)
@@ -876,6 +889,8 @@ class MainWindow(QMainWindow):
             self.agent.hint.connect(self.notify)
             self.agent.summary_ready.connect(self._summary_received)
             self.agent.summary_failed.connect(self._summary_failed)
+            self.agent.project_ready.connect(self._project_update_received)
+            self.agent.project_failed.connect(self._project_update_failed)
             self.stack.addWidget(self.agent)
             self.agent.model, self.agent.effort = self._agent_choice()
         return self.agent
@@ -1009,6 +1024,8 @@ class MainWindow(QMainWindow):
         if not WEBENGINE:
             QMessageBox.information(self, "Helpix", tr("Il componente browser (PySide6-WebEngine) non è installato: "
                                                        "puoi usare solo una chiave API."))
+            return
+        if not resume and self.projects_enabled and not self._remind_project(tr("passare a un'altra IA")):
             return
         if self.handoff:
             self.handoff.close()
@@ -1354,6 +1371,8 @@ class MainWindow(QMainWindow):
         msg = Message("assistant", text or tr("_(risposta vuota)_"), meta={"provider": pid, "model": model})
         self.session.add(msg)
         self.chat.add_message(msg)
+        if self.projects_enabled:
+            QTimer.singleShot(0, lambda: self._check_api_note_request(text))
 
     def _ai_failed(self, exc):
         w = getattr(self, "_quick_watch", None)
@@ -1689,7 +1708,7 @@ class MainWindow(QMainWindow):
         """Il messaggio di sistema del motore API contiene utente, nome del PC e cartella: con lo scudo, oscurati."""
         from .. import privacy
         self._sync_privacy()
-        return privacy.filter_paste(build_system_prompt(self.session.cwd), notify=False)
+        return privacy.filter_paste(build_system_prompt(self.session.cwd) + self._project_system_text(), notify=False)
 
     def _private_result(self, res):
         if not self.privacy_on:
@@ -1832,6 +1851,11 @@ class MainWindow(QMainWindow):
     def new_session(self):
         if self.busy:
             return
+        if not getattr(self, "_skip_reminder", False) and self.projects_enabled and self.project is not None:
+            # progetto aperto: il task nuovo riparte con il contesto del progetto
+            if self._remind_project(tr("aprire un nuovo task")):
+                self._start_project_chat()
+            return
         w = getattr(self, "_quick_watch", None)
         if w and hasattr(self, "instance"):
             self._quick_watch = None
@@ -1873,6 +1897,12 @@ class MainWindow(QMainWindow):
         if session.provider not in PROVIDERS:
             session.provider = self.session.provider
         self.session = session
+        if session.project and self.projects_enabled and self.vault and self.vault.is_open:
+            try:  # il task appartiene a un progetto: torna attivo anche il progetto
+                self._set_project(self.vault.project(session.project), announce=False)
+                self._project_saved_at = len(session.messages)
+            except KeyError:
+                pass
         self.chat.clear()
         for m in session.messages:
             self.chat.add_message(m)
@@ -2024,6 +2054,7 @@ class MainWindow(QMainWindow):
         if getattr(self, "tour", None) is not None:
             self.tour.close_tour(mark_done=False)  # riprende al prossimo avvio
         self.locked = True
+        self._projects_on_lock()
         self._lock_timer.stop()
         self._place_overlay()
         self._overlay.set_waiting(False)
@@ -2434,6 +2465,8 @@ class MainWindow(QMainWindow):
             self.instance.reply(sock, {"type": "status", "target": self._quick_target(), **self._quick_choices()})
             if note:
                 self.instance.reply(sock, {"type": "note", "text": note})
+        elif kind == "vault":  # `helpix vault cat/search/project` dagli agenti nel terminale (beta)
+            self.instance.reply(sock, self._vault_request(msg))
         elif kind == "cancel":
             self._quick_stop()
             self._quick_seq = getattr(self, "_quick_seq", 0) + 1
@@ -2541,7 +2574,11 @@ class MainWindow(QMainWindow):
             go()
             return
         self._quick_awake(True)  # prima di aprire la chat nuova: la pagina nuova deve poter disegnare
-        self.new_session()
+        self._skip_reminder = True  # la finestra rapida non usa il progetto (beta): chat nuova e basta
+        try:
+            self.new_session()
+        finally:
+            self._skip_reminder = False
         if self.engine == "web" and not self.web.is_external():
             self.web.when_ready(lambda ok: (_qlog("chat nuova pronta: %s", ok), go(ok)), timeout=45)
         elif self.engine == "agent" and self.agent:
@@ -2901,6 +2938,10 @@ class MainWindow(QMainWindow):
         if getattr(self, "tray", None) and not self._quitting and self.settings.get("close_to_tray", True):
             event.ignore()  # la X riduce nell'area di notifica; si esce dal menu dell'icona
             self.to_tray()
+            return
+        if self.projects_enabled and not self._projects_on_quit():
+            event.ignore()  # l'utente salva prima il progetto
+            self._quitting = False
             return
         if self.runner and self.runner.isRunning():
             self.runner.cancel()
