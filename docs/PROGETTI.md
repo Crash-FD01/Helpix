@@ -128,7 +128,10 @@ helpix vault cat "titolo della nota"     # testo della nota (anche PROJECT.md, I
 helpix vault search "parole"             # righe che contengono le parole, con il nome della nota
 ```
 
-Con il vault bloccato rispondono «vault bloccato». Il testo in chiaro non viene scritto su disco.
+Con il vault bloccato rispondono «vault bloccato». Il testo in chiaro non viene scritto su disco. Su Windows
+`Helpix.exe` è un programma a finestre (niente console): le istruzioni per l'agente usano `--out HELPIX-NOTA.md`
+e `| Out-Null`, così PowerShell aspetta la fine e l'agente legge il file. I task della finestra rapida non
+ricevono il contesto del progetto.
 
 ### Salvataggio automatico e promemoria
 
@@ -192,7 +195,8 @@ Fatta da Helpix, senza filesystem montati né driver: funziona uguale su Linux, 
   vecchio (`os.replace`). Su Windows, se l'antivirus o un altro programma ha il file aperto, riprova per qualche
   secondo prima di dare errore.
 - L'intestazione, prima di ogni modifica, viene copiata in `.backup/` (le ultime 10).
-- Il blocco di Helpix (anche quello per inattività) chiude il vault: la chiave master viene tolta dalla memoria.
+- Il blocco di Helpix (*Impostazioni › Sicurezza*, anche quello per inattività), *Progetto › Blocca il vault* e la
+  chiusura di Helpix chiudono il vault: la chiave master viene tolta dalla memoria.
 
 ### Uscire dal formato
 
@@ -224,7 +228,7 @@ Per togliere la beta:
 ## Limiti noti (beta)
 
 - I task salvati (*Task salvati…*) restano dove sono oggi, non cifrati: la cifratura riguarda il vault.
-- La finestra rapida non usa ancora il progetto attivo.
+- La finestra rapida non usa ancora il progetto attivo (i suoi task restano fuori dal progetto).
 - Il pannello Vault non ha un editor avanzato: per modifiche lunghe si può aprire la cartella in chiaro con un
   editor esterno (vault non cifrato).
 - Stima dei token approssimativa (caratteri / 4).
@@ -239,5 +243,6 @@ Per togliere la beta:
 | `helpix/passwords.py` | Robustezza della password, codici e frasi casuali (`data/parole-it.txt`) |
 | `helpix/ui/vault_panel.py` | Pannello Vault |
 | `helpix/ui/vault_dialogs.py` | Nuovo progetto, salvataggio con anteprima, creazione/sblocco/recupero del vault, impostazioni |
-| `helpix/ui/main_window.py` | Selettore, salvataggio, promemoria, bozze, barra HELPIX-NOTA, blocco |
-| `helpix/app.py` | `helpix vault cat/search` |
+| `helpix/ui/project_mixin.py` | Selettore, apertura, salvataggio, promemoria, bozze, barra HELPIX-NOTA, blocco, `helpix vault` |
+| `helpix/ui/main_window.py` | Punti di aggancio (barra, menu, nuovo task, chiusura, blocco, canale locale) |
+| `helpix/app.py` | `helpix vault cat/search/project [--out FILE]` |
