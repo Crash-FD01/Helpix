@@ -132,6 +132,24 @@ _SEND_JS = r"""
 })();
 """
 
+# Stato della casella della chat: quanti caratteri contiene e se il pulsante di invio è attivo.
+_COMPOSER_JS = r"""
+(function () {
+  const visible = e => e && e.isConnected && e.getClientRects().length > 0;
+  const editable = e => e && (e.isContentEditable || e.tagName === 'TEXTAREA');
+  const box = [document.activeElement,
+               ...document.querySelectorAll('#prompt-textarea, div[contenteditable="true"], textarea')]
+      .find(e => editable(e) && visible(e));
+  const len = box ? (box.tagName === 'TEXTAREA' ? box.value : box.innerText).trim().length : -1;
+  const sels = ['button[data-testid="send-button"]', '#composer-submit-button', 'button[aria-label="Send message"]',
+                'button[aria-label="Invia messaggio"]', 'button[aria-label*="Send" i]', 'button[aria-label*="Invia" i]',
+                'button[aria-label*="Submit" i]', 'button.send-button'];
+  const sendable = sels.some(sel => [...document.querySelectorAll(sel)].filter(visible)
+      .some(b => !b.disabled && b.getAttribute('aria-disabled') !== 'true'));
+  return JSON.stringify({len, sendable});
+})();
+"""
+
 # Cerca nella pagina il riepilogo scritto dall'IA: l'ultimo blocco di codice che inizia con il
 # marcatore e ha i campi compilati (la richiesta stessa ha i campi vuoti). busy = l'IA sta ancora
 # scrivendo (pulsante «Stop» visibile).
@@ -617,6 +635,43 @@ class WebPanel(QWidget):
                     callback(False)
             tab[1].runJavaScript(_READY_JS, QWebEngineScript.ScriptWorldId.ApplicationWorld, ready)
         QTimer.singleShot(300, poll)
+
+    def send_verified(self, callback, timeout: float = 15.0, attempts: int = 4):
+        """Invia il messaggio della casella e controlla che sia partito davvero.
+
+        Aspetta che il testo incollato sia nella casella e il pulsante di invio attivo (le chat lo abilitano
+        solo dopo aver «visto» il testo), preme Invio, poi guarda se la casella si è svuotata; se no riprova.
+        callback(True) quando il messaggio è partito, callback(False) se resta nella casella."""
+        page = self.page
+        if not (self.view and page):
+            callback(False)
+            return
+        state = {"tries": 0, "until": time.monotonic() + timeout, "t0": time.monotonic()}
+
+        def check():
+            page.runJavaScript(_COMPOSER_JS, QWebEngineScript.ScriptWorldId.ApplicationWorld, got)
+
+        def got(result):
+            try:
+                info = json.loads(result or "{}")
+            except ValueError:
+                info = {}
+            length, sendable = info.get("len", -1), bool(info.get("sendable"))
+            if length == 0 and state["tries"]:
+                callback(True)  # casella vuota dopo l'invio: partito
+                return
+            if length > 0 and state["tries"] < attempts and (
+                    sendable or time.monotonic() - state["t0"] > 3 or state["tries"]):
+                state["tries"] += 1
+                page.runJavaScript(_SEND_JS, QWebEngineScript.ScriptWorldId.ApplicationWorld)
+                QTimer.singleShot(1500, check)
+                return
+            if time.monotonic() < state["until"] and state["tries"] < attempts:
+                QTimer.singleShot(400, check)  # il testo non è ancora arrivato nella casella
+                return
+            callback(False)
+
+        QTimer.singleShot(300, check)
 
     def send_current(self):
         """Invia il messaggio presente nella casella della chat (pulsante di invio del sito)."""

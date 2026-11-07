@@ -1287,4 +1287,5 @@ EN: dict[str, str] = {
     'Nuovo task (chat nuova)': 'New task (new chat)',
     'Lo script ufficiale non può usare le giunzioni (junction) su questo PC: Windows le blocca (RedirectionGuard). Installo lo stesso pacchetto ufficiale di Codex, dalla sua release su GitHub, in una cartella normale: {dir}': "The official script can't use junctions on this PC: Windows blocks them (RedirectionGuard). Installing the same official Codex package, from its GitHub release, in a normal folder: {dir}",
     'Codex {version} installato.': 'Codex {version} installed.',
+    '_Non sono riuscito a inviare il messaggio: è nella casella della chat di Helpix, premi Invio lì (↗)._': "_I couldn't send the message: it's in the chat box in Helpix, press Enter there (↗)._",
 }

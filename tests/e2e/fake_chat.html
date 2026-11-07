@@ -40,6 +40,9 @@ Problema: il wifi non va</code></pre>
   // invio finto: mostra il messaggio e, se è la richiesta di riepilogo, «scrive» la risposta a pezzi
   window.sent = [];
   document.getElementById('send').addEventListener('click', () => {
+    // come le chat vere appena caricate: i primi clic possono andare persi, o l'invio può essere bloccato
+    if (window.blockSend) return;
+    if (window.dropClicks > 0) { window.dropClicks--; return; }
     const text = box.textContent;
     window.sent.push(text);
     box.textContent = '';

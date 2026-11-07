@@ -143,12 +143,33 @@ def test_quick_window():
     until(lambda: not win.isVisible() and not gpt.isVisible(), timeout=5, what="Helpix torna nascosto")
     assert not win._on_screen()
 
-    # secondo messaggio: stessa chat
+    # secondo messaggio: stessa chat; i primi due clic su «Invia» vanno persi, Helpix riprova finché parte
+    js(gpt, "window.dropClicks = 2")
     q.input.setPlainText("e se non basta?")
     q.send()
-    until(lambda: js(gpt, "window.sent.length") == 2, what="secondo messaggio nella stessa chat")
+    until(lambda: js(gpt, "window.sent.length") == 2, timeout=20, what="secondo messaggio partito al terzo clic")
     until(lambda: q.btn_send.isEnabled(), timeout=25, what="seconda risposta completa")
     win.show()
+
+    # Helpix ridotto a icona: la pagina resta «visibile» per il motore web finché arriva la risposta
+    win.showMinimized()
+    pump(800)
+    q.input.setPlainText("terza domanda")
+    q.send()
+    until(lambda: js(gpt, "window.sent.length") == 3, timeout=20, what="messaggio con Helpix ridotto a icona")
+    until(lambda: q.btn_send.isEnabled(), timeout=25, what="risposta con Helpix ridotto a icona")
+    assert q.answers.toPlainText().count("NetworkManager") >= 3
+    win.showNormal()
+    pump(300)
+
+    # invio impossibile (pulsante che non fa nulla): la finestra rapida lo dice invece di aspettare
+    js(gpt, "window.blockSend = true")
+    q.input.setPlainText("questo non parte")
+    q.send()
+    until(lambda: "Non sono riuscito a inviare" in q.answers.toPlainText(), timeout=30, what="avviso di invio fallito")
+    until(lambda: q.btn_send.isEnabled(), timeout=5, what="finestra rapida di nuovo pronta")
+    assert win._quick_watch is None
+    js(gpt, "window.blockSend = false")
 
     # una sola finestra rapida: la scorciatoia la nasconde e la rimostra, ogni volta con un task nuovo
     from helpix.ui.quick_window import _QuickServer, quick_socket_path

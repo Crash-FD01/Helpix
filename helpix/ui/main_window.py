@@ -2563,10 +2563,20 @@ class MainWindow(QMainWindow):
                     return
                 if text:
                     self.web.paste_text(text, None)
-                QTimer.singleShot(900, self.web.send_current)
                 self._quick_watch = {"sock": sock, "kind": "web", "count": before.get("count", 0), "last": None,
                                      "stable": 0, "until": time.monotonic() + 600, "t0": time.monotonic()}
-                QTimer.singleShot(2500, self._quick_poll)
+
+                def sent(ok: bool):
+                    if self._quick_seq != seq:
+                        return
+                    if not ok:  # il testo è rimasto nella casella (o non ci è arrivato): lo dico, non aspetto
+                        self._quick_stop()
+                        self.instance.reply(sock, {"type": "answer_unavailable", "text": tr(
+                            "_Non sono riuscito a inviare il messaggio: è nella casella della chat di Helpix, "
+                            "premi Invio lì (↗)._")})
+                        return
+                    QTimer.singleShot(1500, self._quick_poll)
+                self.web.send_verified(sent)
             self.web.last_answer(sent_web)
         else:
             self._quick_watch = {"sock": sock, "kind": "api"}
@@ -2584,8 +2594,29 @@ class MainWindow(QMainWindow):
                 self._ghost = True
                 self.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
                 super().show()
-        elif getattr(self, "_ghost", False):
-            self._unghost(hide=True)
+            elif needs_page and self.isMinimized():
+                # ridotta a icona: Qt segna la pagina come nascosta; basta dirle che è visibile
+                self._awake_minimized = True
+                for page in self._quick_pages():
+                    page.setVisible(True)
+        else:
+            if getattr(self, "_ghost", False):
+                self._unghost(hide=True)
+            if getattr(self, "_awake_minimized", False):
+                self._awake_minimized = False
+                for page in self._quick_pages():
+                    page.setVisible(self.isVisible() and not self.isMinimized())
+
+    def _quick_pages(self):
+        pages = []
+        try:
+            if self.engine == "web" and self.web.page is not None:
+                pages.append(self.web.page)
+            if self.engine == "agent" and self.agent:
+                pages.append(self.agent.term.page())
+        except (AttributeError, RuntimeError):
+            pass
+        return pages
 
     def _unghost(self, hide: bool = False):
         if not getattr(self, "_ghost", False):
