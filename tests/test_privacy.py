@@ -186,7 +186,7 @@ def test_main_window_toggle():
     # finestra rapida: anche il testo incollato lì passa dal filtro
     sent = []
     win.web.paste_text = lambda text, *a, **k: sent.append(text)
-    win.web.last_answer = lambda cb, sent="": cb({"count": 0, "text": "", "busy": False})
+    win.web.last_answer = lambda cb, sent="", mark=False: cb({"count": 0, "text": "", "busy": False})
     win.web.send_current = lambda *a, **k: None
     win.instance.reply = lambda *a, **k: None
     win.engine = "web"
