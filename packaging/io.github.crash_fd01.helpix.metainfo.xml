@@ -69,6 +69,13 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.19.2" date="2026-11-08">
+      <description>
+        <p>Projects and vault (beta, still off by default): delete and rename projects, notes and files, with a Trash
+          to restore or delete for good; the vault tree opens with one click and shows its arrows; the Vault panel is
+          now an independent window with Helpix's own title bar, no longer always on top, and fits the screen.</p>
+      </description>
+    </release>
     <release version="0.19.1" date="2026-11-08">
       <description>
         <p>Projects and vault (beta, still off by default): redesigned Vault panel in three columns (vault and search,
