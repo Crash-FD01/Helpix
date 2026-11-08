@@ -607,9 +607,12 @@ class ProjectsMixin:
             self.vault_panel.raise_()
             self.vault_panel.activateWindow()
             return
-        panel = VaultPanel(vault, self, active=self.project.slug if self.project else None,
+        # nessun genitore: è una finestra a sé, non resta sempre sopra a Helpix; stessa barra integrata di Helpix
+        panel = VaultPanel(vault, None, active=self.project.slug if self.project else None,
                            keep_versions=int(self.settings.get("project_versions", 20)),
-                           assistant=self._source_label)
+                           assistant=self._source_label, frameless=self.frameless,
+                           rounded=getattr(self, "rounded", False))
+        panel._fit_to_screen(self)
         panel.resume.connect(lambda slug: self._open_project(slug))
         panel.paste.connect(self._paste_text_anywhere)
         panel.lock_requested.connect(self.lock_vault)
@@ -766,7 +769,10 @@ class ProjectsMixin:
             self.lock_vault()
 
     def _projects_on_quit(self) -> bool:
-        if self.project is None:
-            return True
-        self._write_draft()
-        return self._remind_project(tr("uscire da Helpix"))
+        if self.project is not None:
+            self._write_draft()
+            if not self._remind_project(tr("uscire da Helpix")):
+                return False
+        if self.vault_panel is not None:  # finestra a sé: si chiude con Helpix
+            self.vault_panel.close()
+        return True

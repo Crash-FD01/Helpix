@@ -151,7 +151,11 @@ Finestra separata (dal selettore *Progetto › Apri il vault…*) in tre colonne
   misuratore dei token di PROJECT.md; nota formattata con le decisioni «in vigore» e «Solo per me» evidenziata
   («mai inviata all'IA»); in modifica *Salva modifiche* / *Annulla le modifiche*; per le versioni *Ripristina*;
 - **destra**: cosa va all'IA nella prossima chat (con il totale), «Citata da», note recenti (*nel contesto* /
-  *archivio*).
+  *archivio*). Se la finestra è stretta (meno di ~1120 px) questa colonna si nasconde da sola e torna allargandola.
+
+È una finestra indipendente con la stessa barra del titolo di Helpix (bordi arrotondati, pulsanti
+riduci/ingrandisci/chiudi): non resta sopra alle altre, si porta in primo piano Helpix con un clic e si chiude da
+sola quando esci da Helpix. All'apertura si adatta allo schermo.
 
 In alto una striscia *Beta* con *Esporta in chiaro*, *Segnala un problema* e *Guida*.
 
