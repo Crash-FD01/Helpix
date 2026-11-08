@@ -132,6 +132,29 @@ _SEND_JS = r"""
 })();
 """
 
+# Struttura della zona della chat (tag, attributi utili, classi e inizio del testo): per capire, quando una risposta
+# non si riesce a leggere, com'è fatta la pagina di quel sito. Va solo nel registro locale.
+_OUTLINE_JS = r"""
+(function () {
+  const root = document.querySelector('main') || document.body;
+  const out = [];
+  function walk(el, depth) {
+    if (out.length > 600 || depth > 28) return;
+    if (/^(SCRIPT|STYLE|SVG|PATH|NOSCRIPT)$/i.test(el.tagName)) return;
+    const own = [...el.childNodes].filter(n => n.nodeType === 3).map(n => n.nodeValue).join(' ')
+        .replace(/\s+/g, ' ').trim();
+    const attrs = ['data-testid', 'data-message-author-role', 'data-turn', 'role', 'aria-label', 'id']
+        .filter(a => el.hasAttribute(a)).map(a => a + '=' + el.getAttribute(a).slice(0, 40)).join(' ');
+    const cls = (typeof el.className === 'string' ? el.className : '').split(/\s+/).slice(0, 6).join('.');
+    out.push('  '.repeat(depth) + el.tagName.toLowerCase() + (cls ? '.' + cls : '') + (attrs ? ' [' + attrs + ']' : '')
+             + (own ? ' «' + own.slice(0, 30) + (own.length > 30 ? '…' : '') + '»' : ''));
+    for (const c of el.children) walk(c, depth + 1);
+  }
+  walk(root, 0);
+  return location.host + location.pathname + '\n' + out.join('\n');
+})();
+"""
+
 # Stato della casella della chat: quanti caratteri contiene e se il pulsante di invio è attivo.
 _COMPOSER_JS = r"""
 (function () {
@@ -232,30 +255,36 @@ _ANSWER_JS = r"""
     const root = document.querySelector('main') || document.body;
     const EDIT = 'textarea, input, form, [contenteditable="true"]';
     const composer = document.querySelector('#prompt-textarea, [contenteditable="true"], textarea');
-    // le risposte possono citare la domanda (es. «3. quanti messaggi ti ho mandato?»): il messaggio inviato è
-    // l'ultima volta che il testo compare fuori dal contenuto formattato di una risposta (markdown, elenchi, codice)
-    const ANSWERISH = '[class*="markdown"], .prose, li, pre, code, blockquote, table';
-    let user = null;
+    // Il messaggio inviato è un punto della pagina con quel testo e poco altro (non dentro elenchi o codice di una
+    // risposta, che può citare la domanda). Da lì salgo solo finché il contenitore è ancora «il messaggio» (il
+    // turno dell'utente): il primo blocco con del testo che lo segue a quel livello è la risposta. Più su c'è il
+    // resto della pagina (avvisi come «ChatGPT può commettere errori»), che non va mai preso per risposta.
+    const NOT_USER = 'li, ol, ul, pre, code, blockquote, table';
+    const limit = want.length + 80;
+    const cands = [];
     for (const el of root.querySelectorAll('*')) {
-      if (el.matches(SKIP) || el.closest(EDIT) || el.closest(ANSWERISH)) continue;
+      if (el.matches(SKIP) || el.closest(EDIT) || el.closest(NOT_USER)) continue;
       const t = norm(el.innerText);
-      if (t && t.length <= want.length + 40 && t.includes(key)) user = el;
+      if (t && t.length <= want.length + 40 && t.includes(key)) cands.push(el);
     }
-    for (let a = user, depth = 0; a && a !== root && depth < 10; a = a.parentElement, depth++) {
-      const parts = [];
-      for (let sib = a.nextElementSibling; sib; sib = sib.nextElementSibling) {
-        if (sib.matches(EDIT) || sib.querySelector(EDIT) || (composer && sib.contains(composer))) break;
-        if (sib.matches(SKIP) || hidden(sib)) continue;
-        const t = body(sib).map(e => text(e, false)).join('\n');
-        if (norm(t)) parts.push(t);
+    for (const user of cands.slice(-5).reverse()) {
+      for (let a = user, depth = 0; a && a !== root && depth < 12; a = a.parentElement, depth++) {
+        if (norm(a.innerText).length > limit) break;  // uscito dal messaggio dell'utente
+        const parts = [];
+        for (let sib = a.nextElementSibling; sib; sib = sib.nextElementSibling) {
+          if (sib.matches(EDIT) || sib.querySelector(EDIT) || (composer && sib.contains(composer))) break;
+          if (sib.matches(SKIP) || hidden(sib)) continue;
+          const t = body(sib).map(e => text(e, false)).join('\n');
+          if (norm(t)) parts.push(t);
+        }
+        if (parts.length) {
+          const clean = parts.join('\n').replace(/\u00a0/g, ' ').replace(/[ \t]+\n/g, '\n')
+              .replace(/\n{3,}/g, '\n\n').trim();
+          return JSON.stringify({ count: 1, text: clean, busy, fallback: true });
+        }
       }
-      if (parts.length) {
-        const clean = parts.join('\n').replace(/\u00a0/g, ' ').replace(/[ \t]+\n/g, '\n')
-            .replace(/\n{3,}/g, '\n\n').trim();
-        return JSON.stringify({ count: 1, text: clean, busy, fallback: true });
-      }
-      if (composer && a.parentElement && a.parentElement.contains(composer)) break;
     }
+    return JSON.stringify({ count: 0, text: '', busy, fallback: true, candidates: cands.length });
   }
   return JSON.stringify({ count: 0, text: '', busy });
 })(__SENT__);
@@ -647,6 +676,14 @@ class WebPanel(QWidget):
 
         self.page.runJavaScript(_ANSWER_JS.replace("__SENT__", json.dumps(sent or "")),
                                 QWebEngineScript.ScriptWorldId.ApplicationWorld, got)
+
+    def page_outline(self, callback):
+        """callback(str) con la struttura della zona della chat (vedi _OUTLINE_JS)."""
+        if not (self.view and self.page):
+            callback("")
+            return
+        self.page.runJavaScript(_OUTLINE_JS, QWebEngineScript.ScriptWorldId.ApplicationWorld,
+                                lambda r: callback(str(r or "")))
 
     def when_ready(self, callback, timeout: float = 45.0):
         """callback(True) appena la pagina del servizio visibile ha finito di caricare e ha la casella della chat;

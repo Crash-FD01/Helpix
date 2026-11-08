@@ -176,6 +176,18 @@ def _qlog(fmt: str, *args) -> None:
         pass
 
 
+def _save_outline(outline: str) -> None:
+    """Struttura della pagina della chat quando la risposta non si legge (inizio dei testi compreso): resta sul PC,
+    in logs/pagina-chat.txt, da allegare a una segnalazione se si vuole."""
+    try:
+        from ..config import DATA_DIR
+        path = DATA_DIR / "logs" / "pagina-chat.txt"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(time.strftime("%Y-%m-%d %H:%M:%S\n") + outline + "\n", encoding="utf-8")
+    except OSError:
+        pass
+
+
 def _connected(sock) -> bool:
     from PySide6.QtNetwork import QLocalSocket
     try:
@@ -2720,13 +2732,17 @@ class MainWindow(QMainWindow):
                         _qlog("contrassegni dei messaggi non trovati: leggo il testo dopo il messaggio inviato")
                 else:
                     fresh = count > w["count"] and not (w["page_changed"] and text and text == w["base_text"])
-                if w.get("logged") != (count, bool(text), data.get("busy")):
-                    w["logged"] = (count, bool(text), data.get("busy"))
-                    _qlog("pagina: %d risposte (prima %d), testo %d caratteri, sta scrivendo %s",
-                          count, w["count"], len(text), bool(data.get("busy")))
+                state = (count, bool(text), data.get("busy"), data.get("candidates"))
+                if w.get("logged") != state:
+                    w["logged"] = state
+                    _qlog("pagina: %d risposte (prima %d), testo %d caratteri, sta scrivendo %s%s",
+                          count, w["count"], len(text), bool(data.get("busy")),
+                          "" if data.get("candidates") is None else
+                          f", punti con il messaggio inviato {data['candidates']}")
                 if not fresh:  # la risposta non è ancora comparsa
                     if time.monotonic() - w.get("t0", time.monotonic()) > 120:
-                        _qlog("nessuna risposta vista in 2 minuti")
+                        _qlog("nessuna risposta vista in 2 minuti: struttura della pagina in pagina-chat.txt")
+                        self.web.page_outline(_save_outline)
                         self._quick_stop()
                         self.instance.reply(w["sock"], {"type": "answer_unavailable", "text": tr(
                             "_Non vedo la risposta nella pagina: guardala in Helpix (↗)._")})

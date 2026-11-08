@@ -60,25 +60,35 @@ Problema: il wifi non va</code></pre>
       stop.textContent = 'Stop'; document.body.appendChild(stop);
       let msg = document.createElement('div');
       if (window.plainMarkup) {
-        // come ChatGPT senza account: nessun contrassegno sui messaggi, solo il turno dell'utente e quello dell'IA
+        // come ChatGPT senza account: nessun contrassegno sui messaggi, i turni in un contenitore con classe «prose»,
+        // sotto un avviso fisso; la risposta resta vuota per un attimo prima di comparire
+        let wrap = document.getElementById('plainwrap');
+        if (!wrap) {
+          wrap = document.createElement('div'); wrap.id = 'plainwrap'; wrap.className = 'prose turns';
+          thread.appendChild(wrap);
+          const note = document.createElement('div'); note.className = 'disclaimer';
+          note.textContent = 'ChatGPT is AI and can make mistakes.'; thread.appendChild(note);
+        }
         const user = document.createElement('div'); user.className = 'turn';
+        const said = document.createElement('h5'); said.className = 'sr-only'; said.textContent = 'You said:';
         const bubble = document.createElement('div'); bubble.className = 'bubble'; bubble.textContent = text;
         const copy = document.createElement('button'); copy.textContent = 'Copia';
-        user.append(bubble, copy); thread.appendChild(user);
+        user.append(said, bubble, copy); wrap.appendChild(user);
         const turn = document.createElement('div'); turn.className = 'turn';
         msg.className = 'markdown'; turn.appendChild(msg);
         const tools = document.createElement('button'); tools.textContent = 'Copia'; turn.appendChild(tools);
-        thread.appendChild(turn);
+        wrap.appendChild(turn);
       } else {
         msg.setAttribute('data-message-author-role', 'assistant');
         thread.appendChild(msg);
       }
       const words = ('Risposta finta: controlla il driver del wifi con nmcli device status e riavvia ' +
                      'NetworkManager.').split(' ');
-      let w = 0;
+      let w = window.plainMarkup ? -12 : 0;  // senza contrassegni: la risposta compare dopo circa 1,5 s
       // come le chat vere (React): il testo si aggiorna al prossimo fotogramma, che con la pagina nascosta non arriva
       const t2 = setInterval(() => {
         const n = ++w;
+        if (n <= 0) return;
         if (n >= words.length) clearInterval(t2);
         requestAnimationFrame(() => {
           msg.textContent = words.slice(0, n).join(' ');
