@@ -69,6 +69,12 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.18.6" date="2026-11-08">
+      <description>
+        <p>Quick window with ChatGPT without an account: reads its new page layout directly; on unknown layouts it
+          only takes text that appeared after sending, so fixed notices are never taken for the answer.</p>
+      </description>
+    </release>
     <release version="0.18.5" date="2026-11-08">
       <description>
         <p>Quick window on chat pages without message markers: finds the sent message again when the conversation is

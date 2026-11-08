@@ -70,6 +70,53 @@ Problema: il wifi non va</code></pre>
       code.textContent = text.slice(fence + 3).split('```')[0].trim();
       pre.appendChild(code); thread.appendChild(pre);
     }
+    if (window.ucMarkup && !text.includes('HELPIX-TASK')) {
+      // come ChatGPT senza account (chatgpt.com/uc/…, struttura vista sul PC di prova): la conversazione è un
+      // ol[aria-label=Conversation] di <li>, intestazione nascosta per turno, risposta in section «DIL content»
+      // fatta di <span> per parola; sotto la conversazione l'avviso fisso
+      let ol = document.querySelector('ol[aria-label="Conversation"]');
+      if (!ol) {
+        ol = document.createElement('ol'); ol.setAttribute('aria-label', 'Conversation'); thread.appendChild(ol);
+        const note = document.createElement('div'); note.innerHTML = '<p><span>ChatGPT is AI and can make mistakes.</span></p>';
+        thread.appendChild(note);
+      }
+      const sr = label => { const h = document.createElement('h4'); h.setAttribute('aria-label', label);
+        h.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)';
+        h.textContent = label; return h; };
+      const user = document.createElement('li');
+      user.innerHTML = '<div><div><div><p></p></div></div></div><div><div role="group"><button aria-label="Copy"></button>' +
+                       '<span role="status"></span></div></div>';
+      user.querySelector('p').textContent = text;
+      user.prepend(sr('You said:')); ol.appendChild(user);
+      const stop = document.createElement('button'); stop.setAttribute('data-testid', 'stop-button');
+      stop.textContent = 'Stop'; document.body.appendChild(stop);
+      const turn = document.createElement('li');
+      turn.innerHTML = '<div><span></span><div><div><div><section></section><div role="status"></div></div></div></div></div>' +
+                       '<div role="group" aria-label="Response actions"><button aria-label="Copy response"></button></div>';
+      turn.prepend(sr('ChatGPT said:'));
+      const section = turn.querySelector('section');
+      if (!window.ucNoLabel) section.setAttribute('aria-label', 'DIL content');
+      const p = document.createElement('p'); section.appendChild(p);
+      setTimeout(() => ol.appendChild(turn), 600);  // il turno dell'IA compare dopo un attimo
+      const words = ('Risposta finta: controlla il driver del wifi con nmcli device status e riavvia ' +
+                     'NetworkManager.').split(' ');
+      let w = -8;
+      const t3 = setInterval(() => {
+        const n = ++w;
+        if (n <= 0) return;
+        requestAnimationFrame(() => {
+          if (n > 1) p.appendChild(document.createTextNode(' '));
+          const span = document.createElement('span'); span.textContent = words[n - 1]; p.appendChild(span);
+          if (n >= words.length && window.quoteQuestion) {  // la risposta cita la domanda in un elenco
+            const ol2 = document.createElement('ol'); const li = document.createElement('li');
+            li.textContent = text; ol2.appendChild(li); section.appendChild(ol2);
+          }
+          if (n >= words.length) setTimeout(() => stop.remove(), 400);
+        });
+        if (n >= words.length) clearInterval(t3);
+      }, 120);
+      return;
+    }
     if (!text.includes('HELPIX-TASK')) {  // risposta normale, scritta a pezzi come fanno le chat
       const stop = document.createElement('button'); stop.setAttribute('data-testid', 'stop-button');
       stop.textContent = 'Stop'; document.body.appendChild(stop);

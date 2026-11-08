@@ -203,7 +203,11 @@ _ANSWER_JS = r"""
   // prima dell'invio: segno tutto ciò che c'è già nella pagina; la risposta sarà fatta di elementi nuovi
   if (mark) for (const el of document.body.querySelectorAll('*')) el.__helpixOld = true;
   const isOld = el => el.__helpixOld && ![...el.querySelectorAll('*')].some(e => !e.__helpixOld);
-  const sels = ['[data-message-author-role="assistant"]', '[data-is-streaming]', '.font-claude-response',
+  // ChatGPT senza account (chatgpt.com/uc/…, classi generate): ogni risposta è in section[aria-label="DIL content"]
+  // dentro ol[aria-label="Conversation"] > li; l'intestazione nascosta del turno dice «ChatGPT said:»
+  const sels = ['[data-message-author-role="assistant"]', 'section[aria-label="DIL content"]',
+                'li:has(> h4[aria-label="ChatGPT said:"]), li:has(> h4[aria-label="ChatGPT ha detto:"])',
+                '[data-is-streaming]', '.font-claude-response',
                 '[data-testid="assistant-message"]', 'model-response message-content', 'model-response',
                 '[data-content="ai-message"]', '.ds-markdown'];
   const busy = !!document.querySelector('[data-testid="stop-button"], button[aria-label*="Stop" i], ' +
@@ -259,9 +263,11 @@ _ANSWER_JS = r"""
     const key = want.slice(0, 120);
     const EDIT = 'textarea, input, form, [contenteditable="true"]';
     const composer = document.querySelector('#prompt-textarea, [contenteditable="true"], textarea');
-    // il messaggio inviato è un punto della pagina con quel testo e poco altro, non dentro elenchi o codice di una
-    // risposta (che può citare la domanda)
-    const NOT_USER = 'li, ol, ul, pre, code, blockquote, table';
+    // il messaggio inviato è un punto della pagina con quel testo e poco altro, non dentro il contenuto di una
+    // risposta (che può citare la domanda in un elenco o in un blocco di codice)
+    // (non: tutti gli elenchi. ChatGPT senza account mette l'intera conversazione in un <ol> di <li>)
+    const NOT_USER = 'pre, code, blockquote, table, [class*="markdown"] li, .prose li, ' +
+                     'section[aria-label="DIL content"], [data-message-author-role="assistant"]';
     function candidates(root) {
       const found = [];
       for (const el of root.querySelectorAll('*')) {

@@ -201,14 +201,34 @@ def test_quick_window():
     assert last.startswith("Risposta finta") and "quanti messaggi ti ho mandato?" in last, last
     js(gpt, "window.plainMarkup = false; window.quoteQuestion = false; 0")
 
+    # ChatGPT senza account, con la struttura vera vista sul PC di prova con Linux Mint (pagina-chat.txt):
+    # domanda, stessa domanda di nuovo, domanda che la risposta cita in un elenco; poi lo stesso senza il contrassegno
+    # «DIL content» (lettura del testo dopo il messaggio inviato)
+    for no_label in (False, True):
+        js(gpt, "document.getElementById('thread').innerHTML = ''; window.plainMarkup = false; "
+                f"window.ucMarkup = true; window.ucNoLabel = {str(no_label).lower()}; 0")
+        for question, quote in (("test", False), ("test", False), ("quanti messaggi ti ho mandato?", True)):
+            js(gpt, f"window.quoteQuestion = {str(quote).lower()}; 0")
+            before = q.answers.toPlainText().count("NetworkManager")
+            q.input.setPlainText(question)
+            q.send()
+            until(lambda: q.answers.toPlainText().count("NetworkManager") > before, timeout=25,
+                  what=f"risposta ChatGPT senza account ({question!r}, senza contrassegno: {no_label})")
+            until(lambda: q.btn_send.isEnabled(), timeout=25, what="risposta completa (ChatGPT senza account)")
+            got = q._history[-1][1]
+            assert got.startswith("Risposta finta: controlla il driver") and "mistakes" not in got, got
+            assert "said" not in got and "Copy" not in got, got
+            assert (question in got) == quote, got
+    js(gpt, "window.ucMarkup = false; window.ucNoLabel = false; window.quoteQuestion = false; 0")
+
     # Helpix ridotto a icona: la pagina resta «visibile» per il motore web finché arriva la risposta
     win.showMinimized()
     pump(800)
     q.input.setPlainText("terza domanda")
     q.send()
-    until(lambda: js(gpt, "window.sent.length") == 8, timeout=20, what="messaggio con Helpix ridotto a icona")
+    until(lambda: js(gpt, "window.sent.length") == 14, timeout=20, what="messaggio con Helpix ridotto a icona")
     until(lambda: q.btn_send.isEnabled(), timeout=25, what="risposta con Helpix ridotto a icona")
-    assert q.answers.toPlainText().count("NetworkManager") >= 8
+    assert q.answers.toPlainText().count("NetworkManager") >= 14
     win.showNormal()
     pump(300)
 
