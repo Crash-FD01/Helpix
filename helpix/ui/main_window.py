@@ -2617,7 +2617,7 @@ class MainWindow(QMainWindow):
                         return
                     QTimer.singleShot(1500, self._quick_poll)
                 self.web.send_verified(sent)
-            self.web.last_answer(sent_web, text)
+            self.web.last_answer(sent_web, text, mark=True)
         else:
             self._quick_watch = {"sock": sock, "kind": "api"}
             self.prompt.setPlainText(text)
@@ -2727,6 +2727,11 @@ class MainWindow(QMainWindow):
                     _qlog("pagina cambiata durante l'attesa (%d risposte): riparto da zero", count)
                 if data.get("fallback"):  # pagina senza contrassegni noti: risposta = testo dopo il messaggio inviato
                     fresh = bool(text) and text != w["base_text"]
+                    if data.get("candidates") == 0 and not w.get("outlined") and \
+                            time.monotonic() - w.get("t0", time.monotonic()) > 5:
+                        w["outlined"] = True  # il messaggio inviato non si trova: la struttura serve subito
+                        _qlog("messaggio inviato non trovato nella pagina: struttura in pagina-chat.txt")
+                        self.web.page_outline(_save_outline)
                     if not w.get("fallback_logged"):
                         w["fallback_logged"] = True
                         _qlog("contrassegni dei messaggi non trovati: leggo il testo dopo il messaggio inviato")

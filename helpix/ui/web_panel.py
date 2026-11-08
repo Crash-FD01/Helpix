@@ -136,10 +136,12 @@ _SEND_JS = r"""
 # non si riesce a leggere, com'è fatta la pagina di quel sito. Va solo nel registro locale.
 _OUTLINE_JS = r"""
 (function () {
-  const root = document.querySelector('main') || document.body;
-  const out = [];
+  const composer = document.querySelector('#prompt-textarea, [contenteditable="true"], textarea');
+  const root = document.body;
+  const out = ['main: ' + document.querySelectorAll('main').length + ', casella dentro main: ' +
+               !!(composer && composer.closest('main'))];
   function walk(el, depth) {
-    if (out.length > 600 || depth > 28) return;
+    if (out.length > 1500 || depth > 40) return;
     if (/^(SCRIPT|STYLE|SVG|PATH|NOSCRIPT)$/i.test(el.tagName)) return;
     const own = [...el.childNodes].filter(n => n.nodeType === 3).map(n => n.nodeValue).join(' ')
         .replace(/\s+/g, ' ').trim();
@@ -197,7 +199,10 @@ _SUMMARY_JS = r"""
 # Ultima risposta dell'assistente nella pagina (per la finestra rapida): quante risposte ci sono,
 # il testo dell'ultima e se sta ancora scrivendo.
 _ANSWER_JS = r"""
-(function (sent) {
+(function (sent, mark) {
+  // prima dell'invio: segno tutto ciò che c'è già nella pagina; la risposta sarà fatta di elementi nuovi
+  if (mark) for (const el of document.body.querySelectorAll('*')) el.__helpixOld = true;
+  const isOld = el => el.__helpixOld && ![...el.querySelectorAll('*')].some(e => !e.__helpixOld);
   const sels = ['[data-message-author-role="assistant"]', '[data-is-streaming]', '.font-claude-response',
                 '[data-testid="assistant-message"]', 'model-response message-content', 'model-response',
                 '[data-content="ai-message"]', '.ds-markdown'];
@@ -252,28 +257,38 @@ _ANSWER_JS = r"""
   const want = norm(sent);
   if (want) {
     const key = want.slice(0, 120);
-    const root = document.querySelector('main') || document.body;
     const EDIT = 'textarea, input, form, [contenteditable="true"]';
     const composer = document.querySelector('#prompt-textarea, [contenteditable="true"], textarea');
-    // Il messaggio inviato è un punto della pagina con quel testo e poco altro (non dentro elenchi o codice di una
-    // risposta, che può citare la domanda). Da lì salgo solo finché il contenitore è ancora «il messaggio» (il
-    // turno dell'utente): il primo blocco con del testo che lo segue a quel livello è la risposta. Più su c'è il
-    // resto della pagina (avvisi come «ChatGPT può commettere errori»), che non va mai preso per risposta.
+    // il messaggio inviato è un punto della pagina con quel testo e poco altro, non dentro elenchi o codice di una
+    // risposta (che può citare la domanda)
     const NOT_USER = 'li, ol, ul, pre, code, blockquote, table';
-    const limit = want.length + 80;
-    const cands = [];
-    for (const el of root.querySelectorAll('*')) {
-      if (el.matches(SKIP) || el.closest(EDIT) || el.closest(NOT_USER)) continue;
-      const t = norm(el.innerText);
-      if (t && t.length <= want.length + 40 && t.includes(key)) cands.push(el);
+    function candidates(root) {
+      const found = [];
+      for (const el of root.querySelectorAll('*')) {
+        if (el.matches(SKIP) || el.closest(EDIT) || el.closest(NOT_USER) || hidden(el)) continue;
+        const t = norm(el.innerText);
+        if (t && t.length <= want.length + 40 && t.includes(key)) found.push(el);
+      }
+      return found;
     }
+    // la conversazione: il <main> con la casella, altrimenti il primo <main>, altrimenti tutta la pagina (con un
+    // cambio di pagina può restare un <main> vecchio e nascosto prima di quello vero)
+    let root = (composer && composer.closest('main')) || document.querySelector('main') || document.body;
+    let cands = candidates(root);
+    if (!cands.length && root !== document.body) { root = document.body; cands = candidates(root); }
+    const limit = want.length + 80;
     for (const user of cands.slice(-5).reverse()) {
+      // salgo dal messaggio finché il contenitore è ancora «il messaggio» (il turno dell'utente). Al primo livello
+      // in cui dopo c'è qualcosa di nuovo (comparso dopo l'invio), quello è il posto della risposta: se è ancora
+      // vuoto si aspetta. Ciò che c'era già prima (avvisi come «ChatGPT può commettere errori») non conta mai.
       for (let a = user, depth = 0; a && a !== root && depth < 12; a = a.parentElement, depth++) {
-        if (norm(a.innerText).length > limit) break;  // uscito dal messaggio dell'utente
+        if (norm(a.innerText).length > limit) break;
         const parts = [];
+        let slot = false;
         for (let sib = a.nextElementSibling; sib; sib = sib.nextElementSibling) {
           if (sib.matches(EDIT) || sib.querySelector(EDIT) || (composer && sib.contains(composer))) break;
-          if (sib.matches(SKIP) || hidden(sib)) continue;
+          if (sib.matches(SKIP) || hidden(sib) || isOld(sib)) continue;
+          slot = true;
           const t = body(sib).map(e => text(e, false)).join('\n');
           if (norm(t)) parts.push(t);
         }
@@ -282,6 +297,7 @@ _ANSWER_JS = r"""
               .replace(/\n{3,}/g, '\n\n').trim();
           return JSON.stringify({ count: 1, text: clean, busy, fallback: true });
         }
+        if (slot) break;  // il posto della risposta c'è ma è ancora vuoto
       }
     }
     return JSON.stringify({ count: 0, text: '', busy, fallback: true, candidates: cands.length });
@@ -659,11 +675,11 @@ class WebPanel(QWidget):
         script = _INSERT_JS % json.dumps(payload)
         page.runJavaScript(script, QWebEngineScript.ScriptWorldId.ApplicationWorld, after_insert)
 
-    def last_answer(self, callback, sent: str = ""):
+    def last_answer(self, callback, sent: str = "", mark: bool = False):
         """callback(dict) con count, text, busy dell'ultima risposta nella pagina visibile.
 
         sent: il messaggio appena inviato; se la pagina non ha i contrassegni noti dei messaggi dell'IA, la risposta
-        è il testo che lo segue (fallback: True)."""
+        è il testo nuovo che lo segue (fallback: True). mark: prima dell'invio, segna ciò che c'è già nella pagina."""
         if not (self.view and self.page):
             callback({"count": 0, "text": "", "busy": False})
             return
@@ -674,7 +690,7 @@ class WebPanel(QWidget):
             except ValueError:
                 callback({"count": 0, "text": "", "busy": False})
 
-        self.page.runJavaScript(_ANSWER_JS.replace("__SENT__", json.dumps(sent or "")),
+        self.page.runJavaScript(_ANSWER_JS.replace("__SENT__", json.dumps(sent or "") + (", true" if mark else "")),
                                 QWebEngineScript.ScriptWorldId.ApplicationWorld, got)
 
     def page_outline(self, callback):

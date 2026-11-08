@@ -171,7 +171,7 @@ def test_quick_window():
     # pagina senza contrassegni sui messaggi (ChatGPT senza account, Linux Mint: la rapida restava in attesa):
     # la risposta è il testo che segue il messaggio inviato
     js(gpt, "document.querySelectorAll('[data-message-author-role]').forEach(e => e.remove()); "
-            "window.plainMarkup = true; 0")
+            "window.plainMarkup = true; window.ensurePlainWrap(); 0")
     before = q.answers.toPlainText().count("NetworkManager")
     q.input.setPlainText("domanda su una pagina senza contrassegni")
     q.send()
@@ -180,6 +180,15 @@ def test_quick_window():
     until(lambda: q.btn_send.isEnabled(), timeout=25, what="risposta completa (senza contrassegni)")
     last = q._history[-1][1]
     assert last.startswith("Risposta finta") and "Copia" not in last and "senza contrassegni" not in last, last
+    # di nuovo lo stesso messaggio, nella stessa chat (sul Mint il secondo «test» non veniva più trovato)
+    for _round in range(2):
+        before = q.answers.toPlainText().count("NetworkManager")
+        q.input.setPlainText("test")
+        q.send()
+        until(lambda: q.answers.toPlainText().count("NetworkManager") > before, timeout=25,
+              what="risposta al messaggio ripetuto")
+        until(lambda: q.btn_send.isEnabled(), timeout=25, what="risposta completa (messaggio ripetuto)")
+        assert q._history[-1][1].startswith("Risposta finta") and "mistakes" not in q._history[-1][1]
     # la risposta cita la domanda in un elenco (Linux Mint: «quanti messaggi ti ho mandato?» si bloccava)
     js(gpt, "window.quoteQuestion = true; 0")
     before = q.answers.toPlainText().count("NetworkManager")
@@ -197,9 +206,9 @@ def test_quick_window():
     pump(800)
     q.input.setPlainText("terza domanda")
     q.send()
-    until(lambda: js(gpt, "window.sent.length") == 6, timeout=20, what="messaggio con Helpix ridotto a icona")
+    until(lambda: js(gpt, "window.sent.length") == 8, timeout=20, what="messaggio con Helpix ridotto a icona")
     until(lambda: q.btn_send.isEnabled(), timeout=25, what="risposta con Helpix ridotto a icona")
-    assert q.answers.toPlainText().count("NetworkManager") >= 6
+    assert q.answers.toPlainText().count("NetworkManager") >= 8
     win.showNormal()
     pump(300)
 

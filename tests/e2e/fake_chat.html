@@ -39,6 +39,21 @@ Problema: il wifi non va</code></pre>
   });
   // invio finto: mostra il messaggio e, se è la richiesta di riepilogo, «scrive» la risposta a pezzi
   window.sent = [];
+  // come ChatGPT senza account: i turni in un contenitore «prose», un avviso fisso sotto la conversazione e, dopo
+  // un cambio di pagina, un vecchio <main> nascosto prima di quello vero
+  window.ensurePlainWrap = () => {
+    const thread = document.getElementById('thread');
+    let wrap = document.getElementById('plainwrap');
+    if (!wrap) {
+      wrap = document.createElement('div'); wrap.id = 'plainwrap'; wrap.className = 'prose turns';
+      thread.appendChild(wrap);
+      const note = document.createElement('div'); note.className = 'disclaimer';
+      note.textContent = 'ChatGPT is AI and can make mistakes.'; thread.appendChild(note);
+      const old = document.createElement('main'); old.style.display = 'none';
+      old.innerHTML = '<p>pagina precedente</p>'; document.body.insertBefore(old, document.body.firstChild);
+    }
+    return wrap;
+  };
   document.getElementById('send').addEventListener('click', () => {
     // come le chat vere appena caricate: i primi clic possono andare persi, o l'invio può essere bloccato
     if (window.blockSend) return;
@@ -62,13 +77,7 @@ Problema: il wifi non va</code></pre>
       if (window.plainMarkup) {
         // come ChatGPT senza account: nessun contrassegno sui messaggi, i turni in un contenitore con classe «prose»,
         // sotto un avviso fisso; la risposta resta vuota per un attimo prima di comparire
-        let wrap = document.getElementById('plainwrap');
-        if (!wrap) {
-          wrap = document.createElement('div'); wrap.id = 'plainwrap'; wrap.className = 'prose turns';
-          thread.appendChild(wrap);
-          const note = document.createElement('div'); note.className = 'disclaimer';
-          note.textContent = 'ChatGPT is AI and can make mistakes.'; thread.appendChild(note);
-        }
+        const wrap = window.ensurePlainWrap();
         const user = document.createElement('div'); user.className = 'turn';
         const said = document.createElement('h5'); said.className = 'sr-only'; said.textContent = 'You said:';
         const bubble = document.createElement('div'); bubble.className = 'bubble'; bubble.textContent = text;
@@ -77,7 +86,7 @@ Problema: il wifi non va</code></pre>
         const turn = document.createElement('div'); turn.className = 'turn';
         msg.className = 'markdown'; turn.appendChild(msg);
         const tools = document.createElement('button'); tools.textContent = 'Copia'; turn.appendChild(tools);
-        wrap.appendChild(turn);
+        msg.addTurn = () => { if (!turn.isConnected) wrap.appendChild(turn); };  // compare con le prime parole
       } else {
         msg.setAttribute('data-message-author-role', 'assistant');
         thread.appendChild(msg);
@@ -91,6 +100,7 @@ Problema: il wifi non va</code></pre>
         if (n <= 0) return;
         if (n >= words.length) clearInterval(t2);
         requestAnimationFrame(() => {
+          if (msg.addTurn) msg.addTurn();
           msg.textContent = words.slice(0, n).join(' ');
           if (window.quoteQuestion && n >= words.length) {  // la risposta cita la domanda in un elenco
             const ol = document.createElement('ol'); const li = document.createElement('li');
