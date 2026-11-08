@@ -264,6 +264,47 @@ def test_pannello_e_nuovo_progetto():
     panel.select(p.notes()[0].rel)
     panel._paste_current()
     assert pasted and "Record MX" in pasted[0]
+    # albero: un clic apre e chiude le cartelle; le frecce e le righe si disegnano senza errori
+    folder = next(panel.tree.topLevelItem(0).child(j) for j in range(panel.tree.topLevelItem(0).childCount())
+                  if panel.tree.topLevelItem(0).child(j).childCount())
+    was = folder.isExpanded()
+    panel._item_clicked(folder)
+    assert folder.isExpanded() != was
+    panel._item_clicked(folder)
+    assert folder.isExpanded() == was
+    assert not panel.grab().isNull()
+    # elimina e ripristina dal pannello (conferma simulata): il progetto aperto si chiude, poi torna
+    from helpix.ui import vault_panel as vp
+
+    class Yes(vp.QMessageBox):
+        def exec(self):
+            return 0
+
+        def clickedButton(self):
+            return next(b for b in self.buttons() if self.buttonRole(b) == vp.QMessageBox.ButtonRole.DestructiveRole)
+
+    real_box = vp.QMessageBox
+    vp.QMessageBox = Yes
+    try:
+        panel._delete_project(p.slug)
+        assert win.project is None and not vault.projects() and vault.trash()
+        tid = vault.trash()[0].id
+        assert "trash:" + tid in panel._items and panel.current[0] == "trash"
+        assert panel.btn_untrash.isVisible() and panel.btn_purge.isVisible()
+        panel._untrash(tid)
+        assert [i.slug for i in vault.projects()] == [p.slug] and not vault.trash()
+        win._open_project(p.slug)
+        panel.select(p.notes()[0].rel)
+        vault.delete_file(p.notes()[0].rel)
+        panel.reload()
+        assert vault.trash()[0].kind == "note"
+        panel._purge(vault.trash()[0].id)
+        assert not vault.trash()
+    finally:
+        vp.QMessageBox = real_box
+    vault.rename_project(p.slug, "Migrazione posta — M365")
+    panel.changed.emit(p.slug)
+    assert win.project_btn.text().startswith("Migrazione posta — M365")
     # giro a nuvolette del pannello: tutti i passi, poi «già visto»
     win.start_vault_tour(panel)
     tour = panel._tour

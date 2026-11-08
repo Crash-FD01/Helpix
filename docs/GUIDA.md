@@ -266,7 +266,9 @@ piccolo (circa 1000 token) invece di una cronologia che cresce. Specifica comple
 - **Pannello Vault** (*Progetto › Apri il vault…*): a sinistra progetti e note con la ricerca e il lucchetto; al
   centro la nota (*Leggi/Modifica*, link `[[ ]]`, decisioni «in vigore», «Solo per me» evidenziata), *Riprendi con…*,
   *Incolla nella chat* e il peso in token; a destra cosa va all'IA nella prossima chat, «Citata da» e le note recenti
-  (*nel contesto* / *archivio*). Le versioni precedenti si ripristinano dall'albero.
+  (*nel contesto* / *archivio*). Le versioni precedenti si ripristinano dall'albero. Con il pulsante «⋯» o il tasto
+  destro nell'albero rinomini il progetto ed elimini note, file o l'intero progetto (anche da *Progetto › Elimina il
+  progetto…*): finisce nel **Cestino** in fondo all'albero, da cui si ripristina o si elimina definitivamente.
 - **Guida a nuvolette**: parte da sola la prima volta che attivi la funzione e la prima volta che apri il vault; si
   rifà da *Progetto › Guida ai progetti* e dal pulsante *Guida* del pannello.
 - **Il vault** è una cartella di file Markdown (`~/.local/share/helpix/vault`, `%LOCALAPPDATA%\Helpix\vault`),

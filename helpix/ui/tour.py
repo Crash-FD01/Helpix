@@ -176,6 +176,10 @@ def vault_steps(panel) -> list[Step]:
         Step("v_seg", lambda: panel.seg, tr("Leggi o modifica"),
              tr("Leggi mostra la nota formattata, con i link [[ ]] cliccabili. Modifica apre il testo: puoi correggere "
                 "a mano e salvare; per PROJECT.md la versione precedente resta tra le versioni.")),
+        Step("v_more", lambda: panel.btn_more, tr("Altre azioni"),
+             tr("Rinomina il progetto, elimina una nota, un file o l'intero progetto (anche con il tasto destro "
+                "nell'albero). Quello che elimini va nel Cestino in fondo all'albero: da lì lo ripristini o lo elimini "
+                "definitivamente.")),
         Step("v_resume", lambda: panel.btn_resume, tr("Riprendi"),
              tr("Apre una chat nuova nell'assistente attivo con lo stato del progetto: il modo più veloce per "
                 "ripartire.")),

@@ -39,6 +39,7 @@ vault/
     ├── file/                  dettagli: codice, errori esatti, configurazioni
     ├── sessioni/<task>.md     bozze automatiche della sessione (comandi, output, diagnosi)
     └── .versioni/             versioni precedenti di PROJECT.md (le ultime 20)
+.cestino/<nome>-<data>/        progetti e note eliminati, finché non si svuota il cestino
 ```
 
 ### PROJECT.md
@@ -153,6 +154,18 @@ Finestra separata (dal selettore *Progetto › Apri il vault…*) in tre colonne
   *archivio*).
 
 In alto una striscia *Beta* con *Esporta in chiaro*, *Segnala un problema* e *Guida*.
+
+L'albero si apre e si chiude con un clic (freccia ▸/▾ disegnata da Helpix). Il pulsante «⋯» e il tasto destro
+danno *Rinomina il progetto* (cambia il «# titolo», la cartella resta), *Elimina la nota/il file/la bozza* ed
+*Elimina il progetto*.
+
+### Cestino
+
+Eliminare non cancella subito: progetti e note vanno in `.cestino/<nome>-<data>/` dentro il vault (cifrati anche
+loro, se il vault è cifrato), con gli stessi percorsi. Copia prima, verifica, poi toglie gli originali. Una nota
+porta con sé la sua riga dell'indice, che torna al ripristino. *Ripristina* rifiuta se nel frattempo è stato creato
+qualcosa con lo stesso nome; *Elimina definitivamente* e *Svuota il cestino* chiedono conferma. Un progetto
+eliminato mentre è aperto si chiude.
 
 ### Guida a nuvolette
 
