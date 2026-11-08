@@ -249,6 +249,10 @@ def test_pannello_e_nuovo_progetto():
     win.open_vault_panel()
     panel = win.vault_panel
     assert panel is not None and panel.current and panel.current[2].endswith("PROJECT.md")
+    # finestra a sé (non resta sopra a Helpix) con la stessa barra integrata di Helpix
+    assert panel.parent() is None and panel.isWindow()
+    assert panel.frameless == win.frameless and (not win.frameless or panel.toolbar.isVisible())
+    assert panel.width() >= panel.minimumWidth()
     panel.select(p.notes()[0].rel)
     assert panel.backlinks.count() == 1 and panel.backlinks.item(0).text().startswith("note/")
     panel.select(p.rel("PROJECT.md"))
@@ -305,6 +309,11 @@ def test_pannello_e_nuovo_progetto():
     vault.rename_project(p.slug, "Migrazione posta — M365")
     panel.changed.emit(p.slug)
     assert win.project_btn.text().startswith("Migrazione posta — M365")
+    # finestra stretta: la colonna di destra si nasconde; larga: c'è
+    panel.resize(panel.minimumWidth(), 700)
+    assert not panel.aside.isVisible()
+    panel.resize(1240, 800)
+    assert panel.aside.isVisible()
     # giro a nuvolette del pannello: tutti i passi, poi «già visto»
     win.start_vault_tour(panel)
     tour = panel._tour
@@ -332,6 +341,12 @@ def test_pannello_e_nuovo_progetto():
     win.start_projects_tour()
     assert win._ptour is not None
     win._ptour.close_tour()
+    # uscendo da Helpix si chiude anche la finestra del vault
+    win.open_vault_panel()
+    pump(100)
+    assert win.vault_panel is not None and win._projects_on_quit()
+    pump(100)
+    assert win.vault_panel is None
     win.close()
 
 

@@ -9,12 +9,12 @@ import re
 
 import time
 
-from PySide6.QtCore import QPointF, QRectF, QSize, Qt, QUrl, Signal
+from PySide6.QtCore import QEvent, QPointF, QRectF, QSize, Qt, QUrl, Signal
 from PySide6.QtGui import QColor, QCursor, QDesktopServices, QFont, QPainter, QPainterPath, QPen, QPolygonF
 from PySide6.QtWidgets import (
     QButtonGroup, QDialog, QFrame, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMenu,
     QMessageBox,
-    QPlainTextEdit, QProgressBar, QPushButton, QStackedWidget, QStyle, QStyledItemDelegate, QStyleOptionViewItem,
+    QPlainTextEdit, QProgressBar, QPushButton, QSizePolicy, QStackedWidget, QStyle, QStyledItemDelegate, QStyleOptionViewItem,
     QTextBrowser, QToolButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
@@ -23,6 +23,8 @@ from ..i18n import tr
 from ..icons import icon
 from ..theme import C, mono_font
 from ..vault import FILES, INDEX_FILE, NOTES, PROJECT_FILE, SESSIONS, VERSIONS, Vault, VaultError
+from .controls import WindowControls
+from .frameless import FramelessHelper, RoundedCentral
 from .vault_dialogs import ISSUES_URL
 
 _ROLE = Qt.ItemDataRole.UserRole
@@ -171,6 +173,7 @@ def _css() -> str:
 
 def _panel_qss() -> str:
     return f"""
+    QDialog#vaultPanel[rounded="true"] {{ background: transparent; }}
     #vaultSide, #vaultAside {{ background: {C['sidebar']}; }}
     #vaultSide {{ border-right: 1px solid {C['hairline']}; }}
     #vaultAside {{ border-left: 1px solid {C['hairline']}; }}
@@ -222,7 +225,9 @@ class VaultPanel(QDialog):
     project_restored = Signal(str)
 
     def __init__(self, vault: Vault, parent=None, active: str | None = None, keep_versions: int = 20,
-                 assistant=None):
+                 assistant=None, frameless: bool = False, rounded: bool = False):
+        """Finestra indipendente (parent=None): non resta sopra a Helpix e ha la sua voce nella barra delle
+        applicazioni. Con `frameless` usa la barra integrata di Helpix invece di quella del sistema."""
         super().__init__(parent)
         self.vault = vault
         self.active = active
@@ -230,24 +235,111 @@ class VaultPanel(QDialog):
         self.assistant = assistant or (lambda: "")
         self.current: tuple[str, str, str] | None = None   # (tipo, slug, percorso)
         self._items: dict[str, QTreeWidgetItem] = {}
+        self.frameless = frameless
+        self.rounded = frameless and rounded
+        self.setObjectName("vaultPanel")
         self.setWindowTitle(tr("Helpix — Vault"))
+        from ..theme import app_icon
+        self.setWindowIcon(app_icon())
         self.setWindowFlag(Qt.WindowType.Window, True)
         self.setModal(False)
-        self.resize(1240, 800)
+        self.setMinimumSize(820, 540)
+        self._fit_to_screen(parent)
         self.setStyleSheet(_panel_qss())
-        root = QHBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(0)
-        root.addWidget(self._build_side())
-        root.addWidget(self._build_main(), 1)
-        root.addWidget(self._build_aside())
+        body = QHBoxLayout()
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(0)
+        body.addWidget(self._build_side())
+        body.addWidget(self._build_main(), 1)
+        body.addWidget(self._build_aside())
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        if frameless:
+            self.toolbar = self._build_titlebar()
+            if self.rounded:
+                # finestra trasparente: lo sfondo con gli angoli arrotondati lo dipinge RoundedCentral, come in Helpix
+                self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+                self.setProperty("rounded", "true")
+                self.toolbar.setProperty("rounded", "true")
+                self.central = RoundedCentral(self.toolbar)
+            else:
+                self.central = QWidget()
+            self.central.setObjectName("central")
+            self.central.setProperty("frameless", "true")
+            self.central.setProperty("rounded", "true" if self.rounded else "false")
+            cl = QVBoxLayout(self.central)
+            cl.setContentsMargins(1, 1, 1, 1)
+            cl.setSpacing(0)
+            cl.addWidget(self.toolbar)
+            cl.addLayout(body, 1)
+            outer.addWidget(self.central)
+            if self.rounded:
+                self.central.set_square(False)
+            self._frameless = FramelessHelper(self, self.toolbar)
+        else:
+            outer.addLayout(body, 1)
         self.reload()
+
+    def _fit_to_screen(self, parent):
+        """Grande quanto serve ma mai più dello schermo (prima la colonna di destra poteva finire fuori)."""
+        from PySide6.QtGui import QGuiApplication
+        screen = (parent.screen() if parent is not None else None) or QGuiApplication.primaryScreen()
+        avail = screen.availableGeometry() if screen else None
+        w, h = 1240, 800
+        if avail is not None:
+            w = max(self.minimumWidth(), min(w, int(avail.width() * 0.94)))
+            h = max(self.minimumHeight(), min(h, int(avail.height() * 0.92)))
+        self.resize(w, h)
+        if avail is not None:
+            center = parent.geometry().center() if parent is not None and parent.isVisible() else avail.center()
+            x = min(max(center.x() - w // 2, avail.left()), avail.right() - w)
+            y = min(max(center.y() - h // 2, avail.top()), avail.bottom() - h)
+            self.move(max(x, avail.left()), max(y, avail.top()))
+
+    def _build_titlebar(self) -> QFrame:
+        """Barra integrata come quella di Helpix: icona, titolo, riduci / ingrandisci / chiudi; si trascina."""
+        from ..theme import app_icon
+        bar = QFrame()
+        bar.setObjectName("toolbar")
+        bar.setFixedHeight(46)
+        h = QHBoxLayout(bar)
+        h.setContentsMargins(14, 0, 10, 0)
+        h.setSpacing(10)
+        logo = QLabel()
+        logo.setPixmap(app_icon().pixmap(20, 20))
+        h.addWidget(logo)
+        self.bar_title = _bold(QLabel(tr("Helpix — Vault")))
+        h.addWidget(self.bar_title)
+        h.addStretch(1)
+        self.win_controls = WindowControls(self)
+        h.addWidget(self.win_controls)
+        return bar
+
+    ASIDE_MIN_WIDTH = 1120   # sotto questa larghezza la colonna di destra si nasconde: la nota resta leggibile
+
+    def resizeEvent(self, ev):
+        super().resizeEvent(ev)
+        self.aside.setVisible(self.width() >= self.ASIDE_MIN_WIDTH)
+
+    def changeEvent(self, ev):
+        if ev.type() == QEvent.Type.WindowStateChange and self.frameless:
+            maxed = self.isMaximized() or self.isFullScreen()
+            self.central.setProperty("frameless", "false" if maxed else "true")
+            if self.rounded:
+                self.central.set_square(maxed)  # ingrandita: angoli dritti, niente margini
+            else:
+                self.central.layout().setContentsMargins(*(0 if maxed else 1,) * 4)
+            self.central.style().unpolish(self.central)
+            self.central.style().polish(self.central)
+            self.win_controls.refresh()
+        super().changeEvent(ev)
 
     # ------------------------------------------------------------ costruzione
     def _build_side(self) -> QWidget:
         side = QFrame()
         side.setObjectName("vaultSide")
-        side.setFixedWidth(280)
+        side.setFixedWidth(270)
         v = QVBoxLayout(side)
         v.setContentsMargins(12, 14, 12, 12)
         v.setSpacing(10)
@@ -319,11 +411,13 @@ class VaultPanel(QDialog):
         msg = QLabel("<b>" + tr("Beta") + "</b> · " + tr("Progetti e vault sono in prova: tieni una copia dei dati "
                                                            "importanti."))
         msg.setWordWrap(True)
+        msg.setMinimumWidth(120)
         bh.addWidget(msg, 1)
         for label, slot in ((tr("Esporta in chiaro"), self.export_requested.emit),
                             (tr("Segnala un problema"), lambda: QDesktopServices.openUrl(QUrl(ISSUES_URL))),
                             (tr("Guida"), self.tour_requested.emit)):
             b = QPushButton(label)
+            b.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)  # mai tagliati
             b.setCursor(Qt.CursorShape.PointingHandCursor)
             b.clicked.connect(slot)
             bh.addWidget(b)
@@ -361,6 +455,9 @@ class VaultPanel(QDialog):
         self.btn_read.setChecked(True)
         self.btn_read.toggled.connect(lambda on: on and self._mode(False))
         self.btn_edit.toggled.connect(lambda on: on and self._mode(True))
+        self.seg.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        for b in (self.btn_read, self.btn_edit):
+            b.setMinimumWidth(b.sizeHint().width() + 16)
         title_row.addWidget(self.seg, 0, Qt.AlignmentFlag.AlignBottom)
         self.btn_more = QToolButton()
         self.btn_more.setIcon(icon("more", C["text"], 18))
@@ -418,6 +515,9 @@ class VaultPanel(QDialog):
         self.tokens.setObjectName("vaultTokens")
         mh.addWidget(self.tokens)
         actions.addWidget(self.meter_box)
+        for b in (self.btn_resume, self.btn_paste, self.btn_restore, self.btn_untrash, self.btn_purge):
+            b.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.meter_box.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         bv.addLayout(actions)
         bv.addSpacing(10)
         rule = QFrame()
@@ -458,7 +558,8 @@ class VaultPanel(QDialog):
     def _build_aside(self) -> QWidget:
         aside = QFrame()
         aside.setObjectName("vaultAside")
-        aside.setFixedWidth(310)
+        aside.setFixedWidth(300)
+        self.aside = aside
         v = QVBoxLayout(aside)
         v.setContentsMargins(14, 16, 14, 14)
         v.setSpacing(8)
