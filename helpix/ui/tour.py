@@ -108,6 +108,94 @@ def steps_for(win) -> list[Step]:
     ]
 
 
+
+def project_steps(win) -> list[Step]:
+    """Giro dei progetti (beta) nella finestra principale."""
+    def open_text() -> str:
+        engine = getattr(win, "engine", "web")
+        if engine == "agent":
+            return tr("Da qui crei un progetto nuovo o ne apri uno. Aprendolo, l'agente riparte con lo stato del "
+                      "progetto nelle sue istruzioni, e le note vecchie se le legge da solo quando servono.")
+        if engine == "api":
+            return tr("Da qui crei un progetto nuovo o ne apri uno. Aprendolo, lo stato del progetto va all'IA "
+                      "insieme a ogni richiesta: lei sa sempre dove eravate rimasti.")
+        return tr("Da qui crei un progetto nuovo o ne apri uno. Aprendolo, ti apro una chat nuova e ci incollo lo "
+                  "stato del progetto: tu controlli e premi Invio. Funziona con qualsiasi IA, anche cambiandola.")
+
+    btn = lambda: win.project_btn  # noqa: E731
+    return [
+        Step("p_welcome", None, tr("Progetti e vault 🗂️"),
+             tr("Un progetto è un lavoro che va avanti per giorni: un cliente, un PC, un'idea tua. Io tengo un "
+                "riassunto breve di dove sei arrivato e lo do all'IA ogni volta che riparti, così non devi rispiegare "
+                "niente e spendi meno messaggi e token. Ti faccio vedere come in un minuto."), tip=False),
+        Step("p_picker", btn, tr("Il selettore Progetto"), open_text),
+        Step("p_save", btn, tr("Salva progetto"),
+             tr("Quando hai fatto progressi: Progetto › Salva progetto. Chiedo all'IA solo cosa è cambiato e una nota "
+                "sulla sessione, poi ti mostro l'anteprima: correggi quello che vuoi e premi Salva. Le versioni "
+                "precedenti restano, e se il riassunto diventa lungo c'è «Compatta il progetto».")),
+        Step("p_note", None, tr("Le note su richiesta"),
+             tr("Le note vecchie non le mando sempre: pesano. Se all'IA ne serve una scrive «HELPIX-NOTA: titolo»; tu "
+                "copi quella riga e compare la barra «L'IA chiede la nota…»: premi Incolla nella chat e gliela passo.")),
+        Step("p_private", None, tr("«Solo per me»"),
+             tr("Nel riassunto c'è una sezione tutta tua, «Solo per me»: appunti, idee, cose dei clienti che non vuoi "
+                "far uscire. Non la mando mai a nessuna IA, e l'IA non può modificarla.")),
+        Step("p_auto", None, tr("Bozze e promemoria"),
+             tr("Ogni 10 minuti salvo da solo una bozza della sessione (comandi, output, diagnosi): niente IA, zero "
+                "token. E quando cambi progetto, apri un task nuovo, passi a un'altra IA o chiudi, ti chiedo se vuoi "
+                "salvare. Mai niente di nascosto: aggiorno il progetto solo quando confermi.")),
+        Step("p_vault", btn, tr("Il vault"),
+             tr("Tutti i progetti stanno nel vault: una cartella di file Markdown, leggibile anche con un editor o con "
+                "Obsidian. Da Progetto › Apri il vault vedi progetti, note e versioni, e quanto pesa quello che va "
+                "all'IA. Lì dentro c'è un altro mini-giro.")),
+        Step("p_lock", btn, tr("Il lucchetto (facoltativo)"),
+             tr("In Progetto › Impostazioni dei progetti puoi cifrare il vault: una password, più 8 codici usa e getta "
+                "per rientrare se la dimentichi (e, se vuoi, un file di recupero). Si blocca insieme a me. Conserva "
+                "bene codici e password: se li perdi tutti, nessuno può recuperare i dati, nemmeno io.")),
+        Step("p_bye", None, tr("Pronto a partire! 🎉"),
+             tr("Crea il primo progetto dal selettore e prova Salva progetto dopo un po' di lavoro. È una funzione in "
+                "beta: tieni una copia dei dati importanti. Questa guida la ritrovi in Progetto › Guida ai "
+                "progetti."), tip=False),
+    ]
+
+
+def vault_steps(panel) -> list[Step]:
+    """Giro del pannello Vault."""
+    return [
+        Step("v_welcome", None, tr("Benvenuto nel vault 🗃️"),
+             tr("Qui ci sono tutti i tuoi progetti, con lo stato attuale, le note e le versioni. Facciamo un giro "
+                "veloce dei comandi."), tip=False),
+        Step("v_tree", lambda: panel.tree, tr("Progetti e note"),
+             tr("Ogni progetto ha PROJECT.md (lo stato attuale, quello che va all'IA), INDEX.md (l'elenco delle note), "
+                "le note di ogni salvataggio, i file di dettaglio, le bozze delle sessioni e le versioni precedenti.")),
+        Step("v_search", lambda: panel.search, tr("Cerca"),
+             tr("Scrivi una parola e trovi le righe che la contengono in tutti i progetti: maiuscole e accenti non "
+                "contano.")),
+        Step("v_meter", lambda: panel.meter_box, tr("Quanto pesa"),
+             tr("Il peso di PROJECT.md in token. Sotto i 1000 va tutto bene; oltre, conviene «Compatta il progetto», "
+                "così ogni chat nuova resta leggera.")),
+        Step("v_seg", lambda: panel.seg, tr("Leggi o modifica"),
+             tr("Leggi mostra la nota formattata, con i link [[ ]] cliccabili. Modifica apre il testo: puoi correggere "
+                "a mano e salvare; per PROJECT.md la versione precedente resta tra le versioni.")),
+        Step("v_resume", lambda: panel.btn_resume, tr("Riprendi"),
+             tr("Apre una chat nuova nell'assistente attivo con lo stato del progetto: il modo più veloce per "
+                "ripartire.")),
+        Step("v_ctx", lambda: panel.ctx_card, tr("Cosa va all'IA"),
+             tr("Esattamente quello che mando a ogni chat nuova: PROJECT.md senza «Solo per me» e le ultime righe "
+                "dell'indice. Tutto il resto resta qui finché non serve.")),
+        Step("v_recent", lambda: panel.recent, tr("Note e collegamenti"),
+             tr("Le note più recenti: «nel contesto» sono quelle elencate all'IA, «archivio» le altre. Sopra, «Citata "
+                "da» mostra quali note puntano a quella aperta.")),
+        Step("v_lock", lambda: panel.lock_card, tr("Il lucchetto"),
+             tr("Se il vault è cifrato, da qui lo blocchi subito; si blocca anche insieme a Helpix. Se non è cifrato, "
+                "sono normali file Markdown nella tua cartella.")),
+        Step("v_guide", lambda: panel.btn_guide, tr("Beta e guida"),
+             tr("È una funzione in prova: «Esporta in chiaro» ti fa una copia leggibile, «Segnala un problema» apre "
+                "la pagina delle segnalazioni, «Guida» rifà questo giro.")),
+        Step("v_bye", None, tr("Tutto qui! ✨"),
+             tr("Buon lavoro con i tuoi progetti."), tip=False),
+    ]
+
+
 class Bubble(QWidget):
     """Nuvoletta con la punta verso il pulsante; il contenuto è un normale layout."""
 
@@ -202,11 +290,16 @@ class Tour(QWidget):
 
     finished = Signal()
 
-    def __init__(self, win, mode: str = "tour", start_key: str | None = None):
-        host = win.centralWidget() or win
+    def __init__(self, win, mode: str = "tour", start_key: str | None = None, steps: list[Step] | None = None,
+                 host: QWidget | None = None, done_key: str = "tour_done"):
+        """`steps`, `host` e `done_key` servono ai giri di una sola funzione (progetti, pannello Vault): altri
+        passi, sopra un'altra finestra, con la loro impostazione «già visto»."""
+        host = host or win.centralWidget() or win
         super().__init__(host)
         self.win, self.host, self.mode = win, host, mode
-        all_steps = steps_for(win)
+        self.done_key = done_key
+        self.custom = steps is not None
+        all_steps = steps if steps is not None else steps_for(win)
         self.steps = all_steps if mode == "tour" else [s for s in all_steps if s.tip]
         self.index = 0
         if start_key:
@@ -221,6 +314,7 @@ class Tour(QWidget):
         self.bubble = Bubble(self)
         self.bubble.show_tips.setChecked(bool(win.settings.get("show_tips", True)))
         self.bubble.show_tips.toggled.connect(lambda on: win.settings.set("show_tips", bool(on)))
+        self.bubble.show_tips.setVisible(not self.custom)  # la spunta riguarda i consigli di Helpix
         self.bubble.next.clicked.connect(self.forward)
         self.bubble.back.clicked.connect(self.backward)
         self.bubble.skip.clicked.connect(lambda: self.close_tour())
@@ -286,7 +380,7 @@ class Tour(QWidget):
 
     def close_tour(self, mark_done: bool = True):
         if self.mode == "tour" and mark_done:
-            self.win.settings.set("tour_done", True)
+            self.win.settings.set(self.done_key, True)
         self.host.removeEventFilter(self)
         self.hide()
         self.deleteLater()

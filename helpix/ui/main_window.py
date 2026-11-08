@@ -527,6 +527,7 @@ class MainWindow(ProjectsMixin, QMainWindow):
         self.act_projects_beta.setChecked(bool(self.settings.get("projects_beta", False)))
         self.act_projects_beta.toggled.connect(self.toggle_projects_beta)
         lab.addAction(tr("Impostazioni dei progetti…"), self.open_project_settings)
+        lab.addAction(tr("Guida ai progetti"), self.start_projects_tour)
         menu.addSeparator()
         self.act_rounded = menu.addAction(tr("Angoli arrotondati"))
         self.act_rounded.setCheckable(True)

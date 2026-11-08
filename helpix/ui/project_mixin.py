@@ -101,6 +101,8 @@ class ProjectsMixin:
         if not on:
             if self.project is not None:
                 self._set_project(None, announce=False)
+            if self.vault is not None:
+                self.vault.lock()  # niente chiave in memoria con la funzione spenta
             self.vault = None
             return
         root = Path(self.settings.get("vault_dir") or default_root())
@@ -241,6 +243,7 @@ class ProjectsMixin:
             if vault.encrypted:
                 m.addAction(icon("lock", C["text"], 16), tr("Blocca il vault"), self.lock_vault)
         m.addSeparator()
+        m.addAction(icon("info", C["text"], 16), tr("Guida ai progetti"), self.start_projects_tour)
         m.addAction(icon("gear", C["text"], 16), tr("Impostazioni dei progetti…"), self.open_project_settings)
 
     def new_project(self):
@@ -383,6 +386,7 @@ class ProjectsMixin:
                                "pulsante Copia."), 12000)
                 return
             if self.web.summary_pending:
+                self.notify(tr("Sto già aspettando una risposta dall'IA: riprova tra poco."))
                 return
             self.web.request_summary(request, marker=pj.PROJECT_MARKER)
             self.notify(tr("Chiedo a {name} l'aggiornamento del progetto: lo invio e leggo la risposta…").format(
@@ -414,6 +418,10 @@ class ProjectsMixin:
         if p is None or not (self.vault and self.vault.is_open):
             self.notify(tr("Aggiornamento del progetto ricevuto, ma nessun progetto è aperto."), 8000)
             return
+        signature = (p.slug, repr(update))
+        if signature == getattr(self, "_last_signature", None):
+            self.notify(tr("Questo aggiornamento del progetto è già stato salvato."))
+            return
         req, self._project_request = self._project_request, None
         if self.agent is not None:
             self.agent.cancel_project()
@@ -423,6 +431,7 @@ class ProjectsMixin:
             self.notify(str(exc), 8000)
             return
         result = pj.apply_update(current, update)
+        self._pending_signature = signature
         source = self._source_label()
         compact = update.full_text is not None
         if self.settings.get("project_update_mode") == "auto" and not compact and not (req or {}).get("compact"):
@@ -451,12 +460,13 @@ class ProjectsMixin:
             if title or body:
                 note_md = pj.note_text(title or tr("Sessione"), body, source, result.superseded, result.warnings)
                 note = p.add_note(title or tr("Sessione"), note_md, pj.note_summary(body))
-            if self.session.messages:
+            if self.session.messages and self._in_project():
                 p.write_session_draft(self.session.id, pj.session_markdown(self.session))
         except (VaultError, OSError) as exc:
             QMessageBox.warning(self, tr("Progetto"), tr("Salvataggio non riuscito: {exc}").format(exc=exc))
             return
         self._last_update = {"slug": p.slug, "version": version, "note": note, "at": time.time()}
+        self._last_signature = getattr(self, "_pending_signature", None)
         self._project_saved_at = len(self.session.messages)
         self._refresh_agent_project()
         if self.vault_panel is not None:
@@ -468,6 +478,7 @@ class ProjectsMixin:
 
     def _undo_project_update(self):
         last, self._last_update = self._last_update, None
+        self._last_signature = None  # dopo «Annulla» lo stesso aggiornamento si può applicare di nuovo
         if not last or self.project is None or self.project.slug != last["slug"]:
             return
         try:
@@ -524,7 +535,7 @@ class ProjectsMixin:
 
     def _check_api_note_request(self, answer: str):
         """Motore API: se la risposta chiede una nota, Helpix chiede conferma prima di inviarla."""
-        if self.project is None:
+        if not self._in_project():
             return
         title = pj.parse_note_request(answer or "")
         if not title:
@@ -540,8 +551,12 @@ class ProjectsMixin:
             self.send_message()
 
     # ------------------------------------------------------------ promemoria e bozze
+    def _in_project(self) -> bool:
+        """Il task attuale appartiene al progetto aperto (non, per esempio, un task della finestra rapida)."""
+        return self.project is not None and self.session.project == self.project.slug
+
     def _project_dirty(self) -> bool:
-        if self.project is None:
+        if not self._in_project():
             return False
         new = self.session.messages[self._project_saved_at:]
         return any(m.kind in ("output", "diagnostics", "summary", "chat", "shot") and m.role != "note" for m in new)
@@ -568,7 +583,7 @@ class ProjectsMixin:
 
     def _write_draft(self):
         p = self.project
-        if p is None or not self.session.messages or not (self.vault and self.vault.is_open):
+        if not self._in_project() or not self.session.messages or not (self.vault and self.vault.is_open):
             return
         marker = (self.session.id, len(self.session.messages))
         if marker == self._draft_marker:
@@ -592,7 +607,8 @@ class ProjectsMixin:
             self.vault_panel.activateWindow()
             return
         panel = VaultPanel(vault, self, active=self.project.slug if self.project else None,
-                           keep_versions=int(self.settings.get("project_versions", 20)))
+                           keep_versions=int(self.settings.get("project_versions", 20)),
+                           assistant=self._source_label)
         panel.resume.connect(lambda slug: self._open_project(slug))
         panel.paste.connect(self._paste_text_anywhere)
         panel.lock_requested.connect(self.lock_vault)
@@ -600,8 +616,11 @@ class ProjectsMixin:
         panel.changed.connect(lambda slug: self._refresh_agent_project()
                               if self.project and self.project.slug == slug else None)
         panel.finished.connect(lambda _r: setattr(self, "vault_panel", None))
+        panel.tour_requested.connect(lambda: self.start_vault_tour(panel))
         self.vault_panel = panel
         panel.show()
+        if not self.settings.get("vault_tour_done"):  # prima apertura: il giro del pannello
+            QTimer.singleShot(400, lambda: self.start_vault_tour(panel))
 
     def _paste_text_anywhere(self, text: str):
         out = self._private(text)
@@ -631,15 +650,36 @@ class ProjectsMixin:
         self._apply_project_settings()
         if on:
             self.notify(tr("Progetti e vault (beta) attivi: trovi il selettore Progetto nella barra."), 8000)
+            if not self.settings.get("projects_tour_done"):  # la prima volta: il giro a nuvolette
+                QTimer.singleShot(500, self.start_projects_tour)
+
+    # ------------------------------------------------------------ giri guidati
+    def start_projects_tour(self):
+        from .tour import Tour, project_steps
+        if not self.projects_enabled or getattr(self, "_ptour", None) is not None:
+            return
+        if getattr(self, "tour", None) is not None:
+            self.tour.close_tour(mark_done=False)
+        self._ptour = Tour(self, "tour", steps=project_steps(self), done_key="projects_tour_done")
+        self._ptour.finished.connect(lambda: setattr(self, "_ptour", None))
+
+    def start_vault_tour(self, panel=None):
+        from .tour import Tour, vault_steps
+        panel = panel or self.vault_panel
+        if panel is None or getattr(panel, "_tour", None) is not None:
+            return
+        panel._tour = Tour(self, "tour", steps=vault_steps(panel), host=panel, done_key="vault_tour_done")
+        panel._tour.finished.connect(lambda: setattr(panel, "_tour", None))
 
     def lock_vault(self):
         vault = self.vault
         if vault is None or not vault.encrypted:
             return
-        vault.lock()
         if self.vault_panel is not None:
+            self.vault_panel.editor.document().setModified(False)  # il blocco vince sulle modifiche aperte
             self.vault_panel.close()
             self.vault_panel = None
+        vault.lock()
         self.note_bar.hide()
         agents.set_project_context(None)
         if self.agent is not None:

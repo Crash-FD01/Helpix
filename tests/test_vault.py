@@ -83,6 +83,10 @@ def test_vault_in_chiaro():
     # file temporanei rimasti da una scrittura interrotta: non compaiono
     (v.root / "progetti" / p.slug / ".PROJECT.md.123.abc.tmp").write_text("resto", encoding="utf-8")
     assert not any(r.endswith(".tmp") for r in v.store.list())
+    # file con nomi che il vault non gestisce, messi da fuori: ignorati, niente errori nella ricerca
+    if os.name != "nt":
+        (v.root / "progetti" / p.slug / "file" / "strano:nome.txt").write_text("ipsec", encoding="utf-8")
+        assert p.search("ipsec") and not any(":" in r for r in v.store.list())
     # un altro progetto con lo stesso nome non sovrascrive il primo
     p2 = v.create_project("Cliente Rossi — firewall", "# Cliente Rossi — firewall\n")
     assert p2.slug != p.slug and len(v.projects()) == 2
@@ -131,6 +135,12 @@ del vault.
     assert any("Già presente" in w for w in r2.warnings), "una decisione già scritta non si duplica"
     note = pj.note_text(up2.title, up2.body, "Claude", r2.superseded, r2.warnings, date="2026-11-08")
     assert "## Decisioni superate" in note and "→ Vault cifrato per intero" in note
+    # «=» su più righe con un elenco: «- passo: dettaglio» è testo della sezione, non una modifica
+    up3 = pj.parse_update("HELPIX-PROJECT\nNOTA: x\ny\nMODIFICHE:\n= Prossimi passi:\n- Failover: domani\n"
+                          "- Backup: venerdì\n+ Stato: ok")
+    assert [o[0] for o in up3.ops] == ["=", "+"] and "Backup: venerdì" in up3.ops[0][2]
+    r4 = pj.apply_update(text, up3)
+    assert "- Failover: domani\n- Backup: venerdì" in r4.text and not r4.warnings
     # la richiesta copiata per sbaglio non è un aggiornamento; il testo senza marcatore nemmeno
     assert pj.parse_update(pj.update_request(text)) is None
     assert pj.parse_update("NOTA: x\nMODIFICHE:\n+ Stato: y") is None
@@ -368,11 +378,12 @@ def test_esporta_e_script_autonomo():
     assert v.export_plain(dest) == len(before)
     out = Vault(dest)
     assert not out.encrypted and {r: out.store.read(r) for r in out.store.list()} == before
-    try:
-        v.export_plain(dest)
-        raise AssertionError("esportato in una cartella non vuota")
-    except VaultError:
-        pass
+    for bad in (dest, v.root / "export"):
+        try:
+            v.export_plain(bad)
+            raise AssertionError(f"esportato in {bad}")
+        except VaultError:
+            pass
     # lo script funziona da solo: copiato altrove, senza il resto di Helpix
     alone = new_root()
     (alone / "vault_crypto.py").write_bytes(Path(vc.__file__).read_bytes())

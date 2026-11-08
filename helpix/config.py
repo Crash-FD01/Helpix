@@ -72,6 +72,8 @@ DEFAULT_SETTINGS = {
     "project_update_mode": "ask",   # ask (anteprima) | auto (salva subito, con annullamento)
     "project_reminder": True,       # «Salvare nel progetto?» nei momenti naturali
     "project_versions": 20,         # versioni di PROJECT.md da conservare
+    "projects_tour_done": False,    # giro a nuvolette dei progetti già visto
+    "vault_tour_done": False,       # giro a nuvolette del pannello Vault già visto
 }
 
 

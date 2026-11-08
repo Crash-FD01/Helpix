@@ -258,6 +258,9 @@ def parse_update(text: str) -> Update | None:
             note.append(line)
             continue
         m = _OP.match(line)
+        # dopo «= Sezione:» le righe di un elenco («- passo: dettaglio») sono il testo della sezione, non modifiche
+        if m and up.ops and up.ops[-1][0] == "=" and section_key(m.group(2)) is None:
+            m = None
         if m:
             up.ops.append((m.group(1), m.group(2).strip(), m.group(3).strip()))
         elif line.strip() and up.ops:  # continuazione (per «=» su più righe)
