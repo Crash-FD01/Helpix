@@ -180,16 +180,26 @@ def test_quick_window():
     until(lambda: q.btn_send.isEnabled(), timeout=25, what="risposta completa (senza contrassegni)")
     last = q._history[-1][1]
     assert last.startswith("Risposta finta") and "Copia" not in last and "senza contrassegni" not in last, last
-    js(gpt, "window.plainMarkup = false; 0")
+    # la risposta cita la domanda in un elenco (Linux Mint: «quanti messaggi ti ho mandato?» si bloccava)
+    js(gpt, "window.quoteQuestion = true; 0")
+    before = q.answers.toPlainText().count("NetworkManager")
+    q.input.setPlainText("quanti messaggi ti ho mandato?")
+    q.send()
+    until(lambda: q.answers.toPlainText().count("NetworkManager") > before, timeout=25,
+          what="risposta che cita la domanda")
+    until(lambda: q.btn_send.isEnabled(), timeout=25, what="risposta completa (cita la domanda)")
+    last = q._history[-1][1]
+    assert last.startswith("Risposta finta") and "quanti messaggi ti ho mandato?" in last, last
+    js(gpt, "window.plainMarkup = false; window.quoteQuestion = false; 0")
 
     # Helpix ridotto a icona: la pagina resta «visibile» per il motore web finché arriva la risposta
     win.showMinimized()
     pump(800)
     q.input.setPlainText("terza domanda")
     q.send()
-    until(lambda: js(gpt, "window.sent.length") == 5, timeout=20, what="messaggio con Helpix ridotto a icona")
+    until(lambda: js(gpt, "window.sent.length") == 6, timeout=20, what="messaggio con Helpix ridotto a icona")
     until(lambda: q.btn_send.isEnabled(), timeout=25, what="risposta con Helpix ridotto a icona")
-    assert q.answers.toPlainText().count("NetworkManager") >= 5
+    assert q.answers.toPlainText().count("NetworkManager") >= 6
     win.showNormal()
     pump(300)
 

@@ -82,6 +82,10 @@ Problema: il wifi non va</code></pre>
         if (n >= words.length) clearInterval(t2);
         requestAnimationFrame(() => {
           msg.textContent = words.slice(0, n).join(' ');
+          if (window.quoteQuestion && n >= words.length) {  // la risposta cita la domanda in un elenco
+            const ol = document.createElement('ol'); const li = document.createElement('li');
+            li.textContent = text; ol.appendChild(li); msg.appendChild(ol);
+          }
           if (n >= words.length) setTimeout(() => stop.remove(), 400);
         });
       }, 120);

@@ -232,9 +232,12 @@ _ANSWER_JS = r"""
     const root = document.querySelector('main') || document.body;
     const EDIT = 'textarea, input, form, [contenteditable="true"]';
     const composer = document.querySelector('#prompt-textarea, [contenteditable="true"], textarea');
+    // le risposte possono citare la domanda (es. «3. quanti messaggi ti ho mandato?»): il messaggio inviato è
+    // l'ultima volta che il testo compare fuori dal contenuto formattato di una risposta (markdown, elenchi, codice)
+    const ANSWERISH = '[class*="markdown"], .prose, li, pre, code, blockquote, table';
     let user = null;
     for (const el of root.querySelectorAll('*')) {
-      if (el.matches(SKIP) || el.closest(EDIT)) continue;
+      if (el.matches(SKIP) || el.closest(EDIT) || el.closest(ANSWERISH)) continue;
       const t = norm(el.innerText);
       if (t && t.length <= want.length + 40 && t.includes(key)) user = el;
     }
