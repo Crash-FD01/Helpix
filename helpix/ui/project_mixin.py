@@ -238,6 +238,7 @@ class ProjectsMixin:
                 if self._last_update and time.time() - self._last_update["at"] < 1800:
                     m.addAction(tr("Annulla l'ultimo aggiornamento"), self._undo_project_update)
                 m.addAction(tr("Chiudi il progetto"), lambda: self._close_project())
+                m.addAction(icon("trash", C["errText"], 16), tr("Elimina il progetto…"), self.delete_current_project)
             m.addSeparator()
             m.addAction(icon("folder", C["text"], 16), tr("Apri il vault…"), self.open_vault_panel)
             if vault.encrypted:
@@ -617,10 +618,30 @@ class ProjectsMixin:
                               if self.project and self.project.slug == slug else None)
         panel.finished.connect(lambda _r: setattr(self, "vault_panel", None))
         panel.tour_requested.connect(lambda: self.start_vault_tour(panel))
+        panel.project_deleted.connect(self._project_deleted)
+        panel.changed.connect(lambda _slug: self._update_project_button())
         self.vault_panel = panel
         panel.show()
         if not self.settings.get("vault_tour_done"):  # prima apertura: il giro del pannello
             QTimer.singleShot(400, lambda: self.start_vault_tour(panel))
+
+    def _project_deleted(self, slug: str):
+        """Progetto spostato nel cestino: se era quello aperto, si chiude."""
+        if self.project is not None and self.project.slug == slug:
+            self._set_project(None, announce=False)
+            self.notify(tr("Progetto spostato nel cestino del vault: le chat nuove partono senza contesto."), 8000)
+        if self.settings.get("active_project") == slug:
+            self.settings.set("active_project", None)
+        self._update_project_button()
+
+    def delete_current_project(self):
+        """Progetto › Elimina il progetto…: apre il pannello sul progetto e chiede conferma."""
+        if self.project is None:
+            return
+        slug = self.project.slug
+        self.open_vault_panel()
+        if self.vault_panel is not None:
+            self.vault_panel._delete_project(slug)
 
     def _paste_text_anywhere(self, text: str):
         out = self._private(text)

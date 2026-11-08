@@ -7,15 +7,18 @@ from __future__ import annotations
 import html
 import re
 
-from PySide6.QtCore import QSize, Qt, QUrl, Signal
-from PySide6.QtGui import QDesktopServices, QFont
+import time
+
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt, QUrl, Signal
+from PySide6.QtGui import QColor, QCursor, QDesktopServices, QFont, QPainter, QPainterPath, QPen, QPolygonF
 from PySide6.QtWidgets import (
-    QButtonGroup, QDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMessageBox,
+    QButtonGroup, QDialog, QFrame, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMenu,
+    QMessageBox,
     QPlainTextEdit, QProgressBar, QPushButton, QStackedWidget, QStyle, QStyledItemDelegate, QStyleOptionViewItem,
     QTextBrowser, QToolButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
-from .. import project as pj
+from .. import project as pj, theme
 from ..i18n import tr
 from ..icons import icon
 from ..theme import C, mono_font
@@ -185,11 +188,9 @@ def _panel_qss() -> str:
     #vaultTokens {{ color: {C['secondary']}; font-family: 'JetBrains Mono', monospace; font-size: 12px; }}
     #vaultRule {{ background: {C['hairline']}; max-height: 1px; min-height: 1px; }}
     QTreeWidget#vaultTree, QListWidget#vaultList {{ background: transparent; border: none; outline: 0; }}
-    QTreeWidget#vaultTree::item {{ min-height: 28px; border-radius: 7px; padding-left: 2px; }}
-    QTreeWidget#vaultTree::item:hover {{ background: {C['hover']}; }}
-    QTreeWidget#vaultTree::item:selected {{ background: {C['tint']}; color: {C['accentFg']}; }}
-    QTreeWidget#vaultTree {{ show-decoration-selected: 0; }}
-    QTreeWidget#vaultTree::branch, QTreeWidget#vaultTree::branch:selected {{ background: transparent; border: none; }}
+    QTreeWidget#vaultTree::item {{ min-height: 28px; padding-left: 2px; background: transparent; border: none; }}
+    QTreeWidget#vaultTree::item:hover, QTreeWidget#vaultTree::item:selected {{ background: transparent; }}
+    QTreeWidget#vaultTree {{ show-decoration-selected: 0; selection-background-color: transparent; }}
     QListWidget#vaultList::item {{ background: {C['panel']}; border: 1px solid {C['border']}; border-radius: 8px;
                                    margin: 2px 0; padding: 0 8px; min-height: 34px; }}
     QListWidget#vaultList::item:hover {{ background: {C['hover']}; }}
@@ -217,6 +218,8 @@ class VaultPanel(QDialog):
     export_requested = Signal()
     tour_requested = Signal()     # giro guidato del pannello
     changed = Signal(str)         # un file del progetto (slug) è stato modificato
+    project_deleted = Signal(str)  # progetto (slug) spostato nel cestino
+    project_restored = Signal(str)
 
     def __init__(self, vault: Vault, parent=None, active: str | None = None, keep_versions: int = 20,
                  assistant=None):
@@ -268,7 +271,12 @@ class VaultPanel(QDialog):
         self.tree = _Tree()
         self.tree.setObjectName("vaultTree")
         self.tree.setHeaderHidden(True)
-        self.tree.setIndentation(16)
+        self.tree.setIndentation(18)
+        self.tree.setExpandsOnDoubleClick(False)  # un clic apre e chiude (vedi _item_clicked)
+        self.tree.setMouseTracking(True)
+        self.tree.itemClicked.connect(self._item_clicked)
+        self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.tree.customContextMenuRequested.connect(self._tree_menu)
         self.tree.setIconSize(QSize(15, 15))
         self.tree.setAccessibleName(tr("Progetti e note"))
         self.tree.setItemDelegate(_NoFocusDelegate(self.tree))
@@ -354,6 +362,19 @@ class VaultPanel(QDialog):
         self.btn_read.toggled.connect(lambda on: on and self._mode(False))
         self.btn_edit.toggled.connect(lambda on: on and self._mode(True))
         title_row.addWidget(self.seg, 0, Qt.AlignmentFlag.AlignBottom)
+        self.btn_more = QToolButton()
+        self.btn_more.setIcon(icon("more", C["text"], 18))
+        self.btn_more.setIconSize(QSize(18, 18))
+        self.btn_more.setToolTip(tr("Altre azioni: rinomina, elimina…"))
+        self.btn_more.setAccessibleName(tr("Altre azioni"))
+        self.btn_more.setObjectName("iconBtn")
+        self.btn_more.setFixedSize(34, 34)
+        self.btn_more.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.btn_more.setStyleSheet("QToolButton::menu-indicator { image: none; width: 0; }")
+        self.more_menu = theme.prepare_menu(QMenu(self))
+        self.more_menu.aboutToShow.connect(lambda: self._fill_menu(self.more_menu, self.current))
+        self.btn_more.setMenu(self.more_menu)
+        title_row.addWidget(self.btn_more, 0, Qt.AlignmentFlag.AlignBottom)
         bv.addLayout(title_row)
         self.meta = QLabel()
         self.meta.setObjectName("vaultMeta")
@@ -374,6 +395,14 @@ class VaultPanel(QDialog):
         self.btn_restore = QPushButton(tr("Ripristina questa versione"))
         self.btn_restore.clicked.connect(self._restore)
         actions.addWidget(self.btn_restore)
+        self.btn_untrash = QPushButton(tr("Ripristina"))
+        self.btn_untrash.setObjectName("primary")
+        self.btn_untrash.clicked.connect(lambda: self.current and self._untrash(self.current[1]))
+        actions.addWidget(self.btn_untrash)
+        self.btn_purge = QPushButton(tr("Elimina definitivamente"))
+        self.btn_purge.setObjectName("danger")
+        self.btn_purge.clicked.connect(lambda: self.current and self._purge(self.current[1]))
+        actions.addWidget(self.btn_purge)
         actions.addStretch(1)
         self.meter_box = QWidget()
         mh = QHBoxLayout(self.meter_box)
@@ -448,7 +477,8 @@ class VaultPanel(QDialog):
         cv.addWidget(self.ctx_note)
         v.addWidget(self.ctx_card)
         v.addSpacing(6)
-        v.addWidget(_bold(QLabel(tr("Citata da"))))
+        self.lab_links = _bold(QLabel(tr("Citata da")))
+        v.addWidget(self.lab_links)
         self.backlinks = QListWidget()
         self.backlinks.setObjectName("vaultList")
         self.backlinks.setFrameShape(QFrame.Shape.NoFrame)
@@ -456,7 +486,8 @@ class VaultPanel(QDialog):
         self.backlinks.itemClicked.connect(lambda it: it.data(_ROLE) and self.select(it.data(_ROLE)))
         v.addWidget(self.backlinks)
         v.addSpacing(6)
-        v.addWidget(_bold(QLabel(tr("Note recenti"))))
+        self.lab_recent = _bold(QLabel(tr("Note recenti")))
+        v.addWidget(self.lab_recent)
         self.recent = QListWidget()
         self.recent.setObjectName("vaultList")
         self.recent.setFrameShape(QFrame.Shape.NoFrame)
@@ -507,6 +538,26 @@ class VaultPanel(QDialog):
             empty = QTreeWidgetItem([tr("Nessun progetto: creane uno dal selettore Progetto.")])
             empty.setFlags(Qt.ItemFlag.NoItemFlags)
             self.tree.addTopLevelItem(empty)
+        try:
+            trash = self.vault.trash()
+        except VaultError:
+            trash = []
+        if trash:
+            bin_item = QTreeWidgetItem([tr("Cestino ({n})").format(n=len(trash))])
+            bin_item.setIcon(0, icon("trash", C["secondary"], 16))
+            bin_item.setData(0, _ROLE, ("bin", "", ""))
+            self.tree.addTopLevelItem(bin_item)
+            for t in trash:
+                label = t.name + "  · " + time.strftime("%d/%m %H:%M", time.localtime(t.deleted))
+                it = QTreeWidgetItem([label])
+                it.setIcon(0, icon("folder" if t.kind == "project" else "file", C["secondary"], 15))
+                preview = next((f for f in t.files if f.endswith("/" + PROJECT_FILE) and f.count("/") == 4),
+                               next((f for f in t.files if f.endswith(".md")), t.files[0]))
+                it.setData(0, _ROLE, ("trash", t.id, preview))
+                it.setToolTip(0, tr("Progetto eliminato") if t.kind == "project" else tr("Nota eliminata"))
+                bin_item.addChild(it)
+                self._items.setdefault("trash:" + t.id, it)
+            bin_item.setExpanded(keep is not None and keep.startswith("trash:"))
         self.tree.blockSignals(False)
         self._update_lock_card()
         target = keep if keep in self._items else (projects and self._first_rel(projects))
@@ -562,9 +613,15 @@ class VaultPanel(QDialog):
     def _dirty(self) -> bool:
         return self.stack.currentIndex() == 1 and self.editor.document().isModified()
 
+    def _item_clicked(self, item, _column=0):
+        """Un clic apre e chiude cartelle, progetti e cestino (la freccia ▸/▾ lo mostra)."""
+        data = item.data(0, _ROLE)
+        if item.childCount() and (data is None or data[0] in ("project", "bin")):
+            item.setExpanded(not item.isExpanded())
+
     def _item_changed(self, item, previous):
         data = item.data(0, _ROLE) if item else None
-        if not data:
+        if not data or data[0] == "bin":
             return
         if self._dirty() and QMessageBox.question(
                 self, tr("Vault"), tr("Le modifiche non salvate andranno perse. Continuare?")) != \
@@ -577,6 +634,9 @@ class VaultPanel(QDialog):
 
     def _open(self, data):
         kind, slug, rel = data
+        if kind == "trash":
+            self._open_trash(slug, rel)
+            return
         if kind == "project":  # la riga del progetto apre PROJECT.md
             kind = "file"
         self.current = (kind, slug, rel)
@@ -617,12 +677,174 @@ class VaultPanel(QDialog):
         self.btn_resume.setText(tr("Riprendi con {name}").format(name=self.assistant()) if self.assistant()
                                 else tr("Riprendi il progetto"))
         self.btn_edit.setEnabled(kind == "file")
+        self.seg.setVisible(True)
+        self.btn_resume.setVisible(True)
+        self.btn_untrash.hide()
+        self.btn_purge.hide()
         self.btn_restore.setVisible(kind == "version")
         self.btn_paste.setVisible(f"/{NOTES}/" in rel or f"/{FILES}/" in rel)
         self.btn_resume.setEnabled(True)
         self.btn_read.setChecked(True)
         self._mode(False)
         self._side(p, rel)
+
+    def _open_trash(self, tid: str, rel: str):
+        self.current = ("trash", tid, rel)
+        try:
+            item = next(t for t in self.vault.trash() if t.id == tid)
+            text = self.vault.store.read(rel).decode("utf-8", "replace")
+        except (StopIteration, KeyError, VaultError):
+            self.reload()
+            return
+        self.crumb.setText(f"{self.vault.name}  /  {tr('Cestino')}")
+        self.title.setText(item.name)
+        when = time.strftime("%d/%m/%Y %H:%M", time.localtime(item.deleted))
+        self.meta.setText((tr("Progetto nel cestino") if item.kind == "project" else tr("Nota nel cestino"))
+                          + " · " + tr("eliminato il {when}").format(when=when) + " · "
+                          + tr("{n} file").format(n=len(item.files)))
+        self._set_html(project_html(text) if rel.endswith("/" + PROJECT_FILE) else markdown_html(text))
+        self.meter_box.hide()
+        self.seg.hide()
+        for b in (self.btn_resume, self.btn_paste, self.btn_restore):
+            b.hide()
+        self.btn_untrash.show()
+        self.btn_purge.show()
+        self.stack.setCurrentIndex(0)
+        self.backlinks.clear()
+        self.recent.clear()
+        self._clear_ctx()
+        self._ctx_row(tr("Nel cestino"), tr("non va all'IA"), muted=True)
+        self.ctx_note.hide()
+        for w in (self.lab_links, self.backlinks, self.lab_recent, self.recent):
+            w.hide()
+
+    # ------------------------------------------------------------ rinomina, elimina, cestino
+    def _fill_menu(self, menu: QMenu, data):
+        menu.clear()
+        if not data:
+            menu.addAction(tr("Nessuna azione")).setEnabled(False)
+            return
+        kind, slug, rel = data
+        if kind == "bin":
+            menu.addAction(icon("trash", C["errText"], 16), tr("Svuota il cestino…"), self._empty_bin)
+            return
+        if kind == "trash":
+            menu.addAction(icon("restore", C["text"], 16), tr("Ripristina"), lambda: self._untrash(slug))
+            menu.addAction(icon("trash", C["errText"], 16), tr("Elimina definitivamente…"), lambda: self._purge(slug))
+            return
+        name = rel.rsplit("/", 1)[-1]
+        project_level = kind == "project" or name in (PROJECT_FILE, INDEX_FILE) or f"/{VERSIONS}/" in rel
+        menu.addAction(icon("file", C["text"], 16), tr("Rinomina il progetto…"), lambda: self._rename(slug))
+        if not project_level and f"/{SESSIONS}/" not in rel:
+            label = tr("Elimina la nota…") if f"/{NOTES}/" in rel else tr("Elimina il file…")
+            menu.addAction(icon("trash", C["errText"], 16), label, lambda: self._delete_file(rel))
+        elif f"/{SESSIONS}/" in rel:
+            menu.addAction(icon("trash", C["errText"], 16), tr("Elimina la bozza…"), lambda: self._delete_file(rel))
+        menu.addSeparator()
+        menu.addAction(icon("trash", C["errText"], 16), tr("Elimina il progetto…"), lambda: self._delete_project(slug))
+
+    def _tree_menu(self, pos):
+        item = self.tree.itemAt(pos)
+        data = item.data(0, _ROLE) if item else None
+        if data is None and item is not None and item.parent() is not None:
+            parent = item.parent().data(0, _ROLE)
+            data = ("project", parent[1], parent[2]) if parent and parent[0] == "project" else None
+        if not data:
+            return
+        menu = theme.prepare_menu(QMenu(self))
+        self._fill_menu(menu, data)
+        menu.exec(self.tree.viewport().mapToGlobal(pos))
+
+    def _rename(self, slug: str):
+        p = self.vault.project(slug)
+        name, ok = QInputDialog.getText(self, tr("Rinomina il progetto"), tr("Nuovo nome:"), text=p.name)
+        if not ok or not name.strip() or name.strip() == p.name:
+            return
+        try:
+            self.vault.rename_project(slug, name)
+        except (VaultError, KeyError) as exc:
+            QMessageBox.warning(self, tr("Vault"), str(exc))
+            return
+        self.changed.emit(slug)
+        self.reload()
+
+    def _delete_project(self, slug: str):
+        p = self.vault.project(slug)
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle(tr("Elimina il progetto"))
+        box.setText(tr("Eliminare il progetto «{name}»?").format(name=p.name))
+        box.setInformativeText(tr("Va nel cestino del vault con tutte le note e le versioni: da lì puoi ripristinarlo "
+                                  "o eliminarlo definitivamente."))
+        delete = box.addButton(tr("Sposta nel cestino"), QMessageBox.ButtonRole.DestructiveRole)
+        box.addButton(tr("Annulla"), QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        if box.clickedButton() is not delete:
+            return
+        try:
+            tid = self.vault.delete_project(slug)
+        except (VaultError, KeyError, OSError) as exc:
+            QMessageBox.warning(self, tr("Vault"), tr("Eliminazione non riuscita: {exc}").format(exc=exc))
+            return
+        self.current = None
+        self.project_deleted.emit(slug)
+        self.reload(keep="trash:" + tid)
+
+    def _delete_file(self, rel: str):
+        name = rel.rsplit("/", 1)[-1]
+        if QMessageBox.question(self, tr("Vault"), tr("Spostare «{name}» nel cestino del vault?").format(name=name)) != \
+                QMessageBox.StandardButton.Yes:
+            return
+        try:
+            self.vault.delete_file(rel)
+        except (VaultError, KeyError, OSError) as exc:
+            QMessageBox.warning(self, tr("Vault"), tr("Eliminazione non riuscita: {exc}").format(exc=exc))
+            return
+        slug = rel.split("/")[1]
+        self.current = None
+        self.changed.emit(slug)
+        self.reload(keep=self.vault.project(slug).rel(PROJECT_FILE))
+
+    def _untrash(self, tid: str):
+        try:
+            targets = self.vault.restore(tid)
+        except VaultError as exc:
+            QMessageBox.warning(self, tr("Vault"), tr("Non posso ripristinarlo: {exc}. Rinomina o elimina prima "
+                                                      "quello che c'è adesso.").format(exc=exc))
+            return
+        except (KeyError, OSError) as exc:
+            QMessageBox.warning(self, tr("Vault"), str(exc))
+            return
+        slug = targets[0].split("/")[1]
+        self.current = None
+        self.project_restored.emit(slug)
+        self.changed.emit(slug)
+        first = next((t for t in targets if t.endswith("/" + PROJECT_FILE)), targets[0])
+        self.reload(keep=first)
+
+    def _purge(self, tid: str):
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle(tr("Elimina definitivamente"))
+        box.setText(tr("Eliminare definitivamente? Non si potrà più recuperare."))
+        delete = box.addButton(tr("Elimina definitivamente"), QMessageBox.ButtonRole.DestructiveRole)
+        box.addButton(tr("Annulla"), QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        if box.clickedButton() is not delete:
+            return
+        self.vault.purge(tid)
+        self.current = None
+        self.reload()
+
+    def _empty_bin(self):
+        n = len(self.vault.trash())
+        if not n or QMessageBox.question(self, tr("Svuota il cestino"),
+                                         tr("Eliminare definitivamente i {n} elementi del cestino?").format(n=n)) != \
+                QMessageBox.StandardButton.Yes:
+            return
+        self.vault.purge()
+        self.current = None
+        self.reload()
 
     def _set_html(self, body: str):
         self.view.document().setDefaultStyleSheet(_css())
@@ -675,6 +897,9 @@ class VaultPanel(QDialog):
         self.ctx_rows.addWidget(row)
 
     def _side(self, p, rel: str):
+        self.ctx_note.show()
+        for w in (self.lab_links, self.backlinks, self.lab_recent, self.recent):
+            w.show()
         text = p.text()
         recent = pj.recent_index_lines(p.index_text())
         n_project = pj.estimate_tokens(pj.strip_private(text))
@@ -713,7 +938,7 @@ class VaultPanel(QDialog):
             it.setData(_ROLE, n.rel)
             it.setData(Qt.ItemDataRole.AccessibleTextRole, n.title)  # il disegno è quello della riga
             row = _NoteRow(n, n.rel in in_ctx)
-            it.setSizeHint(QSize(0, 40))
+            it.setSizeHint(QSize(0, 54))
             self.recent.addItem(it)
             self.recent.setItemWidget(it, row)
         if not self.recent.count():
@@ -824,16 +1049,19 @@ class _NoteRow(QWidget):
     def __init__(self, note, in_context: bool):
         super().__init__()
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        h = QHBoxLayout(self)
-        h.setContentsMargins(10, 0, 8, 0)
+        v = QVBoxLayout(self)
+        v.setContentsMargins(10, 6, 8, 6)
+        v.setSpacing(3)
+        title = QLabel()
+        title.setText(title.fontMetrics().elidedText(note.title, Qt.TextElideMode.ElideRight, 250))
+        v.addWidget(title)
+        h = QHBoxLayout()
         h.setSpacing(8)
-        date = QLabel(f"{note.date[8:10]}/{note.date[5:7]}" if note.date else "")
+        v.addLayout(h)
+        date = QLabel(f"{note.date[8:10]}/{note.date[5:7]}/{note.date[:4]}" if note.date else "")
         date.setObjectName("vaultTokens")
         h.addWidget(date)
-        title = QLabel(note.title)
-        title.setMinimumWidth(40)
-        title.setText(title.fontMetrics().elidedText(note.title, Qt.TextElideMode.ElideRight, 150))
-        h.addWidget(title, 1)
+        h.addStretch(1)
         chip = QLabel(tr("nel contesto") if in_context else tr("archivio"))
         fg, bg = (C["accentFg"], C["tint"]) if in_context else (C["secondary"], C["segBg"])
         chip.setStyleSheet(f"background: {bg}; color: {fg}; border-radius: 8px; padding: 1px 7px; "
@@ -842,10 +1070,58 @@ class _NoteRow(QWidget):
 
 
 class _Tree(QTreeWidget):
-    def drawRow(self, painter, option, index):  # niente cornice tratteggiata sulla riga attiva
+    """Albero del vault: freccia ▸/▾ disegnata da Helpix, sfondo di selezione e passaggio su tutta la riga
+    (senza scalini né riquadri vuoti), nessuna cornice tratteggiata."""
+
+    def drawRow(self, painter, option, index):
         opt = QStyleOptionViewItem(option)
-        opt.state &= ~QStyle.StateFlag.State_HasFocus
+        # la selezione la chiedo al modello: lo stato passato qui non sempre la riporta
+        selected = self.selectionModel().isSelected(index) and bool(self.itemFromIndex(index).flags()
+                                                                     & Qt.ItemFlag.ItemIsSelectable)
+        hover = self.viewport().underMouse() and opt.rect.contains(self.viewport().mapFromGlobal(QCursor.pos()))
+        if selected or hover:
+            r = QRectF(opt.rect).adjusted(4, 1, -4, -1)
+            r.setLeft(4)
+            r.setRight(self.viewport().width() - 4)
+            path = QPainterPath()
+            path.addRoundedRect(r, 7, 7)
+            painter.save()
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.fillPath(path, QColor(C["tint"] if selected else C["hover"]))
+            painter.restore()
+        opt.state &= ~(QStyle.StateFlag.State_HasFocus | QStyle.StateFlag.State_Selected |
+                       QStyle.StateFlag.State_MouseOver)
+        if selected:
+            opt.palette.setColor(opt.palette.ColorRole.Text, QColor(C["accentFg"]))
         super().drawRow(painter, opt, index)
+
+    def mouseMoveEvent(self, ev):  # lo sfondo del passaggio copre tutta la riga: ridisegno anche fuori dall'elemento
+        super().mouseMoveEvent(ev)
+        self.viewport().update()
+
+    def leaveEvent(self, ev):
+        super().leaveEvent(ev)
+        self.viewport().update()
+
+    def drawBranches(self, painter, rect, index):
+        item = self.itemFromIndex(index)
+        if item is None or not item.childCount():
+            return
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        pen = QPen(QColor(C["secondary"]), 1.6)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        painter.setPen(pen)
+        cx = rect.right() - self.indentation() / 2 + 2
+        cy = rect.center().y() + 0.5
+        s = 3.6
+        if item.isExpanded():
+            pts = [QPointF(cx - s, cy - s / 2), QPointF(cx, cy + s / 2), QPointF(cx + s, cy - s / 2)]
+        else:
+            pts = [QPointF(cx - s / 2, cy - s), QPointF(cx + s / 2, cy), QPointF(cx - s / 2, cy + s)]
+        painter.drawPolyline(QPolygonF(pts))
+        painter.restore()
 
 
 class _NoFocusDelegate(QStyledItemDelegate):

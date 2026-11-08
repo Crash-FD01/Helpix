@@ -36,6 +36,8 @@ NOTES = "note"
 FILES = "file"
 SESSIONS = "sessioni"
 VERSIONS = ".versioni"
+TRASH = ".cestino"   # progetti e note eliminati: si ripristinano o si eliminano definitivamente
+_INDEX_LINES = "riga-indice.txt"   # nel cestino, la riga dell'indice di una nota eliminata
 KEYRING_SERVICE = "helpix-vault"
 _SKIP_PLAIN = {vc.HEADER, vc.BACKUP_DIR, vc.DATA_DIR}
 
@@ -193,6 +195,15 @@ def keyring_available() -> bool:
 
 
 # ------------------------------------------------------------------ il vault
+@dataclass
+class TrashItem:
+    id: str
+    kind: str        # "project" o "note"
+    name: str
+    deleted: float
+    files: list
+
+
 @dataclass
 class ProjectInfo:
     slug: str
@@ -438,6 +449,151 @@ class Vault:
                 return Project(self, candidate)
         raise KeyError(slug)
 
+    # --- cestino
+    def _move(self, rels: list[str], src_prefix: str, dst_prefix: str) -> None:
+        """Copia i file sotto un altro prefisso e solo dopo, a copie verificate, toglie gli originali."""
+        moved = []
+        for rel in rels:
+            data = self.store.read(rel)
+            dst = dst_prefix + rel[len(src_prefix):]
+            self.store.write(dst, data)
+            if self.store.read(dst) != data:
+                raise VaultError(f"copia non riuscita: {rel}")
+            moved.append(rel)
+        for rel in moved:
+            self.store.delete(rel)
+        self._prune_dirs()
+
+    def _prune_dirs(self) -> None:
+        if isinstance(self.store, PlainStore):
+            for top in (PROJECTS, TRASH):
+                for dirpath, _dirs, _files in os.walk(self.root / top, topdown=False):
+                    try:
+                        if not os.listdir(dirpath):
+                            os.rmdir(dirpath)
+                    except OSError:
+                        pass
+
+    def _trash_id(self, base: str) -> str:
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        tid, n = f"{base}-{stamp}", 2
+        while self.store.list(f"{TRASH}/{tid}/"):
+            tid, n = f"{base}-{stamp}-{n}", n + 1
+        return tid
+
+    def delete_project(self, slug: str) -> str:
+        """Sposta il progetto nel cestino del vault. Restituisce l'identificativo nel cestino."""
+        p = self.project(slug)
+        rels = self.store.list(p.rel() + "/")
+        tid = self._trash_id(slugify(slug, 40))
+        self._move(rels, f"{PROJECTS}/", f"{TRASH}/{tid}/{PROJECTS}/")
+        return tid
+
+    def delete_file(self, rel: str) -> str:
+        """Sposta una nota o un file nel cestino (la riga dell'indice di una nota viene tolta)."""
+        self._need_open()
+        rel = clean_relpath(rel)
+        parts = rel.split("/")
+        if len(parts) < 4 or parts[0] != PROJECTS or parts[2] in (PROJECT_FILE, INDEX_FILE):
+            raise VaultError("si eliminano solo note e file di un progetto")
+        if not self.store.exists(rel):
+            raise KeyError(rel)
+        tid = self._trash_id(slugify(parts[-1].removesuffix(".md"), 40))
+        if parts[2] == NOTES:  # la riga dell'indice va nel cestino con la nota, per poterla rimettere
+            p = Project(self, parts[1])
+            stem = parts[-1].removesuffix(".md")
+            keep, gone = [], []
+            for ln in p.index_text().splitlines():
+                (gone if f"[[{stem}|" in ln or f"[[{stem}]]" in ln else keep).append(ln)
+            if gone:
+                self.store.write(f"{TRASH}/{tid}/{_INDEX_LINES}", ("\n".join(gone) + "\n").encode("utf-8"))
+            p.write_text(p.rel(INDEX_FILE), "\n".join(keep).rstrip("\n") + "\n")
+        self._move([rel], f"{PROJECTS}/", f"{TRASH}/{tid}/{PROJECTS}/")
+        return tid
+
+    def trash(self) -> list[TrashItem]:
+        """Elementi nel cestino, dal più recente."""
+        self._need_open()
+        groups: dict[str, list[str]] = {}
+        for rel in self.store.list(TRASH + "/"):
+            parts = rel.split("/")
+            if len(parts) >= 3:
+                groups.setdefault(parts[1], []).append(rel)
+        out = []
+        for tid, all_rels in groups.items():
+            rels = [r for r in all_rels if not r.endswith("/" + _INDEX_LINES)] or all_rels
+            inner = [r[len(f"{TRASH}/{tid}/"):] for r in rels]
+            project_md = next((r for r in rels if r.endswith(f"/{PROJECT_FILE}") and r.count("/") == 4), None)
+            if project_md:
+                kind = "project"
+                name = _title(self.store.read(project_md).decode("utf-8", "replace")) or inner[0].split("/")[1]
+            else:
+                kind = "note"
+                name = _title(self.store.read(rels[0]).decode("utf-8", "replace")) or inner[0].rsplit("/", 1)[-1]
+                proj = inner[0].split("/")[1] if inner[0].count("/") >= 2 else ""
+                try:
+                    pname = Project(self, proj).name if self.store.exists(f"{PROJECTS}/{proj}/{PROJECT_FILE}") else proj
+                except VaultError:
+                    pname = proj
+                name = f"{name} ({pname})" if pname else name
+            m = re.search(r"(\d{8})-(\d{6})", tid)
+            stamp = time.mktime(time.strptime(m.group(1) + m.group(2), "%Y%m%d%H%M%S")) if m else 0.0
+            out.append(TrashItem(tid, kind, name, stamp, sorted(all_rels)))
+        out.sort(key=lambda t: t.deleted, reverse=True)
+        return out
+
+    def restore(self, tid: str) -> list[str]:
+        """Rimette al loro posto i file di un elemento del cestino. VaultError se qualcosa con lo stesso nome c'è
+        già (un progetto ricreato nel frattempo, per esempio)."""
+        self._need_open()
+        prefix = f"{TRASH}/{clean_relpath(tid)}/"
+        index_rel = prefix + _INDEX_LINES
+        rels = [r for r in self.store.list(prefix) if r != index_rel]
+        if not rels:
+            raise KeyError(tid)
+        targets = [r[len(prefix):] for r in rels]
+        clash = [t for t in targets if self.store.exists(t)]
+        if clash:
+            raise VaultError("esiste già: " + clash[0])
+        self._move(rels, prefix, "")
+        if self.store.exists(index_rel):  # nota ripristinata: torna anche la sua riga nell'indice
+            parts = targets[0].split("/")
+            if len(parts) >= 2 and self.store.exists(f"{PROJECTS}/{parts[1]}/{PROJECT_FILE}"):
+                p = Project(self, parts[1])
+                lines = self.store.read(index_rel).decode("utf-8", "replace").strip("\n")
+                index = p.index_text().rstrip("\n") + "\n"
+                if not any(ln.strip().startswith("- ") for ln in index.splitlines()):
+                    index += "\n"  # riga vuota tra il titolo e la prima nota, come in add_note
+                p.write_text(p.rel(INDEX_FILE), index + lines + "\n")
+            self.store.delete(index_rel)
+            self._prune_dirs()
+        return targets
+
+    def purge(self, tid: str | None = None) -> int:
+        """Elimina definitivamente un elemento del cestino (o tutto il cestino con tid=None)."""
+        self._need_open()
+        prefix = f"{TRASH}/" + (f"{clean_relpath(tid)}/" if tid else "")
+        rels = self.store.list(prefix)
+        for rel in rels:
+            self.store.delete(rel)
+        self._prune_dirs()
+        return len(rels)
+
+    def rename_project(self, slug: str, name: str) -> None:
+        """Cambia il nome mostrato (il «# titolo» di PROJECT.md); la cartella resta la stessa."""
+        name = " ".join((name or "").split())
+        if not name:
+            raise VaultError("nome vuoto")
+        p = self.project(slug)
+        lines = p.text().splitlines()
+        for i, line in enumerate(lines):
+            if line.startswith("# "):
+                lines[i] = f"# {name}"
+                break
+        else:
+            lines = [f"# {name}", ""] + lines
+        p.save_text("\n".join(lines).rstrip("\n") + "\n")
+
     def create_project(self, name: str, text: str) -> "Project":
         self._need_open()
         base = slugify(name)
@@ -448,6 +604,13 @@ class Vault:
         self.store.write(p.rel(PROJECT_FILE), text.encode("utf-8"))
         self.store.write(p.rel(INDEX_FILE), f"# Indice — {name}\n\n".encode("utf-8"))
         return p
+
+
+def _title(text: str) -> str:
+    for line in text.splitlines():
+        if line.startswith("# "):
+            return line[2:].strip()
+    return ""
 
 
 _NOTE_LINE = re.compile(r"^-\s*(\d{4}-\d{2}-\d{2})\s*·\s*\[\[([^|\]]+)(?:\|([^\]]+))?\]\]\s*(?:—\s*(.*))?$")

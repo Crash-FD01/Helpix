@@ -416,6 +416,56 @@ def test_store_cifrato_scrive_e_cancella():
         pass
 
 
+def test_cestino_rinomina():
+    for encrypted in (False, True):
+        v, p = plain_vault_with_project()
+        if encrypted:
+            v.create_encrypted(PASSWORD, passwords.generate_codes())
+        files = {r: v.store.read(r) for r in v.store.list()}
+        v.rename_project(p.slug, "  Rossi   — VPN sede ")
+        assert v.project(p.slug).name == "Rossi — VPN sede" and len(p.versions()) == 1
+        files = {r: v.store.read(r) for r in v.store.list()}
+        # nota nel cestino: sparisce anche dall'indice; ripristinata torna al suo posto
+        note = p.notes()[0]
+        tid = v.delete_file(note.rel)
+        assert not v.store.exists(note.rel) and "Prima sessione" not in p.index_text()
+        items = v.trash()
+        assert len(items) == 1 and items[0].kind == "note" and "Prima sessione" in items[0].name
+        for bad in (p.rel("PROJECT.md"), p.rel("INDEX.md")):
+            try:
+                v.delete_file(bad)
+                raise AssertionError(bad)
+            except VaultError:
+                pass
+        v.restore(tid)
+        assert v.store.read(note.rel) == files[note.rel] and not v.trash()
+        assert v.store.read(p.rel("INDEX.md")) == files[p.rel("INDEX.md")], "la riga dell'indice torna com'era"
+        # progetto nel cestino: fuori dall'elenco; ripristinato identico
+        tid = v.delete_project(p.slug)
+        assert not v.projects() and v.trash()[0].kind == "project" and v.trash()[0].name == "Rossi — VPN sede"
+        if not encrypted:
+            assert not (v.root / "progetti" / p.slug).exists()
+        restored = v.restore(tid)
+        assert {r: v.store.read(r) for r in restored if r in files} == {r: d for r, d in files.items() if r in restored}
+        assert [i.slug for i in v.projects()] == [p.slug]
+        # ripristino che si scontra con un progetto ricreato con lo stesso nome: rifiutato, niente perso
+        tid = v.delete_project(p.slug)
+        v.create_project("Cliente Rossi — firewall", "# Nuovo\n")
+        try:
+            v.restore(tid)
+            raise AssertionError("ripristino sopra un progetto esistente")
+        except VaultError:
+            pass
+        assert v.trash() and v.project(p.slug).name == "Nuovo"
+        # eliminazione definitiva
+        assert v.purge(tid) > 0 and not v.trash()
+        v.delete_project(p.slug)
+        v.purge()
+        assert not v.trash() and not v.projects()
+        if not encrypted:
+            assert not (v.root / ".cestino").exists()
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

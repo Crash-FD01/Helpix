@@ -17,6 +17,7 @@ PATHS: dict[str, str] = {
     "camera": '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
     "chevron-down": '<path d="M6 9l6 6 6-6"/>',
     "check": '<path d="M5 12l5 5 9-10"/>',
+    "more": '<circle cx="5.5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="18.5" cy="12" r="1.2"/>',
     "search": '<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>',
     "file": '<path d="M14 3H6.5A1.5 1.5 0 0 0 5 4.5v15A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V8z"/>'
             '<path d="M14 3v5h5M8.5 13h7M8.5 16.5h5"/>',
