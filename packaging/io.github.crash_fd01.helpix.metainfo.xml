@@ -69,6 +69,15 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.19.0" date="2026-11-08">
+      <description>
+        <p>Projects and vault (beta, off by default: Settings › Experimental features). A project is work that
+          continues across sessions and AIs: Helpix keeps a short PROJECT.md with the current state and gives it to the
+          AI in every new chat. "Save project" asks the AI only for the changes, with an editable preview; older notes
+          are passed only when the AI asks for them. The vault is a folder of Markdown files, with optional encryption
+          (password, one-time recovery codes, optional recovery file).</p>
+      </description>
+    </release>
     <release version="0.18.6" date="2026-11-08">
       <description>
         <p>Quick window with ChatGPT without an account: reads its new page layout directly; on unknown layouts it
