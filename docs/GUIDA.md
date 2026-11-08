@@ -475,10 +475,10 @@ messa nel repository.
 - [x] v0.14.0 — Prima versione pubblica: licenza GPL-3.0-or-later (conforme REUSE), revisione finale
 - [x] v0.13.4 — Compatibilità con i desktop più usati (Cinnamon, MATE, Xfce, COSMIC, Hyprland/Sway…) e Qt 6.8/6.9 per le distribuzioni con glibc meno recente
 - [x] v0.18 — Finestra rapida: un task nuovo a ogni apertura, risposte anche con Helpix nascosto o chiuso
+- [x] v0.19 — Progetti e vault (beta, spenti di default): progetti che continuano tra sessioni e IA, vault Markdown con cifratura facoltativa ([`PROGETTI.md`](PROGETTI.md))
 - [x] v0.17 — Controllo degli aggiornamenti all'avvio con *Aggiorna ora*, su Windows e Linux
 - [x] v0.16 — Versione per Windows: PowerShell con Controllo account utente, scorciatoia globale, agenti con ConPTY,
   Windows Hello, diagnosi, installer e avviso delle nuove versioni
-- [ ] Progetti e vault (beta): progetti che continuano tra sessioni e IA, vault Markdown con cifratura facoltativa ([`PROGETTI.md`](PROGETTI.md))
 - [ ] Firma digitale dell'installer di Windows
 - [ ] Versione per macOS (piano in [`audit-roadmap.md`](audit-roadmap.md))
 
