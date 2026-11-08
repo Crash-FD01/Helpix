@@ -143,9 +143,24 @@ ricevono il contesto del progetto.
 
 ### Il pannello Vault
 
-Finestra separata (dal selettore *Progetto › Apri il vault…*): albero di progetti e note, nota formattata con
-*Leggi/Modifica*, link `[[ ]]` cliccabili, ricerca, «Citata da» (backlink), peso in token del contesto, note
-recenti (*nel contesto* / *archivio*), *Riprendi*, *Incolla nella chat*, versioni. Banner *Beta* in alto.
+Finestra separata (dal selettore *Progetto › Apri il vault…*) in tre colonne:
+- **sinistra**: nome del vault, ricerca, albero di progetti e note (PROJECT.md, INDEX.md, note, file, sessioni,
+  versioni), scheda del lucchetto con *Blocca*;
+- **centro**: percorso, titolo, *Leggi/Modifica*, *Riprendi con…* (l'assistente attivo), *Incolla nella chat*,
+  misuratore dei token di PROJECT.md; nota formattata con le decisioni «in vigore» e «Solo per me» evidenziata
+  («mai inviata all'IA»); in modifica *Salva modifiche* / *Annulla le modifiche*; per le versioni *Ripristina*;
+- **destra**: cosa va all'IA nella prossima chat (con il totale), «Citata da», note recenti (*nel contesto* /
+  *archivio*).
+
+In alto una striscia *Beta* con *Esporta in chiaro*, *Segnala un problema* e *Guida*.
+
+### Guida a nuvolette
+
+Come il giro di Helpix, con le stesse nuvolette:
+- **progetti** (finestra principale): parte da solo la prima volta che si attiva la funzione; si rifà da
+  *Progetto › Guida ai progetti* (anche in *Impostazioni › Funzioni sperimentali*);
+- **pannello Vault**: parte la prima volta che si apre il pannello; si rifà dal pulsante *Guida*.
+I passi su pulsanti non visibili (per esempio il misuratore, che c'è solo su PROJECT.md) si saltano.
 
 ## Cifratura (facoltativa)
 
@@ -241,7 +256,8 @@ Per togliere la beta:
 | `helpix/vault.py` | Archivio (chiaro o cifrato), progetti, note, indice, versioni, bozze, ricerca |
 | `helpix/project.py` | Testo di contesto, richiesta e lettura di `HELPIX-PROJECT`, applicazione delle modifiche, `HELPIX-NOTA` |
 | `helpix/passwords.py` | Robustezza della password, codici e frasi casuali (`data/parole-it.txt`) |
-| `helpix/ui/vault_panel.py` | Pannello Vault |
+| `helpix/ui/vault_panel.py` | Pannello Vault (e la resa Markdown delle note) |
+| `helpix/ui/tour.py` | Giri a nuvolette, anche quelli dei progetti e del pannello |
 | `helpix/ui/vault_dialogs.py` | Nuovo progetto, salvataggio con anteprima, creazione/sblocco/recupero del vault, impostazioni |
 | `helpix/ui/project_mixin.py` | Selettore, apertura, salvataggio, promemoria, bozze, barra HELPIX-NOTA, blocco, `helpix vault` |
 | `helpix/ui/main_window.py` | Punti di aggancio (barra, menu, nuovo task, chiusura, blocco, canale locale) |

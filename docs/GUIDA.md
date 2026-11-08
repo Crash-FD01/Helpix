@@ -263,8 +263,12 @@ piccolo (circa 1000 token) invece di una cronologia che cresce. Specifica comple
 - **Solo per me**: la sezione di `PROJECT.md` che non viene mai inviata a nessuna IA.
 - **Bozza della sessione** ogni 10 minuti (comandi, output, diagnosi: niente IA, niente token) e **promemoria**
   «Salvare nel progetto?» quando cambi progetto, apri un task nuovo, passi a un'altra IA o esci.
-- **Pannello Vault** (*Progetto › Apri il vault…*): progetti e note, *Leggi/Modifica*, link `[[ ]]`, ricerca,
-  «Citata da», versioni, peso del contesto in token.
+- **Pannello Vault** (*Progetto › Apri il vault…*): a sinistra progetti e note con la ricerca e il lucchetto; al
+  centro la nota (*Leggi/Modifica*, link `[[ ]]`, decisioni «in vigore», «Solo per me» evidenziata), *Riprendi con…*,
+  *Incolla nella chat* e il peso in token; a destra cosa va all'IA nella prossima chat, «Citata da» e le note recenti
+  (*nel contesto* / *archivio*). Le versioni precedenti si ripristinano dall'albero.
+- **Guida a nuvolette**: parte da sola la prima volta che attivi la funzione e la prima volta che apri il vault; si
+  rifà da *Progetto › Guida ai progetti* e dal pulsante *Guida* del pannello.
 - **Il vault** è una cartella di file Markdown (`~/.local/share/helpix/vault`, `%LOCALAPPDATA%\Helpix\vault`),
   leggibile anche con un editor o con Obsidian. **Cifratura facoltativa** (*Impostazioni dei progetti › Cifra il
   vault…*): password, 8 codici usa e getta per reimpostarla se la dimentichi, file di recupero facoltativo, sblocco

@@ -102,6 +102,11 @@ def test_progetto_api_salva_annulla():
     win._project_update_received(pj.parse_update(UPDATE.replace("IKEv2 con AES-256", "Failover attivo")
                                                  .replace("Tunnel configurato", "Failover")))
     assert "Failover attivo" in p.text() and p.notes()[-1].title == "Failover"
+    # lo stesso blocco arrivato due volte (letto dalla risposta e poi copiato): si applica una volta sola
+    notes_before = len(p.notes())
+    win._project_update_received(pj.parse_update(UPDATE.replace("IKEv2 con AES-256", "Failover attivo")
+                                                 .replace("Tunnel configurato", "Failover")))
+    assert len(p.notes()) == notes_before
     win._undo_project_update()
     assert "Failover attivo" not in p.text() and p.notes()[-1].title == "Tunnel configurato"
     # promemoria: c'è qualcosa di nuovo solo dopo un comando o una risposta
@@ -112,6 +117,14 @@ def test_progetto_api_salva_annulla():
     win._write_draft()
     drafts = vault.store.list(p.rel("sessioni") + "/")
     assert drafts and "ping 10.0.0.1" in p.read_text(drafts[0])
+    # un task fuori dal progetto (finestra rapida): niente novità da salvare, niente bozze nel progetto
+    project_id, win.session.project = win.session.project, None
+    assert not win._project_dirty()
+    win.session.add(Message("user", "", kind="output", meta={"cmd": "whoami", "rc": 0, "output": "x"}))
+    win._draft_marker = None
+    win._write_draft()
+    assert "whoami" not in p.read_text(drafts[0])
+    win.session.project = project_id
     win.close()
 
 
@@ -251,7 +264,33 @@ def test_pannello_e_nuovo_progetto():
     panel.select(p.notes()[0].rel)
     panel._paste_current()
     assert pasted and "Record MX" in pasted[0]
+    # giro a nuvolette del pannello: tutti i passi, poi «già visto»
+    win.start_vault_tour(panel)
+    tour = panel._tour
+    assert tour is not None and tour.host is panel and not tour.bubble.show_tips.isVisible()
+    seen = []
+    while panel._tour is not None and len(seen) < 30:
+        seen.append(tour.step.key)
+        tour.forward()
+    assert seen[0] == "v_welcome" and seen[-1] == "v_bye" and "v_ctx" in seen and len(seen) >= 8
+    assert win.settings.get("vault_tour_done")
     panel.close()
+    # giro dei progetti: parte da solo la prima volta che si accende la funzione, si riapre dal menu
+    win.settings.set("projects_tour_done", False)
+    win.show()  # i passi puntano a pulsanti visibili
+    win.toggle_projects_beta(False)
+    win.toggle_projects_beta(True)
+    pump(800)
+    assert win._ptour is not None and win._ptour.step.key == "p_welcome"
+    keys = []
+    while win._ptour is not None and len(keys) < 30:
+        keys.append(win._ptour.step.key)
+        win._ptour.forward()
+    assert keys[-1] == "p_bye" and {"p_picker", "p_save", "p_vault", "p_lock"} <= set(keys), keys
+    assert win.settings.get("projects_tour_done")
+    win.start_projects_tour()
+    assert win._ptour is not None
+    win._ptour.close_tour()
     win.close()
 
 

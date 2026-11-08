@@ -113,6 +113,10 @@ class PlainStore:
                 rel = (rel_dir / f).as_posix() if rel_dir != Path(".") else f
                 if rel in _SKIP_PLAIN or rel.split("/")[0] in _SKIP_PLAIN:
                     continue
+                try:  # nomi messi da fuori che il vault non sa gestire (es. con «:»): li ignoro
+                    clean_relpath(rel)
+                except VaultError:
+                    continue
                 if rel.startswith(prefix):
                     out.append(rel)
         return sorted(out)
@@ -403,6 +407,8 @@ class Vault:
         """Copia il vault, decifrato, in una cartella nuova o vuota (un vault in chiaro valido)."""
         self._need_open()
         dest = Path(dest)
+        if dest.resolve() == self.root.resolve() or self.root.resolve() in dest.resolve().parents:
+            raise VaultError("scegli una cartella fuori dal vault")
         if dest.exists() and any(dest.iterdir()):
             raise VaultError("la cartella di destinazione non è vuota")
         dest.mkdir(parents=True, exist_ok=True)
@@ -492,6 +498,11 @@ class Project:
     def updated(self) -> float:
         stamps = [self._stamp(r) for r in self.store.list(self.rel(VERSIONS) + "/")]
         stamps += [self._stamp(r) for r in self.store.list(self.rel(NOTES) + "/")]
+        if isinstance(self.store, PlainStore):  # nel vault cifrato le date dei file non dicono niente
+            try:
+                stamps.append(self.store._path(self.rel(PROJECT_FILE)).stat().st_mtime)
+            except OSError:
+                pass
         return max([s for s in stamps if s] or [0.0])
 
     @staticmethod
