@@ -25,7 +25,6 @@ from ..theme import C, mono_font
 from ..vault import FILES, INDEX_FILE, NOTES, PROJECT_FILE, SESSIONS, VERSIONS, Vault, VaultError
 from .controls import WindowControls
 from .frameless import FramelessHelper, RoundedCentral
-from .vault_dialogs import ISSUES_URL
 from .vault_graph import GraphPage
 
 _ROLE = Qt.ItemDataRole.UserRole
@@ -415,7 +414,6 @@ class VaultPanel(QDialog):
         msg.setMinimumWidth(120)
         bh.addWidget(msg, 1)
         for label, slot in ((tr("Esporta in chiaro"), self.export_requested.emit),
-                            (tr("Segnala un problema"), lambda: QDesktopServices.openUrl(QUrl(ISSUES_URL))),
                             (tr("Guida"), self.tour_requested.emit)):
             b = QPushButton(label)
             b.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)  # mai tagliati

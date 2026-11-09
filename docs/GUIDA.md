@@ -285,6 +285,13 @@ piccolo (circa 1000 token) invece di una cronologia che cresce. Specifica comple
   Helpix. *Esporta in chiaro* ne fa una copia leggibile; `helpix/vault_crypto.py` lo decifra anche senza Helpix.
   Persi password, codici e file, i dati non si recuperano.
 
+**Segnala un problema** (ingranaggio delle impostazioni): Helpix prepara una segnalazione con
+versione, sistema, impostazioni, ultime righe dei registri e lo stato del vault **senza contenuti** (mai note,
+PROJECT.md, chiavi o percorsi del vault); la diagnosi del PC si aggiunge solo se la spunti. Tutto passa dal filtro
+privacy e compare in anteprima, modificabile: parte esattamente quello che vedi, verso un archivio privato letto
+solo da chi sviluppa Helpix (servizio in `tools/segnalazioni`). Se l'invio non è attivo o non riesce, *Salva come
+file…* la salva sul Desktop da mandare a mano.
+
 ## Installazione
 
 ### Dal repository (consigliato)

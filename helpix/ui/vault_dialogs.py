@@ -6,8 +6,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QEventLoop, Qt, QUrl, Signal
-from PySide6.QtGui import QDesktopServices, QGuiApplication
+from PySide6.QtCore import QEventLoop, Qt, Signal
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDialog, QFileDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit,
     QMessageBox, QPlainTextEdit, QPushButton, QRadioButton, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget,
@@ -15,12 +15,10 @@ from PySide6.QtWidgets import (
 
 from .. import passwords, project as pj
 from ..i18n import tr
-from ..system import IS_WINDOWS, SOURCE_URL
+from ..system import IS_WINDOWS
 from ..theme import C, mono_font
 from ..vault import Vault, VaultError, WrongSecret, in_onedrive, keyring_available
 from .workers import FuncWorker
-
-ISSUES_URL = SOURCE_URL + "/issues/new/choose"
 
 
 def _wrap(text: str, secondary: bool = True) -> QLabel:
@@ -85,7 +83,7 @@ def run_busy(parent, fn, *args, **kwargs):
 
 
 class BetaBanner(QFrame):
-    """«Funzione in beta» con i pulsanti per segnalare un problema ed esportare in chiaro."""
+    """«Funzione in beta» con il pulsante per esportare in chiaro."""
 
     export = Signal()
 
@@ -100,10 +98,6 @@ class BetaBanner(QFrame):
         h.addWidget(pill, 0, Qt.AlignmentFlag.AlignTop)
         msg = _wrap(text or tr("Progetti e vault sono in prova: tieni una copia dei dati importanti."), secondary=False)
         h.addWidget(msg, 1)
-        report = QPushButton(tr("Segnala un problema"))
-        report.setObjectName("plain")
-        report.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(ISSUES_URL)))
-        h.addWidget(report)
         if export:
             exp = QPushButton(tr("Esporta in chiaro"))
             exp.setObjectName("plain")
