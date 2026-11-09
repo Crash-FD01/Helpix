@@ -383,6 +383,29 @@ def save_diagnostics(text: str) -> Path:
     return dest
 
 
+def read_agent_file(path: Path) -> str | None:
+    """Testo di un file scritto dall'agente, qualunque codifica abbia usato (None se non c'è o non si legge).
+
+    Su Windows l'agente può scrivere con PowerShell 5.1 o con altri strumenti: UTF-8 con BOM, UTF-16 (con BOM)
+    o la codepage ANSI. Letto come UTF-8 puro, il BOM nascondeva il marcatore e le altre codifiche facevano
+    fallire la lettura con un errore che fermava il controllo periodico."""
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return None
+    if data.startswith((b"\xff\xfe", b"\xfe\xff")):
+        enc = "utf-16"
+    elif data.startswith(b"\xef\xbb\xbf"):
+        enc = "utf-8-sig"
+    else:
+        enc = "utf-8"
+    try:
+        text = data.decode(enc)
+    except UnicodeDecodeError:
+        text = data.decode("cp1252" if IS_WINDOWS else "latin-1", errors="replace")
+    return text.replace("\r\n", "\n").lstrip("﻿")
+
+
 def summary_request() -> str:
     return tr("Scrivi il riepilogo per Helpix nel file {file}, nel formato indicato nelle istruzioni.").format(
         file=SUMMARY_FILE)
@@ -390,12 +413,8 @@ def summary_request() -> str:
 
 def read_summary() -> str | None:
     """Il riepilogo scritto dall'agente, solo se completo (le voci non sono tutte vuote)."""
-    path = workspace() / SUMMARY_FILE
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError:
-        return None
-    if SUMMARY_MARKER not in text:
+    text = read_agent_file(workspace() / SUMMARY_FILE)
+    if not text or SUMMARY_MARKER not in text:
         return None
     body = text[text.index(SUMMARY_MARKER) + len(SUMMARY_MARKER):].split("```")[0].strip()
     lines = [ln.strip() for ln in body.splitlines() if ln.strip()]
@@ -455,8 +474,5 @@ def project_update_request(compact: bool = False, project_text: str = "") -> str
 def read_project_update():
     """L'aggiornamento del progetto scritto dall'agente (project.Update), o None se non c'è ancora."""
     from . import project
-    try:
-        text = (workspace() / PROJECT_FILE).read_text(encoding="utf-8")
-    except OSError:
-        return None
-    return project.parse_update(text)
+    text = read_agent_file(workspace() / PROJECT_FILE)
+    return project.parse_update(text) if text else None

@@ -8,6 +8,7 @@ percorso del file nella riga di comando, e legge il riepilogo che l'agente scriv
 """
 from __future__ import annotations
 
+import logging
 import os
 import shlex
 import time
@@ -21,6 +22,8 @@ from .. import agents, site_icons, theme
 from ..i18n import tr
 from .controls import IconButton
 from .terminal_view import TerminalView
+
+log = logging.getLogger(__name__)
 
 
 class _InstallPage(QWidget):
@@ -368,7 +371,11 @@ class AgentPanel(QWidget):
     def _summary_poll(self):
         if not self.summary_pending:
             return
-        text = agents.read_summary()
+        try:
+            text = agents.read_summary()
+        except Exception:
+            log.exception("lettura di %s non riuscita", agents.SUMMARY_FILE)
+            text = None
         if text and text == self._summary_last:  # uguale a due controlli di fila: l'agente ha finito di scriverlo
             self._summary_until = 0.0
             self.summary_ready.emit(text)
@@ -401,16 +408,32 @@ class AgentPanel(QWidget):
     def _project_poll(self):
         if not self.project_pending:
             return
-        up = agents.read_project_update()
+        try:
+            up = agents.read_project_update()
+        except Exception:  # un errore qui fermava i controlli lasciando Helpix «in attesa» per 5 minuti
+            log.exception("lettura di %s non riuscita", agents.PROJECT_FILE)
+            up = None
         key = repr(up) if up else None
         if key and key == self._project_last:  # uguale a due controlli di fila: l'agente ha finito di scriverlo
             self._project_until = 0.0
+            log.info("aggiornamento del progetto letto da %s", agents.PROJECT_FILE)
             self.project_ready.emit(up)
             return
         self._project_last = key
         if time.monotonic() < self._project_until:
             QTimer.singleShot(1500, self._project_poll)
+            return
+        self._project_until = 0.0
+        path = agents.workspace() / agents.PROJECT_FILE
+        from ..project import PROJECT_MARKER
+        if path.exists():  # il file c'è ma non si capisce: lo dico, con l'inizio nel registro per capire perché
+            head = (agents.read_agent_file(path) or "")[:200]
+            log.warning("%s presente ma senza un blocco %s valido: %r", path, PROJECT_MARKER, head)
+            self.project_failed.emit(tr("{name} ha scritto {file}, ma Helpix non riesce a leggerlo: la prima riga "
+                                        "dev'essere {marker}. Chiedi all'agente di riscriverlo, poi riprova.").format(
+                name=self.label, file=agents.PROJECT_FILE, marker=PROJECT_MARKER))
         else:
+            log.warning("%s non scritto entro il tempo limite", path)
             self.project_failed.emit(tr("{name} non ha scritto l'aggiornamento del progetto nel file {file}.").format(
                 name=self.label, file=agents.PROJECT_FILE))
 

@@ -242,7 +242,7 @@ def parse_update(text: str) -> Update | None:
     if not text or PROJECT_MARKER not in text:
         return None
     # il marcatore su una riga da solo: nella richiesta (copiata per sbaglio) sta in mezzo a una frase
-    all_lines = text.splitlines()
+    all_lines = text.replace("﻿", "").splitlines()  # BOM di un file scritto su Windows
     start = next((i for i, ln in enumerate(all_lines) if ln.strip().strip("`").strip() == PROJECT_MARKER), None)
     if start is None:
         return None

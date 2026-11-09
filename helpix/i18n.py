@@ -1332,6 +1332,8 @@ EN: dict[str, str] = {
     "Sostituzione senza «=>»: {t}": "Replacement without “=>”: {t}",
     "Riga da sostituire non trovata in «{s}»: {t}": "Line to replace not found in “{s}”: {t}",
     "{name} non ha scritto l'aggiornamento del progetto nel file {file}.": "{name} didn't write the project update to the file {file}.",
+    "{name} ha scritto {file}, ma Helpix non riesce a leggerlo: la prima riga dev'essere {marker}. Chiedi all'agente di riscriverlo, poi riprova.":
+        "{name} wrote {file}, but Helpix can't read it: the first line must be {marker}. Ask the agent to rewrite it, then try again.",
     "Progetti e vault (beta)": "Projects and vault (beta)",
     "Impostazioni dei progetti…": "Project settings…",
     "Funzioni sperimentali": "Experimental features",
