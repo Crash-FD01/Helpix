@@ -456,6 +456,55 @@ def test_tetto_regolabile():
         win.close()
 
 
+def test_file_dell_agente_in_codifiche_windows():
+    """HELPIX-PROJECT.md scritto su Windows (BOM, UTF-16, ANSI con accenti, CRLF): Helpix lo legge lo stesso, e un
+    file illeggibile non ferma il controllo lasciando Helpix «in attesa» senza dire niente."""
+    from helpix import agents
+    from helpix.ui.agent_panel import AgentPanel
+    body = UPDATE.strip("`\n").replace("sede.", "sede, perché è più già.") + "\n"
+    path = agents.workspace() / agents.PROJECT_FILE
+    for data in (body.encode("utf-8-sig"), body.encode("utf-16"), body.encode("cp1252"),
+                 body.replace("\n", "\r\n").encode("utf-8-sig")):
+        path.write_bytes(data)
+        up = agents.read_project_update()
+        assert up is not None and up.title == "Tunnel configurato", data[:20]
+        assert "perché è più già" in up.body
+    path.write_text("﻿HELPIX-SUMMARY\nniente\n", encoding="utf-8")
+    assert agents.read_summary() is None
+
+    panel = AgentPanel("claude-code")
+    try:
+        got, failed = [], []
+        panel.project_ready.connect(got.append)
+        panel.project_failed.connect(failed.append)
+        panel._project_until, panel._project_last = 1e18, None
+        orig = agents.read_project_update
+        agents.read_project_update = lambda: (_ for _ in ()).throw(UnicodeDecodeError("utf-8", b"", 0, 1, "x"))
+        try:
+            panel._project_poll()  # prima lanciava l'errore e i controlli si fermavano
+        finally:
+            agents.read_project_update = orig
+        assert panel.project_pending and not got and not failed
+        path.write_bytes(body.encode("utf-16"))
+        for _ in range(2):
+            panel._project_poll()
+        assert len(got) == 1 and not panel.project_pending
+        # tempo scaduto con un file che non si capisce: lo dice, invece del messaggio «non l'ha scritto»
+        import time
+        path.write_text("ciao\n", encoding="utf-8")
+        panel._project_until, panel._project_last = time.monotonic() + 0.05, None
+        agents.read_project_update = lambda: (time.sleep(0.1), None)[1]
+        try:
+            panel._project_poll()
+        finally:
+            agents.read_project_update = orig
+        assert len(failed) == 1 and "non riesce a leggerlo" in failed[0] and not panel.project_pending
+    finally:
+        path.unlink(missing_ok=True)
+        panel.shutdown()
+        panel.deleteLater()
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):
