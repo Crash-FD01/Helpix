@@ -69,6 +69,13 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.19.5" date="2026-11-09">
+      <description>
+        <p>Windows: saving a project with an agent in the terminal (Claude Code, Codex, Gemini CLI) shows the preview
+          again even when the agent writes the file with a BOM, in UTF-16 or in the ANSI code page; a file that can't be
+          read no longer leaves Helpix waiting silently, and the message says what went wrong.</p>
+      </description>
+    </release>
     <release version="0.19.4" date="2026-11-09">
       <description>
         <p>Projects and vault (beta, still off by default): the PROJECT.md limit can be set to 500, 1000, 2000 or 4000
