@@ -466,6 +466,38 @@ def test_cestino_rinomina():
             assert not (v.root / ".cestino").exists()
 
 
+def test_grafo_del_progetto():
+    v = Vault(new_root())
+    v.create_plain("Lavoro")
+    p = v.create_project("Grafo", "# Grafo\n\n## Stato\nVedi [[file/schema.md]].\n")
+    assert [n.kind for n in p.graph().nodes] == ["project"] and p.graph().edges == []   # progetto vuoto
+    a = p.add_note("Inizio", "# Inizio\n\nPrimo passo.\n", "avvio", date="2026-10-01")
+    b = p.add_note("Scelta", "# Scelta\n\nDopo [[2026-10-01-inizio|Inizio]], vedi [[schema]] e ![[schema.md]].\n",
+                   "deciso", date="2026-10-05")
+    c = p.add_note("Fine", "# Fine\n\nCome in [[Inizio]], link rotto [[non-esiste]].\n", "", date="2026-10-09")
+    p.write_text(p.rel("file", "schema.md"), "# Schema\n\nTorna a [[2026-10-05-scelta]].\n")
+    p.write_text(p.rel("file", "foto.txt"), "niente link\n")
+    p.write_session_draft("task-1", "# bozza\n[[2026-10-01-inizio]]\n")
+    g = p.graph(recent=2)
+    kinds = {n.rel: n.kind for n in g.nodes}
+    assert [n.rel for n in g.nodes if n.kind == "note"] == [a, b, c]
+    assert sorted(r.rsplit("/", 1)[1] for r, k in kinds.items() if k == "file") == ["foto.txt", "schema.md"]
+    assert not any("/sessioni/" in r or r.endswith("INDEX.md") for r in kinds)   # bozze e indice restano fuori
+    assert [n.in_context for n in g.nodes if n.kind == "note"] == [False, True, True]
+    edges = {(e.src.rsplit("/", 1)[1], e.dst.rsplit("/", 1)[1], e.kind) for e in g.edges}
+    schema = p.rel("file", "schema.md")
+    assert edges == {
+        ("2026-10-01-inizio.md", "2026-10-05-scelta.md", "next"),
+        ("2026-10-05-scelta.md", "2026-10-09-fine.md", "next"),
+        ("2026-10-09-fine.md", "PROJECT.md", "next"),
+        ("2026-10-05-scelta.md", "schema.md", "link"),          # [[schema]] e ![[schema.md]]: uno solo
+        ("2026-10-09-fine.md", "2026-10-01-inizio.md", "link"),  # per titolo; il link rotto non c'è
+        ("PROJECT.md", "schema.md", "link"),
+    }, edges
+    assert g.neighbours(schema) == {b, p.rel("PROJECT.md")}   # il ritorno da schema.md non si ripete
+    assert g.node(c).title == "Fine" and g.node(p.rel("PROJECT.md")).in_context
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

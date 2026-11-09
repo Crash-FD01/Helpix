@@ -22,7 +22,8 @@ os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu")
 os.environ["HELPIX_NO_UPDATE_CHECK"] = "1"
 
 import PySide6.QtWebEngineWidgets  # noqa: F401,E402
-from PySide6.QtCore import QEventLoop, QTimer  # noqa: E402
+from PySide6.QtCore import QEventLoop, Qt, QTimer  # noqa: E402
+from PySide6.QtTest import QTest  # noqa: E402
 from PySide6.QtWidgets import QApplication, QDialog, QMessageBox  # noqa: E402
 
 app = QApplication.instance() or QApplication([])
@@ -255,6 +256,29 @@ def test_pannello_e_nuovo_progetto():
     assert panel.width() >= panel.minimumWidth()
     panel.select(p.notes()[0].rel)
     assert panel.backlinks.count() == 1 and panel.backlinks.item(0).text().startswith("note/")
+    # grafo: percorso del progetto, un clic apre la nota, da lì si torna a leggere o modificare
+    panel.btn_graph.setChecked(True)
+    pump(50)
+    gv = panel.graph_page.view
+    assert panel.stack.currentIndex() == 2 and panel.title.text() == p.name
+    assert set(gv.nodes) == {n.rel for n in p.notes()} | {p.rel("PROJECT.md")}
+    # il link da «Utenti» a «DNS» coincide con la freccia tra le due note: non si ripete
+    assert {e.kind for e in gv.edges} == {"next"} and gv.nodes[p.notes()[0].rel].current
+    gv.highlight(p.notes()[1].rel)
+    assert gv.nodes[p.notes()[0].rel].hot is False and not gv.nodes[p.notes()[0].rel].dim   # vicino: acceso
+    gv.highlight(None)
+    second = p.notes()[1].rel
+    QTest.mouseClick(gv.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
+                     gv.mapFromScene(gv.nodes[second].pos()))
+    pump(50)
+    assert panel.stack.currentIndex() == 0 and panel.current[2] == second and panel.btn_read.isChecked()
+    panel.btn_graph.setChecked(True)
+    panel.btn_read.setChecked(True)
+    assert panel.stack.currentIndex() == 0 and panel.current[2] == second and panel.title.text() == "Utenti"
+    panel.btn_graph.setChecked(True)
+    panel.btn_edit.setChecked(True)   # dal grafo direttamente alla modifica
+    assert panel.stack.currentIndex() == 1 and panel.btn_edit.isChecked() and panel.current[2] == second
+    panel.btn_read.setChecked(True)
     panel.select(p.rel("PROJECT.md"))
     panel.btn_edit.setChecked(True)
     panel.editor.setPlainText(p.text() + "\n## Riferimenti\n- wiki interna\n")
