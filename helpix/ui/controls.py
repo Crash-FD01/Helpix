@@ -42,6 +42,7 @@ class IconButton(QToolButton):
                  icon_size: int = 18, color_key: str = "text"):
         super().__init__()
         self._name, self._color_key, self._isz = name, color_key, icon_size
+        self._full, self._limit, self._tip = "", None, ""
         self.setToolTip(tip)
         self.setAccessibleName(tip)
         self.setCheckable(checkable)
@@ -50,7 +51,7 @@ class IconButton(QToolButton):
         if text:
             self.setText(text)
             self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-            self.setMinimumHeight(size)
+            self.setFixedHeight(size)   # alla stessa altezza degli altri controlli della barra
         else:
             self.setFixedSize(size, size)
             self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
@@ -61,6 +62,43 @@ class IconButton(QToolButton):
     def set_icon_name(self, name: str):
         self._name = name
         self.refresh()
+
+    # testo accorciabile: la barra stretta mostra il testo accorciato o solo l'icona; text() resta quello intero
+    def setText(self, text: str):  # noqa: N802
+        self._full = text or ""
+        self._show_text()
+
+    def text(self) -> str:
+        return self._full
+
+    def setToolTip(self, tip: str):  # noqa: N802
+        self._tip = tip or ""
+        self._apply_tip()
+
+    def set_text_limit(self, px: int | None):
+        """None: testo intero; 0: solo icona; altrimenti al massimo `px` pixel, con «…»."""
+        if px != self._limit:
+            self._limit = px
+            self._show_text()
+
+    def _show_text(self):
+        full, lim = self._full, self._limit
+        if lim == 0 and full:
+            shown = ""
+            self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        else:
+            shown = full if not lim else self.fontMetrics().elidedText(full, Qt.TextElideMode.ElideRight, lim)
+            if full:
+                self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        QToolButton.setText(self, shown)
+        self._apply_tip()
+
+    def _apply_tip(self):
+        shown = QToolButton.text(self)
+        tip = self._tip
+        if self._full and shown != self._full:   # accorciato: il testo intero va nel suggerimento
+            tip = f"{tip}: {self._full}" if tip and tip != self._full else self._full
+        QToolButton.setToolTip(self, tip)
 
     def refresh(self):
         color = C["accentFg"] if self.isChecked() else C[self._color_key]
@@ -109,6 +147,13 @@ class Capsule(QFrame):
 
     def set_tooltip(self, text: str):
         self.main.setToolTip(text)
+
+    def set_compact(self, on: bool):
+        """Solo l'icona (barra stretta); il nome resta nel suggerimento."""
+        style = Qt.ToolButtonStyle.ToolButtonIconOnly if on else Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+        if self.main.toolButtonStyle() != style:
+            self.main.setToolButtonStyle(style)
+            self.main.setAccessibleName(self.main.text())
 
 
 class Segmented(QFrame):

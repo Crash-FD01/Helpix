@@ -32,6 +32,33 @@ def _wrap(text: str, secondary: bool = True) -> QLabel:
     return lab
 
 
+class _PathLabel(QLabel):
+    """Percorso su una riga sola, accorciato al centro se non ci sta; intero nel suggerimento."""
+
+    def __init__(self):
+        super().__init__()
+        self._full = ""
+        self.setMinimumWidth(80)
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+
+    def set_path(self, path: str):
+        self._full = path
+        self.setToolTip(path)
+        self._elide()
+
+    def full_text(self) -> str:
+        return self._full
+
+    def resizeEvent(self, ev):  # noqa: N802
+        super().resizeEvent(ev)
+        self._elide()
+
+    def _elide(self):
+        shown = self.fontMetrics().elidedText(self._full, Qt.TextElideMode.ElideMiddle, max(20, self.width()))
+        if shown != self.text():
+            super().setText(shown)
+
+
 def _title(text: str) -> QLabel:
     t = QLabel(text)
     t.setObjectName("title")
@@ -775,13 +802,14 @@ class ProjectSettingsDialog(QDialog):
         grid.setVerticalSpacing(8)
         r = 0
         grid.addWidget(QLabel(tr("Cartella del vault")), r, 0)
-        self.folder = QLabel()
-        self.folder.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        self.folder.setWordWrap(True)
+        self.folder = _PathLabel()
         grid.addWidget(self.folder, r, 1)
         change = QPushButton(tr("Cambia…"))
         change.clicked.connect(self._choose_folder)
         grid.addWidget(change, r, 2)
+        r += 1
+        self.onedrive = _wrap(tr("⚠ È dentro OneDrive: rischio di conflitti e file «solo online»."))
+        grid.addWidget(self.onedrive, r, 1, 1, 2)
         r += 1
         grid.addWidget(QLabel(tr("Bozza della sessione")), r, 0)
         self.autosave = QComboBox()
@@ -865,8 +893,8 @@ class ProjectSettingsDialog(QDialog):
     def _refresh(self):
         from ..vault import default_root
         folder = self.settings.get("vault_dir") or str(default_root())
-        self.folder.setText(folder + ("\n" + tr("⚠ È dentro OneDrive: rischio di conflitti e file «solo online».")
-                                      if in_onedrive(folder) else ""))
+        self.folder.set_path(folder)
+        self.onedrive.setVisible(in_onedrive(folder))
         vault = self.vault_getter() if self.settings.get("projects_beta") else None
         enabled = vault is not None
         for b in (self.b_encrypt, self.b_password, self.b_codes, self.b_recovery, self.b_keyring, self.b_unlock,

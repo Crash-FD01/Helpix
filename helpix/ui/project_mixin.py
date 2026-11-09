@@ -92,6 +92,7 @@ class ProjectsMixin:
     def _apply_project_settings(self, initial: bool = False):
         on = self.projects_enabled
         self.project_btn.setVisible(on)
+        self._schedule_toolbar_fit()
         if hasattr(self, "act_projects_beta"):
             self.act_projects_beta.setChecked(on)
         minutes = int(self.settings.get("project_autosave_min", 10) or 0)
@@ -199,14 +200,14 @@ class ProjectsMixin:
         vault = self.vault
         locked = bool(vault and vault.encrypted and not vault.is_open)
         if self.project is not None and not locked:
-            name = self.project.name
-            text = name if len(name) <= 28 else name[:27] + "…"
+            text = self.project.name   # la barra lo accorcia se non ci sta (nome intero nel suggerimento)
         elif locked and self.settings.get("active_project"):
             text = tr("Vault bloccato")
         else:
             text = tr("Nessun progetto")
         self.project_btn.setText(text)
         self.project_btn.set_icon_name("lock" if locked else "folder")
+        self._schedule_toolbar_fit()
 
     def _build_project_menu(self):
         m = self.project_menu

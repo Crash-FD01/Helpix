@@ -156,8 +156,12 @@ Lanciare `helpix` quando è già aperto porta in primo piano la finestra esisten
 (o Ctrl+Maiusc+L) cambia tema al volo; dal menu Impostazioni › Aspetto si sceglie Automatico, Chiaro o
 Scuro (Automatico segue il tema del sistema). La pagina della chat adotta il tema all'avvio di Helpix.
 Con la barra integrata la finestra ha gli angoli arrotondati (Impostazioni › «Angoli arrotondati» per
-disattivarli; da massimizzata gli angoli tornano dritti).
-Se la barra integrata dà problemi con il tuo desktop: Impostazioni › «Usa la barra del titolo del sistema».
+disattivarli; da massimizzata gli angoli tornano dritti). La stessa barra c'è anche nelle altre finestre di Helpix
+(pannello Vault, impostazioni, conferme e avvisi); il selettore dei file resta quello del sistema.
+Se la barra integrata dà problemi con il tuo desktop: Impostazioni › «Usa la barra del titolo del sistema» (vale
+per tutte le finestre).
+Stringendo la finestra la barra in alto si adatta: prima nasconde lo stato dell'assistente, poi accorcia i nomi
+del modello e del progetto (interi nel suggerimento), poi lascia solo le icone di Screenshot e Diagnosi.
 
 **Schermata iniziale**: all'avvio si sceglie l'assistente, la lingua e il tema. Con l'interruttore «Usa sempre questa
 scelta…» la scelta diventa predefinita e la schermata non compare più. Si riapre quando vuoi da Impostazioni ›
@@ -433,7 +437,7 @@ messa nel repository.
 | `helpix/executor.py` | Esecuzione comandi, cartella corrente, polkit, analisi dei rischi |
 | `helpix/screenshot.py`, `portal_screenshot.py` | Cattura su X11/Wayland |
 | `helpix/ui/start_dialog.py`, `ui/main_window.py` | Finestra di avvio e finestra principale |
-| `helpix/theme.py`, `icons.py`, `ui/controls.py`, `ui/frameless.py` | Tema chiaro/scuro, icone, componenti, barra integrata |
+| `helpix/theme.py`, `icons.py`, `ui/controls.py`, `ui/frameless.py`, `ui/dialog_frame.py` | Tema chiaro/scuro, icone, componenti, barra integrata (anche nelle finestre di dialogo) |
 | `helpix/data/fonts/` | Inter e JetBrains Mono (SIL Open Font License, testo della licenza incluso) |
 | `helpix/data/icons/` | Icona dell'app in 8 dimensioni (16–512 px) |
 | `helpix/i18n.py` | Lingue: catalogo italiano → inglese e funzione `tr()` |

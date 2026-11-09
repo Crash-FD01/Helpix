@@ -58,6 +58,7 @@ QMainWindow, QDialog, #central { background: $window; }
 QToolTip { background: $sheet; color: $text; border: 1px solid $border; padding: 5px 8px; border-radius: 6px; }
 #central[frameless="true"] { border: 1px solid $border; }
 QMainWindow[rounded="true"], #central[rounded="true"] { background: transparent; border: none; }
+QDialog[hxframe="true"] { background: transparent; }
 #toolbar[rounded="true"] { background: transparent; border: none; }
 
 #toolbar { background: $toolbar; border-bottom: 1px solid $hairline; }
@@ -80,10 +81,11 @@ QToolButton:hover { background: $hover; }
 QToolButton:pressed { background: $pressed; }
 QToolButton:checked { background: $tint; color: $accentFg; }
 QToolButton:disabled { color: $secondary; }
-QPushButton#picker { background: $control; border: 1px solid $border; border-radius: 8px; padding: 0; text-align: left; }
+QPushButton#picker { background: $control; border: 1px solid $border; border-radius: 8px; padding: 0; text-align: left;
+    min-height: 0; }
 QPushButton#picker:hover { background: $hover; }
 QPushButton#picker::menu-indicator { image: none; width: 0; }
-QToolButton#pill { background: $control; border: 1px solid $border; padding: 0 10px; min-height: 30px; }
+QToolButton#pill { background: $control; border: 1px solid $border; padding: 0 10px; min-height: 0; }
 QToolButton#pill:hover { background: $hover; }
 QToolButton::menu-indicator { image: none; width: 0; }
 #winBtn { background: $winBtn; border-radius: 12px; padding: 0; }
