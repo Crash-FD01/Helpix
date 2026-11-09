@@ -449,7 +449,7 @@ class VaultPanel(QDialog):
         self.btn_edit.setText(tr("Modifica"))
         self.btn_graph = QToolButton()
         self.btn_graph.setText(tr("Grafo"))
-        self.btn_graph.setToolTip(tr("Il percorso del progetto: le note nel tempo, i file e i collegamenti"))
+        self.btn_graph.setToolTip(tr("La mappa delle decisioni: quando sono nate, quali sono superate e da cosa, lo stato e i prossimi passi"))
         group = QButtonGroup(self)
         for b in (self.btn_read, self.btn_edit, self.btn_graph):
             b.setCheckable(True)
@@ -1011,8 +1011,8 @@ class VaultPanel(QDialog):
             return
         self.crumb.setText(f"{self.vault.name}  /  {p.name}  /  {tr('Grafo')}")
         self.title.setText(p.name)
-        self.meta.setText(tr("Il percorso del lavoro: le note dalla prima all'ultima, poi lo stato attuale; "
-                             "a destra, i file citati"))
+        self.meta.setText(tr("Le sessioni dalla prima all'ultima e, accanto a ognuna, le decisioni prese lì; "
+                             "in fondo lo stato attuale e i prossimi passi"))
         self.meter_box.hide()
         self.btn_paste.hide()
         self.btn_restore.hide()

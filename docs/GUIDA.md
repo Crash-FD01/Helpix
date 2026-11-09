@@ -268,9 +268,9 @@ piccolo (circa 1000 token) invece di una cronologia che cresce. Specifica comple
 - **Bozza della sessione** ogni 10 minuti (comandi, output, diagnosi: niente IA, niente token) e **promemoria**
   «Salvare nel progetto?» quando cambi progetto, apri un task nuovo, passi a un'altra IA o esci.
 - **Pannello Vault** (*Progetto › Apri il vault…*): a sinistra progetti e note con la ricerca e il lucchetto; al
-  centro la nota (*Leggi/Modifica*, link `[[ ]]`, decisioni «in vigore», «Solo per me» evidenziata) o il **Grafo**
-  del progetto (le note dalla prima all'ultima fino allo stato attuale, i file citati a destra, i collegamenti
-  `[[ ]]`; un clic su una nota la apre), *Riprendi con…*,
+  centro la nota (*Leggi/Modifica*, link `[[ ]]`, decisioni «in vigore», «Solo per me» evidenziata) o il **Grafo**,
+  la mappa delle decisioni (accanto a ogni sessione le decisioni prese lì, quelle superate con la freccia verso la
+  nuova, in fondo lo stato e i prossimi passi; un clic apre la nota da cui viene), *Riprendi con…*,
   *Incolla nella chat* e il peso in token; a destra cosa va all'IA nella prossima chat, «Citata da» e le note recenti
   (*nel contesto* / *archivio*). Le versioni precedenti si ripristinano dall'albero. Con il pulsante «⋯» o il tasto
   destro nell'albero rinomini il progetto ed elimini note, file o l'intero progetto (anche da *Progetto › Elimina il

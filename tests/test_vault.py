@@ -467,35 +467,54 @@ def test_cestino_rinomina():
 
 
 def test_grafo_del_progetto():
+    """Mappa delle decisioni: ogni decisione accanto alla sessione in cui è nata, le superate verso le nuove."""
     v = Vault(new_root())
     v.create_plain("Lavoro")
-    p = v.create_project("Grafo", "# Grafo\n\n## Stato\nVedi [[file/schema.md]].\n")
-    assert [n.kind for n in p.graph().nodes] == ["project"] and p.graph().edges == []   # progetto vuoto
-    a = p.add_note("Inizio", "# Inizio\n\nPrimo passo.\n", "avvio", date="2026-10-01")
-    b = p.add_note("Scelta", "# Scelta\n\nDopo [[2026-10-01-inizio|Inizio]], vedi [[schema]] e ![[schema.md]].\n",
-                   "deciso", date="2026-10-05")
-    c = p.add_note("Fine", "# Fine\n\nCome in [[Inizio]], link rotto [[non-esiste]].\n", "", date="2026-10-09")
-    p.write_text(p.rel("file", "schema.md"), "# Schema\n\nTorna a [[2026-10-05-scelta]].\n")
-    p.write_text(p.rel("file", "foto.txt"), "niente link\n")
-    p.write_session_draft("task-1", "# bozza\n[[2026-10-01-inizio]]\n")
+    p = v.create_project("Grafo", pj.template("Grafo", "Provare il grafo", "") .replace(
+        "## Decisioni in vigore\n", "## Decisioni in vigore\n- 2026-09-30 Scritta a mano prima di tutto\n"))
+    g0 = p.graph()
+    assert [n.kind for n in g0.nodes] == ["start", "state", "decision"]
+    assert [(e.src, e.dst) for e in g0.edges if e.kind == "decided"] == [("start", "dec:scritta a mano prima di tutto")]
+
+    def save(date, title, body, ops):
+        up = pj.parse_update(f"HELPIX-PROJECT\nNOTA: {title}\n{body}\nMODIFICHE:\n" + "\n".join(ops))
+        r = pj.apply_update(p.text(), up, today=date)
+        p.save_text(r.text)
+        return p.add_note(title, pj.note_text(title, body, "Claude", r.superseded, r.warnings, date=date,
+                                              added=r.added), pj.note_summary(body), date=date)
+    a = save("2026-10-01", "Inizio", "Vedi [[schema.md]].", ["+ Decisioni in vigore: Docker", "+ Decisioni in vigore: Debian"])
+    b = save("2026-10-05", "Cambio", "Come in [[Inizio]].", ["~ Decisioni in vigore: Docker => Podman",
+                                                            "= Stato: in prova", "+ Prossimi passi: collaudo",
+                                                            "+ Decisioni in vigore: 2026-09-01 Retrodatata"])
+    c = save("2026-10-05", "Stesso giorno", "Riprende [[Inizio]].", [])
+    p.write_text(p.rel("file", "schema.md"), "# Schema\n")
+    # decisione aggiunta a mano in PROJECT.md: va alla sessione dello stesso giorno o alla precedente
+    p.save_text(p.text().replace("## Stato", "- 2026-10-07 Aggiunta a mano\n\n## Stato", 1))
     g = p.graph(recent=2)
-    kinds = {n.rel: n.kind for n in g.nodes}
-    assert [n.rel for n in g.nodes if n.kind == "note"] == [a, b, c]
-    assert sorted(r.rsplit("/", 1)[1] for r, k in kinds.items() if k == "file") == ["foto.txt", "schema.md"]
-    assert not any("/sessioni/" in r or r.endswith("INDEX.md") for r in kinds)   # bozze e indice restano fuori
-    assert [n.in_context for n in g.nodes if n.kind == "note"] == [False, True, True]
-    edges = {(e.src.rsplit("/", 1)[1], e.dst.rsplit("/", 1)[1], e.kind) for e in g.edges}
-    schema = p.rel("file", "schema.md")
-    assert edges == {
-        ("2026-10-01-inizio.md", "2026-10-05-scelta.md", "next"),
-        ("2026-10-05-scelta.md", "2026-10-09-fine.md", "next"),
-        ("2026-10-09-fine.md", "PROJECT.md", "next"),
-        ("2026-10-05-scelta.md", "schema.md", "link"),          # [[schema]] e ![[schema.md]]: uno solo
-        ("2026-10-09-fine.md", "2026-10-01-inizio.md", "link"),  # per titolo; il link rotto non c'è
-        ("PROJECT.md", "schema.md", "link"),
-    }, edges
-    assert g.neighbours(schema) == {b, p.rel("PROJECT.md")}   # il ritorno da schema.md non si ripete
-    assert g.node(c).title == "Fine" and g.node(p.rel("PROJECT.md")).in_context
+    node = {n.rel: n for n in g.nodes}
+    assert [n.rel for n in g.nodes if n.kind in ("start", "note", "state")] == ["start", a, b, c, p.rel("PROJECT.md")]
+    assert node[a].files == ["schema.md"] and [node[r].in_context for r in (a, b, c)] == [False, True, True]
+    assert node[p.rel("PROJECT.md")].summary == "in prova"
+    docker, podman = node["dec:docker"], node["dec:podman"]
+    assert docker.status == "superseded" and docker.origin == a and docker.replaced_by == podman.rel
+    assert docker.until == "2026-10-05" and docker.date == "2026-10-01" and not docker.in_context
+    assert podman.status == "in_force" and podman.origin == b and podman.in_context and podman.open_rel == b
+    assert node["dec:debian"].origin == a
+    assert node["dec:retrodatata"].origin == b   # conta la nota che la elenca in «Decisioni prese», non la data
+    assert "## Decisioni prese\n- Retrodatata" in p.read_text(b)
+    assert node["dec:aggiunta a mano"].origin == c   # nessuna sessione il 7: l'ultima prima
+    assert node["dec:scritta a mano prima di tutto"].origin == "start"
+    assert [n.title for n in g.nodes if n.kind == "step"] == ["collaudo"]
+    kinds = {(e.src, e.dst): e.kind for e in g.edges}
+    assert kinds[(docker.rel, podman.rel)] == "replaced" and kinds[(c, a)] == "link"
+    assert (b, a) not in kinds   # sessioni vicine: la freccia del tempo basta, il link non si ripete
+    assert kinds[(p.rel("PROJECT.md"), "step:0")] == "step"
+    assert [e.kind for e in g.edges].count("next") == 4   # inizio → 3 sessioni → stato
+    assert g.neighbours(docker.rel) == {a, podman.rel}
+    # nota senza «Decisioni prese» (salvata prima di questa versione): conta la data della sessione
+    d = p.add_note("Vecchia", "# Vecchia\n\ntesto\n", "", date="2026-10-09")
+    p.save_text(p.text().replace("## Stato", "- 2026-10-09 Decisa nella nota vecchia\n\n## Stato", 1))
+    assert {n.rel: n for n in p.graph().nodes}["dec:decisa nella nota vecchia"].origin == d
 
 
 if __name__ == "__main__":

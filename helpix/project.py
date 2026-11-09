@@ -317,6 +317,7 @@ class Result:
     applied: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     superseded: list[tuple[str, str]] = field(default_factory=list)
+    added: list[str] = field(default_factory=list)   # decisioni nuove (senza data), per la nota e il Grafo
 
 
 def apply_update(project_text: str, update: Update, today: str | None = None) -> Result:
@@ -354,6 +355,8 @@ def apply_update(project_text: str, update: Update, today: str | None = None) ->
             while sec[1] and not sec[1][-1].strip():
                 sec[1].pop()
             sec[1].append(new)
+            if key == "decisions":
+                res.added.append(_clean_line(new))
             res.applied.append(tr("Aggiunta in «{s}»: {t}").format(s=label, t=_clean_line(new)))
         elif sym == "-":
             idx = next((i for i, ln in enumerate(lines) if ln.strip() and _matches(payload, ln)), None)
@@ -396,9 +399,13 @@ def _apply_full(old_text: str, new_text: str) -> Result:
 
 
 # ------------------------------------------------------------------ note
-def note_text(title: str, body: str, source: str, superseded=(), warnings=(), date: str | None = None) -> str:
+def note_text(title: str, body: str, source: str, superseded=(), warnings=(), date: str | None = None,
+              added=()) -> str:
     date = date or time.strftime("%Y-%m-%d")
     out = [f"# {title.strip() or tr('Sessione')}", "", f"_{date} · {source}_", "", body.strip() or "-"]
+    if added:   # così il Grafo sa in quale sessione è nata ogni decisione
+        out += ["", "## " + tr("Decisioni prese")]
+        out += [f"- {d}" for d in added]
     if superseded:
         out += ["", "## " + tr("Decisioni superate")]
         out += [f"- {a} → {b}" for a, b in superseded]
@@ -406,6 +413,59 @@ def note_text(title: str, body: str, source: str, superseded=(), warnings=(), da
         out += ["", "## " + tr("Modifiche non applicate")]
         out += [f"- {w}" for w in warnings]
     return "\n".join(out).rstrip() + "\n"
+
+
+# ------------------------------------------------------------------ decisioni (per il Grafo)
+def decision_key(text: str) -> str:
+    """Chiave per riconoscere la stessa decisione scritta in posti diversi (data, elenco e maiuscole non contano)."""
+    return _norm(_clean_line(text)).strip(" .")
+
+
+def decisions_in_force(project_text: str) -> list[tuple[str, str]]:
+    """(data, testo) delle righe di «Decisioni in vigore»; data vuota se non c'è."""
+    sec = parse(project_text).find("decisions")
+    out = []
+    for ln in (sec[1] if sec else []):
+        t = re.sub(r"^\s*(?:[-*•]|\d+[.)])\s+", "", ln).strip()
+        if not t or t in ("-",):
+            continue
+        m = _DATE.match(t)
+        out.append((m.group(0) if m else "", _clean_line(t)))
+    return out
+
+
+def section_lines(project_text: str, key: str) -> list[str]:
+    """Righe non vuote di una sezione di PROJECT.md, senza il trattino dell'elenco."""
+    sec = parse(project_text).find(key)
+    out = []
+    for ln in (sec[1] if sec else []):
+        t = re.sub(r"^\s*(?:[-*•]|\d+[.)])\s+", "", ln).strip()
+        if t and t != "-":
+            out.append(t)
+    return out
+
+
+def note_decisions(note_text_: str) -> tuple[list[str], list[tuple[str, str]]]:
+    """Dalla nota di una sessione: decisioni prese e coppie (superata, nuova)."""
+    added, superseded = [], []
+    where = None
+    titles_added = {"decisioni prese", "decisions taken"}
+    titles_sup = {"decisioni superate", "superseded decisions"}
+    for ln in (note_text_ or "").splitlines():
+        if ln.startswith("## "):
+            h = _norm(ln[3:]).strip()
+            where = "added" if h in titles_added else "sup" if h in titles_sup else None
+            continue
+        t = re.sub(r"^\s*[-*•]\s+", "", ln).strip()
+        if not t or where is None:
+            continue
+        if where == "added":
+            added.append(_clean_line(t))
+        else:
+            parts = re.split(r"\s*(?:→|=>|->)\s*", t, maxsplit=1)
+            if len(parts) == 2:
+                superseded.append((_clean_line(parts[0]), _clean_line(parts[1])))
+    return added, superseded
 
 
 def note_summary(body: str, limit: int = 120) -> str:

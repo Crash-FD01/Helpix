@@ -21,7 +21,7 @@ import re
 import shutil
 import time
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
 from . import vault_crypto as vc
@@ -621,19 +621,26 @@ _WIKILINK = re.compile(r"!?\[\[([^\]|#\n]+)(?:#[^\]|\n]*)?(?:\|[^\]\n]*)?\]\]")
 
 @dataclass
 class GraphNode:
-    rel: str
-    kind: str          # "project", "note", "file"
+    rel: str           # identificativo: percorso per note e stato, «start», «dec:…», «step:…»
+    kind: str          # "start", "note", "decision", "state", "step"
     title: str
     date: str
     summary: str
-    in_context: bool   # va all'IA all'inizio di una chat nuova (PROJECT.md e le ultime note dell'indice)
+    in_context: bool   # va all'IA all'inizio di una chat nuova
+    open_rel: str = "" # cosa apre un clic
+    status: str = ""   # decisioni: "in_force", "superseded" (sostituita), "removed" (tolta senza sostituto)
+    files: list[str] = field(default_factory=list)   # note: file citati con [[…]]
+    origin: str = ""   # decisioni: nodo della sessione in cui è nata
+    replaced_by: str = ""
+    until: str = ""    # decisioni superate: data della sessione che le ha sostituite
 
 
 @dataclass
 class GraphEdge:
     src: str
     dst: str
-    kind: str          # "next" (percorso nel tempo) o "link" ([[…]])
+    kind: str          # "next" (tempo), "decided" (sessione → decisione), "replaced" (superata → nuova),
+                       # "step" (stato → prossimo passo), "link" ([[…]] tra note)
 
 
 @dataclass
@@ -874,50 +881,131 @@ class Project:
         return out
 
     def graph(self, recent: int = 3) -> "Graph":
-        """Nodi e collegamenti del progetto per la vista Grafo.
+        """Mappa delle decisioni del progetto, per la vista Grafo.
 
-        - nodi: PROJECT.md (stato attuale), le note in ordine di indice (dalla più vecchia) e i file di `file/`;
-          le bozze automatiche, l'indice e le versioni restano fuori (non sono lavoro del progetto);
-        - collegamenti: «poi» tra una nota e la successiva, dall'ultima nota a PROJECT.md (il percorso del
-          lavoro), e «link» per ogni [[…]] scritto in una nota, in PROJECT.md o in un file Markdown.
-        Un link a qualcosa che non esiste viene ignorato; nessun collegamento si ripete."""
-        nodes: list[GraphNode] = []
+        Linea del tempo: «Inizio» → sessioni (le note, in ordine di indice) → stato attuale (PROJECT.md).
+        Accanto a ogni sessione le decisioni nate lì: in vigore (da «Decisioni in vigore») o superate (dalle note,
+        «Decisioni superate»), con la freccia verso quella che l'ha sostituita. Accanto allo stato i prossimi passi.
+        In più i link [[…]] tra le note e, come numero sulla nota, i file che cita.
+
+        Dove è nata una decisione: la nota che la elenca in «Decisioni prese» o come nuova in «Decisioni superate»;
+        altrimenti la nota dello stesso giorno (l'ultima), altrimenti l'ultima nota precedente; altrimenti «Inizio».
+        Tutto viene da file che ci sono già: niente IA, niente token."""
+        from . import project as pj
         notes = self.notes()
         in_ctx = {n.rel for n in notes[-recent:]} if recent else set()
-        for n in notes:
-            nodes.append(GraphNode(n.rel, "note", n.title, n.date, n.summary, n.rel in in_ctx))
-        for rel in self.files():
-            nodes.append(GraphNode(rel, "file", rel[len(self.rel(FILES)) + 1:], "", "", False))
-        nodes.append(GraphNode(self.rel(PROJECT_FILE), "project", self.name, "", "", True))
-        # nomi con cui un link può indicare un nodo: nome del file, percorso nel progetto, titolo
-        keys: dict[str, str] = {}
-        for node in nodes:
-            tail = node.rel[len(self.rel()) + 1:]
-            stem = tail.rsplit("/", 1)[-1]
-            for k in (tail, tail.removesuffix(".md"), stem, stem.removesuffix(".md"), node.title):
-                keys.setdefault(k.strip().lower(), node.rel)
+        proj_rel = self.rel(PROJECT_FILE)
+        try:
+            proj_text = self.text()
+        except KeyError:
+            proj_text = ""
+        versions = self.versions()
+        nodes: list[GraphNode] = []
         edges: list[GraphEdge] = []
-        seen: set[tuple[str, str]] = set()
-
-        def add(a: str, b: str, kind: str):
-            if a != b and (a, b) not in seen and (b, a) not in seen:
-                seen.add((a, b))
-                edges.append(GraphEdge(a, b, kind))
-        for a, b in zip(notes, notes[1:]):
-            add(a.rel, b.rel, "next")
-        if notes:
-            add(notes[-1].rel, self.rel(PROJECT_FILE), "next")
-        for node in nodes:
-            if not node.rel.endswith(".md"):
-                continue
+        start = GraphNode("start", "start", "Inizio", "", "", False, versions[-1] if versions else proj_rel)
+        nodes.append(start)
+        texts: dict[str, str] = {}
+        for n in notes:
             try:
-                text = self.read_text(node.rel)
+                texts[n.rel] = self.read_text(n.rel)
             except KeyError:
+                texts[n.rel] = ""
+        # file citati da ogni nota: diventano un numero sulla nota (meno nodi, stesso significato)
+        file_keys: dict[str, str] = {}
+        for rel in self.files():
+            tail = rel[len(self.rel()) + 1:]
+            stem = tail.rsplit("/", 1)[-1]
+            for k in (tail, tail.removesuffix(".md"), stem, stem.removesuffix(".md")):
+                file_keys.setdefault(k.lower(), rel)
+        note_keys: dict[str, str] = {}
+        for n in notes:
+            for k in (n.stem, n.title, f"note/{n.stem}"):
+                note_keys.setdefault(k.strip().lower(), n.rel)
+        links: list[tuple[str, str]] = []
+        for n in notes:
+            files, seen_f = [], set()
+            for m in _WIKILINK.finditer(texts[n.rel]):
+                key = m.group(1).strip().lower()
+                if key in file_keys and file_keys[key] not in seen_f:
+                    seen_f.add(file_keys[key])
+                    files.append(file_keys[key][len(self.rel(FILES)) + 1:])
+                elif key in note_keys and note_keys[key] != n.rel:
+                    links.append((n.rel, note_keys[key]))
+            nodes.append(GraphNode(n.rel, "note", n.title, n.date, n.summary, n.rel in in_ctx, n.rel,
+                                   files=files))
+        state_lines = pj.section_lines(proj_text, "status")
+        nodes.append(GraphNode(proj_rel, "state", self.name, "", " ".join(state_lines), True, proj_rel))
+        timeline = ["start"] + [n.rel for n in notes] + [proj_rel]
+        for a, b in zip(timeline, timeline[1:]):
+            edges.append(GraphEdge(a, b, "next"))
+
+        # decisioni: chi le ha prese
+        taken: dict[str, str] = {}          # chiave della decisione -> nota
+        replaced: list[tuple[str, str, str]] = []   # (vecchia, nuova, nota)
+        for n in notes:
+            added, sup = pj.note_decisions(texts[n.rel])
+            for d in added:
+                taken.setdefault(pj.decision_key(d), n.rel)
+            for old, new in sup:
+                taken.setdefault(pj.decision_key(new), n.rel)
+                replaced.append((old, new, n.rel))
+
+        def origin(key: str, date: str) -> str:
+            if key in taken:
+                return taken[key]
+            if date:
+                same = [n.rel for n in notes if n.date == date]
+                if same:
+                    return same[-1]
+                before = [n.rel for n in notes if n.date and n.date <= date]
+                if before:
+                    return before[-1]
+            return "start"
+        dec: dict[str, GraphNode] = {}
+        for date, text in pj.decisions_in_force(proj_text):
+            key = pj.decision_key(text)
+            if not key or key in dec:
                 continue
-            for m in _WIKILINK.finditer(text):
-                target = keys.get(m.group(1).strip().lower())
-                if target:
-                    add(node.rel, target, "link")
+            node = GraphNode(f"dec:{key}", "decision", text, date, "", True, "", status="in_force")
+            node.origin = origin(key, date)
+            dec[key] = node
+        for old, new, note_rel in replaced:
+            ko, kn = pj.decision_key(old), pj.decision_key(new)
+            if not ko or not kn:
+                continue
+            if ko not in dec:   # superata: resta solo nella nota che l'ha sostituita
+                node = GraphNode(f"dec:{ko}", "decision", old, "", "", False, "", status="superseded")
+                node.origin = origin(ko, "")
+                if node.origin == note_rel:   # nata e superata nella stessa sessione: la metto prima
+                    node.origin = next((t for t, nx in zip(timeline, timeline[1:]) if nx == note_rel), "start")
+                dec[ko] = node
+            elif dec[ko].status == "in_force":
+                continue   # torna in vigore più avanti: niente freccia all'indietro
+            if kn not in dec:   # la nuova è stata superata a sua volta o tolta a mano
+                node = GraphNode(f"dec:{kn}", "decision", new, "", "", False, "", status="superseded")
+                node.origin = note_rel
+                dec[kn] = node
+            dec[ko].replaced_by = dec[kn].rel
+            dec[ko].until = next((n.date for n in notes if n.rel == note_rel), "")
+        dates = {n.rel: n.date for n in notes}
+        for node in dec.values():
+            node.date = node.date or dates.get(node.origin, "")   # le superate perdono la data: quella della sessione
+            node.open_rel = node.origin if node.origin != "start" else start.open_rel
+            if node.status == "superseded" and not node.replaced_by:
+                node.status = "removed"
+            nodes.append(node)
+            edges.append(GraphEdge(node.origin, node.rel, "decided"))
+            if node.replaced_by:
+                edges.append(GraphEdge(node.rel, node.replaced_by, "replaced"))
+        # prossimi passi, accanto allo stato attuale
+        for i, step in enumerate(pj.section_lines(proj_text, "next")):
+            nodes.append(GraphNode(f"step:{i}", "step", step, "", "", True, proj_rel))
+            edges.append(GraphEdge(proj_rel, f"step:{i}", "step"))
+        seen = {(e.src, e.dst) for e in edges}
+        for a, b in links:
+            if (a, b) not in seen and (b, a) not in seen:
+                seen.add((a, b))
+                edges.append(GraphEdge(a, b, "link"))
         return Graph(nodes, edges)
 
     def write_session_draft(self, session_id: str, text: str) -> str:

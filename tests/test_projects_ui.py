@@ -261,9 +261,8 @@ def test_pannello_e_nuovo_progetto():
     pump(50)
     gv = panel.graph_page.view
     assert panel.stack.currentIndex() == 2 and panel.title.text() == p.name
-    assert set(gv.nodes) == {n.rel for n in p.notes()} | {p.rel("PROJECT.md")}
-    # il link da «Utenti» a «DNS» coincide con la freccia tra le due note: non si ripete
-    assert {e.kind for e in gv.edges} == {"next"} and gv.nodes[p.notes()[0].rel].current
+    assert {n.rel for n in p.notes()} | {"start", p.rel("PROJECT.md")} <= set(gv.nodes)
+    assert "next" in {e.kind for e in gv.edges} and gv.nodes[p.notes()[0].rel].current
     gv.highlight(p.notes()[1].rel)
     assert gv.nodes[p.notes()[0].rel].hot is False and not gv.nodes[p.notes()[0].rel].dim   # vicino: acceso
     gv.highlight(None)
