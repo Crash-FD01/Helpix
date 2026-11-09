@@ -19,7 +19,19 @@ PROJECT_MARKER = "HELPIX-PROJECT"
 NOTE_MARKER = "HELPIX-NOTA"
 NOTE_MARKERS = ("HELPIX-NOTA", "HELPIX-NOTE")
 AGENT_FILE = "HELPIX-PROJECT.md"
-TOKEN_LIMIT = 1000
+TOKEN_LIMIT = 1000          # tetto consigliato di PROJECT.md; si cambia da *Impostazioni dei progetti*
+TOKEN_LIMITS = (500, 1000, 2000, 4000)
+
+
+def set_token_limit(n) -> int:
+    """Imposta il tetto (valori fuori dall'elenco: il più vicino). Restituisce quello usato."""
+    global TOKEN_LIMIT
+    try:
+        n = int(n)
+    except (TypeError, ValueError):
+        n = 1000
+    TOKEN_LIMIT = min(TOKEN_LIMITS, key=lambda v: abs(v - n))
+    return TOKEN_LIMIT
 RECENT_NOTES = 3
 
 # chiave, titolo italiano, titolo inglese, inizi riconosciuti (anche dei file scritti nell'altra lingua)

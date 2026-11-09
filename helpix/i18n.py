@@ -1666,4 +1666,10 @@ EN: dict[str, str] = {
     "Progetto nel cestino": "Project in the bin",
     "Nota nel cestino": "Note in the bin",
     "eliminato il {when}": "deleted on {when}",
+    "Tetto di PROJECT.md": "PROJECT.md limit",
+    "~500 token (molto corto)": "~500 tokens (very short)",
+    "~1000 token (consigliato)": "~1000 tokens (recommended)",
+    "~2000 token": "~2000 tokens",
+    "~4000 token (contesti grandi)": "~4000 tokens (large contexts)",
+    "PROJECT.md va all'IA all'inizio di ogni chat nuova (con API e agenti a ogni richiesta): più è corto, meno costa e meglio viene seguito. Oltre il tetto Helpix propone di compattarlo; non blocca niente.": "PROJECT.md is sent to the AI at the start of every new chat (with the API and agents, with every request): the shorter it is, the less it costs and the better it is followed. Above the limit Helpix suggests compacting it; nothing is blocked.",
 }

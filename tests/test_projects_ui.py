@@ -416,6 +416,23 @@ def test_barra_stretta_e_finestre_helpix():
     win.close()
 
 
+def test_tetto_regolabile():
+    """Il tetto di PROJECT.md si sceglie dalle impostazioni e vale per misuratore, avvisi e compattazione."""
+    win = make_window()
+    try:
+        assert pj.set_token_limit("abc") == 1000 and pj.set_token_limit(3000) in (2000, 4000)
+        dlg = vault_dialogs.ProjectSettingsDialog(win.settings, win._get_vault, win)
+        dlg.changed.connect(win._apply_project_settings)
+        dlg.limit.setCurrentIndex(dlg.limit.findData(2000))
+        assert win.settings.get("project_token_limit") == 2000 and pj.TOKEN_LIMIT == 2000
+        assert "2000 token" in pj.compact_request("# P\n\n## Stato\nok\n")
+        dlg.close()
+    finally:
+        win.settings.set("project_token_limit", 1000)
+        pj.set_token_limit(1000)
+        win.close()
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):
