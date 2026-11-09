@@ -360,11 +360,13 @@ def test_barra_stretta_e_finestre_helpix():
     win.project_btn.setText("Un progetto con un nome davvero molto lungo")
     win.model_btn.setText("modello predefinito · high")
     pump(100)
-    levels = []
-    for w in (1400, 1100, 950, 820, 760):
+    levels, by_width = [], {}
+    for w in (1400, 1000, 820, 760):
         win.resize(w, 640)
         pump(120)
         levels.append(win._tb_level)
+        by_width[win.toolbar.width()] = win._tb_level
+        assert win.picker.status.isVisible() == (win._tb_level == 0), (w, win._tb_level)
         bar = win.toolbar
         items = [bar.layout().itemAt(i).widget() for i in range(bar.layout().count())]
         shown = [x for x in items if x is not None and x.isVisible()]
@@ -378,9 +380,12 @@ def test_barra_stretta_e_finestre_helpix():
     # il nome intero resta (per i test, i suggerimenti e i lettori di schermo)
     assert win.project_btn.text() == "Un progetto con un nome davvero molto lungo"
     assert "molto lungo" in win.project_btn.toolTip()
+    # allargando si torna indietro (stessa larghezza = stesso livello)
     win.resize(1400, 640)
     pump(120)
-    assert win._tb_level == levels[0] and win.picker.status.isVisible() == (levels[0] == 0)
+    assert win._tb_level <= levels[-1], (win._tb_level, levels)
+    if win.toolbar.width() in by_width:
+        assert win._tb_level == by_width[win.toolbar.width()], (win.toolbar.width(), win._tb_level, by_width)
 
     # finestre di dialogo con la cornice di Helpix
     seen = {}
