@@ -195,7 +195,7 @@ jobs:
           [ "$state" = "completed success" ] || { echo "::error::La CI non ha finito in tempo: non pubblico"; exit 1; }
           gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$TAG" -f sha="$GITHUB_SHA" > /dev/null
           echo "Creato il tag $TAG su $GITHUB_SHA"
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: packages-*
           path: pkgs
