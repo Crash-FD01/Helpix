@@ -69,6 +69,14 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.19.6" date="2026-11-09">
+      <description>
+        <p>A shorter settings menu: on/off options are grouped under Configuration and Appearance. “Report a problem…” is
+          now in the settings menu: it prepares a report with version, system, settings and recent log lines (never the
+          contents of notes or projects), filtered for privacy and shown in an editable preview, and saves it as a
+          file.</p>
+      </description>
+    </release>
     <release version="0.19.5" date="2026-11-09">
       <description>
         <p>Windows: saving a project with an agent in the terminal (Claude Code, Codex, Gemini CLI) shows the preview
