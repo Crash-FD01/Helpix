@@ -69,6 +69,13 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.19.3" date="2026-11-09">
+      <description>
+        <p>The top bar adapts to narrow windows instead of overlapping its buttons (shorter labels, then icons only),
+          and all of Helpix's dialogs (settings, confirmations, warnings, text prompts) now use Helpix's own title
+          bar, unless the system title bar is chosen in Settings. Projects and vault stay in beta, off by default.</p>
+      </description>
+    </release>
     <release version="0.19.2" date="2026-11-08">
       <description>
         <p>Projects and vault (beta, still off by default): delete and rename projects, notes and files, with a Trash
