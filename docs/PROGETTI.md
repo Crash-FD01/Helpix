@@ -69,7 +69,8 @@ Sezioni fisse, in quest'ordine:
 
 ### Note e indice
 
-- Nota: `note/2026-11-07-titolo-breve.md`, con titolo, data, IA usata, testo e decisioni superate.
+- Nota: `note/2026-11-07-titolo-breve.md`, con titolo, data, IA usata, testo, decisioni prese e decisioni superate
+  (servono al Grafo; l'IA le legge solo se chiede la nota).
 - Riga dell'indice: `- 2026-11-07 · [[2026-11-07-titolo-breve|Titolo breve]] — sintesi`.
 - All'apertura del progetto si incollano solo le **ultime 3 righe** dell'indice.
 
@@ -161,20 +162,31 @@ sola quando esci da Helpix. All'apertura si adatta allo schermo.
 
 In alto una striscia *Beta* con *Esporta in chiaro*, *Segnala un problema* e *Guida*.
 
-### Grafo
+### Grafo: la mappa delle decisioni
 
-Terzo pulsante accanto a *Leggi/Modifica*: il percorso del progetto aperto, dalla prima nota allo stato attuale.
-- **Colonna di sinistra**, dall'alto in basso: le note in ordine di indice, unite da frecce («poi»), e in fondo
-  PROJECT.md (in blu). Il pallino indica le note che vanno nel contesto della prossima chat.
-- **A destra** i file di `file/`, ciascuno all'altezza delle note che lo citano; quelli mai citati in fondo.
-- **Archi tratteggiati**: i link `[[…]]` scritti in note, file Markdown e PROJECT.md (a sinistra tra note, verso
-  destra verso i file). Un link a qualcosa che non esiste non compare.
-- Passando sopra un nodo si accendono lui e i suoi collegamenti (gli altri si attenuano) e il suggerimento mostra
-  data e sintesi. **Un clic apre la nota** nel pannello, in lettura.
-- La rotella scorre, Ctrl + rotella ingrandisce, si trascina lo sfondo per spostarsi; *Adatta* rimette tutto in
-  vista (o, se è lungo, la parte finale a grandezza naturale).
-- Bozze automatiche, indice e versioni restano fuori: non sono lavoro del progetto.
-Disposizione fissa (non «a molle», come in Obsidian): si legge come una linea del tempo e non cambia a ogni apertura.
+Terzo pulsante accanto a *Leggi/Modifica*. Non è l'elenco delle note in un'altra forma: mostra **perché il
+progetto è arrivato dov'è**.
+- **Linea del tempo** (a sinistra, dall'alto in basso): *Inizio del progetto*, le sessioni (le note, in ordine di
+  indice) e in fondo lo **stato attuale** (PROJECT.md, in blu, con la riga di *Stato*).
+- **Decisioni** (a destra), all'altezza della sessione in cui sono nate: *in vigore* (barra verde), *superate*
+  (barrate, «superata il …», con la freccia arancione verso quella che le ha sostituite) o *tolte* (superate senza
+  sostituto). Accanto allo stato, i **prossimi passi**.
+- Il pallino indica cosa va all'IA nella prossima chat: stato, decisioni in vigore, ultime sessioni dell'indice.
+- I file citati da una nota sono un numero sulla nota (nomi nel suggerimento); i link `[[…]]` tra note non vicine
+  sono archi sottili a sinistra. Così il grafo resta compatto: un nodo per ogni cosa che conta.
+- Passando sopra un nodo si accendono lui e i suoi collegamenti; il suggerimento dice dove è stata presa una
+  decisione e da cosa è stata sostituita. **Un clic apre la nota da cui viene** (per una decisione, la sessione in
+  cui è nata; per *Inizio*, la versione più vecchia di PROJECT.md che c'è ancora).
+- La rotella scorre, Ctrl + rotella ingrandisce, si trascina lo sfondo; *Adatta* rimette tutto in vista (o, se è
+  lungo, la parte finale a larghezza piena).
+
+Da dove vengono i dati (niente IA, niente token in più):
+- decisioni in vigore e prossimi passi da PROJECT.md;
+- dalla nota di ogni salvataggio: «## Decisioni prese» (scritta da Helpix con le decisioni aggiunte in quel
+  salvataggio) e «## Decisioni superate» (vecchia → nuova);
+- dove è nata una decisione: la nota che la elenca; altrimenti la sessione dello stesso giorno (l'ultima), poi
+  l'ultima precedente, poi *Inizio*. Vale anche per le note salvate prima di questa versione e per le decisioni
+  scritte a mano in PROJECT.md.
 
 L'albero si apre e si chiude con un clic (freccia ▸/▾ disegnata da Helpix). Il pulsante «⋯» e il tasto destro
 danno *Rinomina il progetto* (cambia il «# titolo», la cartella resta), *Elimina la nota/il file/la bozza* ed
@@ -291,7 +303,7 @@ Per togliere la beta:
 | `helpix/project.py` | Testo di contesto, richiesta e lettura di `HELPIX-PROJECT`, applicazione delle modifiche, `HELPIX-NOTA` |
 | `helpix/passwords.py` | Robustezza della password, codici e frasi casuali (`data/parole-it.txt`) |
 | `helpix/ui/vault_panel.py` | Pannello Vault (e la resa Markdown delle note) |
-| `helpix/ui/vault_graph.py` | Vista Grafo del pannello (`Project.graph()` in `vault.py` dà nodi e collegamenti) |
+| `helpix/ui/vault_graph.py` | Vista Grafo, la mappa delle decisioni (`Project.graph()` in `vault.py` dà nodi e collegamenti) |
 | `helpix/ui/tour.py` | Giri a nuvolette, anche quelli dei progetti e del pannello |
 | `helpix/ui/vault_dialogs.py` | Nuovo progetto, salvataggio con anteprima, creazione/sblocco/recupero del vault, impostazioni |
 | `helpix/ui/project_mixin.py` | Selettore, apertura, salvataggio, promemoria, bozze, barra HELPIX-NOTA, blocco, `helpix vault` |

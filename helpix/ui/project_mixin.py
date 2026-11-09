@@ -463,7 +463,8 @@ class ProjectsMixin:
             version = p.save_text(text, keep=keep)
             note = None
             if title or body:
-                note_md = pj.note_text(title or tr("Sessione"), body, source, result.superseded, result.warnings)
+                note_md = pj.note_text(title or tr("Sessione"), body, source, result.superseded, result.warnings,
+                                       added=getattr(result, "added", ()))
                 note = p.add_note(title or tr("Sessione"), note_md, pj.note_summary(body))
             if self.session.messages and self._in_project():
                 p.write_session_draft(self.session.id, pj.session_markdown(self.session))

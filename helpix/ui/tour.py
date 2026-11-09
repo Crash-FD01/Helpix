@@ -175,9 +175,9 @@ def vault_steps(panel) -> list[Step]:
                 "così ogni chat nuova resta leggera.")),
         Step("v_seg", lambda: panel.seg, tr("Leggi, modifica, grafo"),
              tr("Leggi mostra la nota formattata, con i link [[ ]] cliccabili. Modifica apre il testo: puoi correggere "
-                "a mano e salvare; per PROJECT.md la versione precedente resta tra le versioni. Grafo mostra il "
-                "percorso del progetto: le note dalla prima all'ultima fino allo stato attuale, i file a destra e i "
-                "collegamenti [[ ]]. Un clic su una nota la apre.")),
+                "a mano e salvare; per PROJECT.md la versione precedente resta tra le versioni. Grafo è la mappa "
+                "delle decisioni: accanto a ogni sessione quelle prese lì, le superate con la freccia verso quella "
+                "nuova, in fondo lo stato e i prossimi passi. Un clic apre la nota da cui viene.")),
         Step("v_more", lambda: panel.btn_more, tr("Altre azioni"),
              tr("Rinomina il progetto, elimina una nota, un file o l'intero progetto (anche con il tasto destro "
                 "nell'albero). Quello che elimini va nel Cestino in fondo all'albero: da lì lo ripristini o lo elimini "
