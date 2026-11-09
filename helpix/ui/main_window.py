@@ -315,7 +315,8 @@ class MainWindow(ProjectsMixin, QMainWindow):
         self._tb_timer.setSingleShot(True)
         self._tb_timer.setInterval(0)
         self._tb_timer.timeout.connect(self._fit_toolbar)
-        self._tb_watch = _ResizeWatch(self.toolbar, self._fit_toolbar)
+        # subito (niente sovrapposizioni mentre si trascina il bordo) e di nuovo a misure assestate
+        self._tb_watch = _ResizeWatch(self.toolbar, lambda: (self._fit_toolbar(), self._schedule_toolbar_fit()))
         th = QHBoxLayout(self.toolbar)
         th.setContentsMargins(14, 0, 10, 0)
         th.setSpacing(8)
