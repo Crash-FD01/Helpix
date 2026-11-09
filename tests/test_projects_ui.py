@@ -365,7 +365,10 @@ def test_barra_stretta_e_finestre_helpix():
         win.resize(w, 640)
         pump(120)
         levels.append(win._tb_level)
-        by_width[win.toolbar.width()] = win._tb_level
+        lay = win.toolbar.layout()
+        by_width[win.toolbar.width()] = (win._tb_level, lay.minimumSize().width(),
+                                         [(type(x).__name__, x.minimumSizeHint().width(), x.minimumWidth())
+                                          for x in (win.picker, win.model_btn, win.project_btn, win.shot, win.btn_diag)])
         assert win.picker.status.isVisible() == (win._tb_level == 0), (w, win._tb_level)
         bar = win.toolbar
         items = [bar.layout().itemAt(i).widget() for i in range(bar.layout().count())]
@@ -385,7 +388,8 @@ def test_barra_stretta_e_finestre_helpix():
     pump(120)
     assert win._tb_level <= levels[-1], (win._tb_level, levels)
     if win.toolbar.width() in by_width:
-        assert win._tb_level == by_width[win.toolbar.width()], (win.toolbar.width(), win._tb_level, by_width)
+        assert win._tb_level == by_width[win.toolbar.width()][0], (win.toolbar.width(), win._tb_level,
+                                                                     lay.minimumSize().width(), by_width)
 
     # finestre di dialogo con la cornice di Helpix
     seen = {}
