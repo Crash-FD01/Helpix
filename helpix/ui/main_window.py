@@ -526,32 +526,14 @@ class MainWindow(ProjectsMixin, QMainWindow):
         QShortcut(QKeySequence("Ctrl+Shift+L"), self, self._toggle_theme)
 
     def _build_gear_menu(self) -> QMenu:
+        """Ingranaggio: in alto le azioni d'uso frequente, le opzioni sì/no raccolte in «Configurazione» e
+        «Aspetto», in fondo aiuto e segnalazioni (in vista, non nascoste nel vault)."""
         menu = theme.prepare_menu(QMenu(self))
         menu.addAction(icon("key", C["text"], 16), tr("Chiavi API e modelli…"), self.open_settings)
         menu.addAction(icon("lock", C["text"], 16), tr("Sicurezza…"), self.open_security)
-        if not IS_WINDOWS:  # su Windows Qt è incluso nel programma: niente pacchetti di sistema da installare
-            menu.addAction(icon("download", C["text"], 16), tr("Dipendenze di sistema…"), self.check_system_deps)
-        from .. import updates
-        menu.addAction(icon("refresh", C["text"], 16), tr("Controlla gli aggiornamenti"),
-                       lambda: self._check_updates(manual=True))
-        act = menu.addAction(tr("Avvisami delle nuove versioni"))
-        act.setCheckable(True)
-        act.setChecked(bool(self.settings.get("check_updates", updates.enabled_by_default())))
-        act.toggled.connect(lambda on: self.settings.set("check_updates", on))
-        menu.addAction(icon("info", C["text"], 16), tr("Guida rapida (giro guidato)"), self.start_tour)
-        menu.addAction(icon("star", C["text"], 16), tr("Schermata iniziale…"), self.open_start_screen)
-        self.act_start_screen = menu.addAction(tr("Mostra la schermata iniziale all'avvio"))
-        self.act_start_screen.setCheckable(True)
-        self.act_start_screen.setChecked(not self.settings.get("skip_setup", False))
-        self.act_start_screen.toggled.connect(lambda on: self.settings.set("skip_setup", not on))
-        self.act_tips = menu.addAction(tr("Mostra i suggerimenti all'avvio"))
-        self.act_tips.setCheckable(True)
-        self.act_tips.setChecked(bool(self.settings.get("show_tips", True)))
-        self.act_tips.toggled.connect(lambda on: self.settings.set("show_tips", bool(on)))
-        menu.aboutToShow.connect(lambda: (self.act_tips.setChecked(bool(self.settings.get("show_tips", True))),
-                                          self.act_start_screen.setChecked(not self.settings.get("skip_setup",
-                                                                                                  False))))
         self.act_lock_now = menu.addAction(tr("Blocca ora"), self.lock)
+        menu.addSeparator()
+
         appearance = theme.prepare_menu(menu.addMenu(tr("Aspetto")))
         group = QActionGroup(self)
         self.theme_actions = {}
@@ -561,6 +543,17 @@ class MainWindow(ProjectsMixin, QMainWindow):
             group.addAction(act)
             self.theme_actions[key] = act
         self.theme_actions.get(theme.mode(), self.theme_actions["auto"]).setChecked(True)
+        appearance.addSeparator()
+        self.act_rounded = appearance.addAction(tr("Angoli arrotondati"))
+        self.act_rounded.setCheckable(True)
+        self.act_rounded.setChecked(bool(self.settings.get("rounded_corners", True)))
+        self.act_rounded.setEnabled(self.frameless)
+        self.act_rounded.toggled.connect(self._toggle_rounded)
+        self.act_titlebar = appearance.addAction(tr("Usa la barra del titolo del sistema"))
+        self.act_titlebar.setCheckable(True)
+        self.act_titlebar.setChecked(bool(self.settings.get("system_titlebar", False)))
+        self.act_titlebar.toggled.connect(self._toggle_titlebar)
+
         languages = theme.prepare_menu(menu.addMenu(tr("Lingua") + " · Language"))
         lgroup = QActionGroup(self)
         for code, label in LANGUAGES.items():
@@ -568,19 +561,35 @@ class MainWindow(ProjectsMixin, QMainWindow):
             act.setCheckable(True)
             act.setChecked(code == current_language())
             lgroup.addAction(act)
-        menu.addSeparator()
-        self.act_pin = menu.addAction(tr("Tieni sopra le altre finestre"))
+
+        config = theme.prepare_menu(menu.addMenu(tr("Configurazione")))
+        self.act_pin = config.addAction(tr("Tieni sopra le altre finestre"))
         self.act_pin.setCheckable(True)
         self.act_pin.toggled.connect(self._toggle_on_top)
-        self.act_titlebar = menu.addAction(tr("Usa la barra del titolo del sistema"))
-        self.act_titlebar.setCheckable(True)
-        self.act_titlebar.setChecked(bool(self.settings.get("system_titlebar", False)))
-        self.act_titlebar.toggled.connect(self._toggle_titlebar)
-        self.act_close_tray = menu.addAction(tr("Chiudendo, resta nell'area di notifica"))
+        self.act_close_tray = config.addAction(tr("Chiudendo, resta nell'area di notifica"))
         self.act_close_tray.setCheckable(True)
         self.act_close_tray.setChecked(bool(self.settings.get("close_to_tray", True)))
         self.act_close_tray.toggled.connect(lambda on: self.settings.set("close_to_tray", on))
-        self.act_to_tray = menu.addAction(tr("Riduci nell'area di notifica"), lambda: self.to_tray())
+        self.act_start_screen = config.addAction(tr("Mostra la schermata iniziale all'avvio"))
+        self.act_start_screen.setCheckable(True)
+        self.act_start_screen.setChecked(not self.settings.get("skip_setup", False))
+        self.act_start_screen.toggled.connect(lambda on: self.settings.set("skip_setup", not on))
+        self.act_tips = config.addAction(tr("Mostra i suggerimenti all'avvio"))
+        self.act_tips.setCheckable(True)
+        self.act_tips.setChecked(bool(self.settings.get("show_tips", True)))
+        self.act_tips.toggled.connect(lambda on: self.settings.set("show_tips", bool(on)))
+        from .. import updates
+        act = config.addAction(tr("Avvisami delle nuove versioni"))
+        act.setCheckable(True)
+        act.setChecked(bool(self.settings.get("check_updates", updates.enabled_by_default())))
+        act.toggled.connect(lambda on: self.settings.set("check_updates", on))
+        config.aboutToShow.connect(lambda: (self.act_tips.setChecked(bool(self.settings.get("show_tips", True))),
+                                            self.act_start_screen.setChecked(not self.settings.get("skip_setup",
+                                                                                                    False))))
+        if not IS_WINDOWS:  # su Windows Qt è incluso nel programma: niente pacchetti di sistema da installare
+            config.addSeparator()
+            config.addAction(icon("download", C["text"], 16), tr("Dipendenze di sistema…"), self.check_system_deps)
+
         quick = theme.prepare_menu(menu.addMenu(tr("Finestra rapida")))
         quick.addAction(tr("Apri la finestra rapida"), self.open_quick)
         self.act_quick_info = quick.addAction(tr("Scorciatoia globale…"), self.quick_shortcut_info)
@@ -591,13 +600,14 @@ class MainWindow(ProjectsMixin, QMainWindow):
         self.act_projects_beta.toggled.connect(self.toggle_projects_beta)
         lab.addAction(tr("Impostazioni dei progetti…"), self.open_project_settings)
         lab.addAction(tr("Guida ai progetti"), self.start_projects_tour)
+        self.act_to_tray = menu.addAction(tr("Riduci nell'area di notifica"), lambda: self.to_tray())
         menu.addSeparator()
-        self.act_rounded = menu.addAction(tr("Angoli arrotondati"))
-        self.act_rounded.setCheckable(True)
-        self.act_rounded.setChecked(bool(self.settings.get("rounded_corners", True)))
-        self.act_rounded.setEnabled(self.frameless)
-        self.act_rounded.toggled.connect(self._toggle_rounded)
-        menu.addSeparator()
+
+        menu.addAction(icon("info", C["text"], 16), tr("Guida rapida (giro guidato)"), self.start_tour)
+        menu.addAction(icon("star", C["text"], 16), tr("Schermata iniziale…"), self.open_start_screen)
+        menu.addAction(icon("refresh", C["text"], 16), tr("Controlla gli aggiornamenti"),
+                       lambda: self._check_updates(manual=True))
+        menu.addAction(icon("upload", C["text"], 16), tr("Segnala un problema…"), self.report_problem)
         menu.addAction(tr("Informazioni su Helpix"), self.show_about)
         self.gear_menu = menu
         return menu
@@ -839,6 +849,10 @@ class MainWindow(ProjectsMixin, QMainWindow):
             return s.get("default_engine") == "web" and s.get("default_site") == self.web.site
         return (s.get("default_engine") == "api" and s.get("default_provider") == self.session.provider
                 and s.get("default_model") == self.session.model)
+
+    def report_problem(self):
+        from .report_dialog import open_report
+        open_report(self)
 
     def show_about(self):
         QMessageBox.about(self, tr("Informazioni su Helpix"), tr(

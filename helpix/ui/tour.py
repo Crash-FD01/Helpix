@@ -195,8 +195,8 @@ def vault_steps(panel) -> list[Step]:
              tr("Se il vault è cifrato, da qui lo blocchi subito; si blocca anche insieme a Helpix. Se non è cifrato, "
                 "sono normali file Markdown nella tua cartella.")),
         Step("v_guide", lambda: panel.btn_guide, tr("Beta e guida"),
-             tr("È una funzione in prova: «Esporta in chiaro» ti fa una copia leggibile, «Segnala un problema» apre "
-                "la pagina delle segnalazioni, «Guida» rifà questo giro.")),
+             tr("È una funzione in prova: «Esporta in chiaro» ti fa una copia leggibile, «Guida» rifà questo giro; "
+                "«Segnala un problema» è nell'ingranaggio delle impostazioni.")),
         Step("v_bye", None, tr("Tutto qui! ✨"),
              tr("Buon lavoro con i tuoi progetti."), tip=False),
     ]

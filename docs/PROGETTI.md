@@ -160,7 +160,8 @@ Finestra separata (dal selettore *Progetto › Apri il vault…*) in tre colonne
 riduci/ingrandisci/chiudi): non resta sopra alle altre, si porta in primo piano Helpix con un clic e si chiude da
 sola quando esci da Helpix. All'apertura si adatta allo schermo.
 
-In alto una striscia *Beta* con *Esporta in chiaro*, *Segnala un problema* e *Guida*.
+In alto una striscia *Beta* con *Esporta in chiaro* e *Guida*; *Segnala un problema* è nell'ingranaggio delle
+impostazioni.
 
 ### Grafo: la mappa delle decisioni
 
@@ -274,8 +275,8 @@ Helpix lo dice e consiglia la cifratura del disco (LUKS, BitLocker) per la prote
 ## Beta
 
 - Interruttore in *Impostazioni › Funzioni sperimentali*, spento di default.
-- Banner nel pannello Vault: *«Funzione in beta: tieni una copia dei dati importanti»*, con *Segnala un problema*
-  ed *Esporta in chiaro*. Alla creazione di un vault cifrato, avviso più forte.
+- Banner nel pannello Vault: *«Funzione in beta: tieni una copia dei dati importanti»*, con *Esporta in chiaro*
+  (*Segnala un problema* sta nell'ingranaggio delle impostazioni). Alla creazione di un vault cifrato, avviso più forte.
 - Il formato ha un numero di versione dal primo giorno: i vault creati in beta si apriranno con le versioni
   successive.
 

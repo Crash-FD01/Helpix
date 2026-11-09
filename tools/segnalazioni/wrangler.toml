@@ -1,0 +1,28 @@
+# SPDX-FileCopyrightText: 2026 Crash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Servizio di segnalazione di Helpix su Cloudflare Workers (piano gratuito). Istruzioni: README.md.
+name = "helpix-segnalazioni"
+main = "worker.js"
+compatibility_date = "2026-11-01"
+workers_dev = true
+
+[vars]
+GITHUB_REPO = "Crash-FD01/helpix-segnalazioni"
+
+# al massimo 3 segnalazioni al minuto dallo stesso indirizzo…
+[[ratelimits]]
+name = "PER_IP"
+namespace_id = "4101"
+
+  [ratelimits.simple]
+  limit = 3
+  period = 60
+
+# …e 20 al minuto in tutto (contro gli abusi da molti indirizzi)
+[[ratelimits]]
+name = "TUTTI"
+namespace_id = "4102"
+
+  [ratelimits.simple]
+  limit = 20
+  period = 60

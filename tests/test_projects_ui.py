@@ -439,6 +439,25 @@ def test_barra_stretta_e_finestre_helpix():
     win.close()
 
 
+def test_menu_ingranaggio_compatto():
+    """Ingranaggio: le opzioni sì/no stanno in «Configurazione» e «Aspetto», «Segnala un problema…» è in vista."""
+    win = make_window()
+    try:
+        menu = win.gear_menu
+        top = [a.text() for a in menu.actions() if not a.isSeparator()]
+        assert len(top) <= 16, top
+        assert "Segnala un problema…" in top and "Configurazione" in top and "Aspetto" in top
+        for gone in ("Tieni sopra le altre finestre", "Usa la barra del titolo del sistema", "Angoli arrotondati",
+                     "Mostra i suggerimenti all'avvio", "Avvisami delle nuove versioni"):
+            assert gone not in top, gone
+        sub = {a.text(): a.menu() for a in menu.actions() if a.menu()}
+        config = [a.text() for a in sub["Configurazione"].actions()]
+        assert "Tieni sopra le altre finestre" in config and "Mostra i suggerimenti all'avvio" in config
+        assert win.act_titlebar in sub["Aspetto"].actions() and win.act_rounded in sub["Aspetto"].actions()
+    finally:
+        win.close()
+
+
 def test_tetto_regolabile():
     """Il tetto di PROJECT.md si sceglie dalle impostazioni e vale per misuratore, avvisi e compattazione."""
     win = make_window()

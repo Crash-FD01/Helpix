@@ -1,0 +1,9 @@
+{
+  "name": "helpix-segnalazioni",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node test_worker.mjs",
+    "deploy": "wrangler deploy"
+  }
+}
