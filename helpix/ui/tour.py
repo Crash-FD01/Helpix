@@ -173,9 +173,11 @@ def vault_steps(panel) -> list[Step]:
         Step("v_meter", lambda: panel.meter_box, tr("Quanto pesa"),
              tr("Il peso di PROJECT.md in token. Sotto i 1000 va tutto bene; oltre, conviene «Compatta il progetto», "
                 "così ogni chat nuova resta leggera.")),
-        Step("v_seg", lambda: panel.seg, tr("Leggi o modifica"),
+        Step("v_seg", lambda: panel.seg, tr("Leggi, modifica, grafo"),
              tr("Leggi mostra la nota formattata, con i link [[ ]] cliccabili. Modifica apre il testo: puoi correggere "
-                "a mano e salvare; per PROJECT.md la versione precedente resta tra le versioni.")),
+                "a mano e salvare; per PROJECT.md la versione precedente resta tra le versioni. Grafo mostra il "
+                "percorso del progetto: le note dalla prima all'ultima fino allo stato attuale, i file a destra e i "
+                "collegamenti [[ ]]. Un clic su una nota la apre.")),
         Step("v_more", lambda: panel.btn_more, tr("Altre azioni"),
              tr("Rinomina il progetto, elimina una nota, un file o l'intero progetto (anche con il tasto destro "
                 "nell'albero). Quello che elimini va nel Cestino in fondo all'albero: da lì lo ripristini o lo elimini "

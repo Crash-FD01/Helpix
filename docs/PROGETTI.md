@@ -149,7 +149,7 @@ ricevono il contesto del progetto.
 Finestra separata (dal selettore *Progetto › Apri il vault…*) in tre colonne:
 - **sinistra**: nome del vault, ricerca, albero di progetti e note (PROJECT.md, INDEX.md, note, file, sessioni,
   versioni), scheda del lucchetto con *Blocca*;
-- **centro**: percorso, titolo, *Leggi/Modifica*, *Riprendi con…* (l'assistente attivo), *Incolla nella chat*,
+- **centro**: percorso, titolo, *Leggi/Modifica/Grafo*, *Riprendi con…* (l'assistente attivo), *Incolla nella chat*,
   misuratore dei token di PROJECT.md; nota formattata con le decisioni «in vigore» e «Solo per me» evidenziata
   («mai inviata all'IA»); in modifica *Salva modifiche* / *Annulla le modifiche*; per le versioni *Ripristina*;
 - **destra**: cosa va all'IA nella prossima chat (con il totale), «Citata da», note recenti (*nel contesto* /
@@ -160,6 +160,21 @@ riduci/ingrandisci/chiudi): non resta sopra alle altre, si porta in primo piano 
 sola quando esci da Helpix. All'apertura si adatta allo schermo.
 
 In alto una striscia *Beta* con *Esporta in chiaro*, *Segnala un problema* e *Guida*.
+
+### Grafo
+
+Terzo pulsante accanto a *Leggi/Modifica*: il percorso del progetto aperto, dalla prima nota allo stato attuale.
+- **Colonna di sinistra**, dall'alto in basso: le note in ordine di indice, unite da frecce («poi»), e in fondo
+  PROJECT.md (in blu). Il pallino indica le note che vanno nel contesto della prossima chat.
+- **A destra** i file di `file/`, ciascuno all'altezza delle note che lo citano; quelli mai citati in fondo.
+- **Archi tratteggiati**: i link `[[…]]` scritti in note, file Markdown e PROJECT.md (a sinistra tra note, verso
+  destra verso i file). Un link a qualcosa che non esiste non compare.
+- Passando sopra un nodo si accendono lui e i suoi collegamenti (gli altri si attenuano) e il suggerimento mostra
+  data e sintesi. **Un clic apre la nota** nel pannello, in lettura.
+- La rotella scorre, Ctrl + rotella ingrandisce, si trascina lo sfondo per spostarsi; *Adatta* rimette tutto in
+  vista (o, se è lungo, la parte finale a grandezza naturale).
+- Bozze automatiche, indice e versioni restano fuori: non sono lavoro del progetto.
+Disposizione fissa (non «a molle», come in Obsidian): si legge come una linea del tempo e non cambia a ogni apertura.
 
 L'albero si apre e si chiude con un clic (freccia ▸/▾ disegnata da Helpix). Il pulsante «⋯» e il tasto destro
 danno *Rinomina il progetto* (cambia il «# titolo», la cartella resta), *Elimina la nota/il file/la bozza* ed
@@ -276,6 +291,7 @@ Per togliere la beta:
 | `helpix/project.py` | Testo di contesto, richiesta e lettura di `HELPIX-PROJECT`, applicazione delle modifiche, `HELPIX-NOTA` |
 | `helpix/passwords.py` | Robustezza della password, codici e frasi casuali (`data/parole-it.txt`) |
 | `helpix/ui/vault_panel.py` | Pannello Vault (e la resa Markdown delle note) |
+| `helpix/ui/vault_graph.py` | Vista Grafo del pannello (`Project.graph()` in `vault.py` dà nodi e collegamenti) |
 | `helpix/ui/tour.py` | Giri a nuvolette, anche quelli dei progetti e del pannello |
 | `helpix/ui/vault_dialogs.py` | Nuovo progetto, salvataggio con anteprima, creazione/sblocco/recupero del vault, impostazioni |
 | `helpix/ui/project_mixin.py` | Selettore, apertura, salvataggio, promemoria, bozze, barra HELPIX-NOTA, blocco, `helpix vault` |

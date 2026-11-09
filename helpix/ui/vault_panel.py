@@ -26,6 +26,7 @@ from ..vault import FILES, INDEX_FILE, NOTES, PROJECT_FILE, SESSIONS, VERSIONS, 
 from .controls import WindowControls
 from .frameless import FramelessHelper, RoundedCentral
 from .vault_dialogs import ISSUES_URL
+from .vault_graph import GraphPage
 
 _ROLE = Qt.ItemDataRole.UserRole
 _LINK = re.compile(r"\[\[([^\]|]+)(?:\|([^\]]+))?\]\]")
@@ -446,8 +447,11 @@ class VaultPanel(QDialog):
         self.btn_read.setText(tr("Leggi"))
         self.btn_edit = QToolButton()
         self.btn_edit.setText(tr("Modifica"))
+        self.btn_graph = QToolButton()
+        self.btn_graph.setText(tr("Grafo"))
+        self.btn_graph.setToolTip(tr("Il percorso del progetto: le note nel tempo, i file e i collegamenti"))
         group = QButtonGroup(self)
-        for b in (self.btn_read, self.btn_edit):
+        for b in (self.btn_read, self.btn_edit, self.btn_graph):
             b.setCheckable(True)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
             group.addButton(b)
@@ -455,8 +459,9 @@ class VaultPanel(QDialog):
         self.btn_read.setChecked(True)
         self.btn_read.toggled.connect(lambda on: on and self._mode(False))
         self.btn_edit.toggled.connect(lambda on: on and self._mode(True))
+        self.btn_graph.toggled.connect(lambda on: on and self._show_graph())
         self.seg.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        for b in (self.btn_read, self.btn_edit):
+        for b in (self.btn_read, self.btn_edit, self.btn_graph):
             b.setMinimumWidth(b.sizeHint().width() + 16)
         title_row.addWidget(self.seg, 0, Qt.AlignmentFlag.AlignBottom)
         self.btn_more = QToolButton()
@@ -549,8 +554,12 @@ class VaultPanel(QDialog):
         self.btn_save.clicked.connect(self._save)
         er.addWidget(self.btn_save)
         ev.addLayout(er)
+        self.graph_page = GraphPage()
+        self.graph_page.activated.connect(self._graph_open)
+        theme.manager().changed.connect(lambda _d: self.graph_page.refresh_theme())
         self.stack.addWidget(self.view)
         self.stack.addWidget(edit_page)
+        self.stack.addWidget(self.graph_page)
         bv.addWidget(self.stack, 1)
         v.addWidget(body, 1)
         return main
@@ -735,6 +744,8 @@ class VaultPanel(QDialog):
 
     def _open(self, data):
         kind, slug, rel = data
+        if self.stack.currentIndex() == 2:
+            self.stack.setCurrentIndex(0)   # si esce dal grafo
         if kind == "trash":
             self._open_trash(slug, rel)
             return
@@ -792,6 +803,8 @@ class VaultPanel(QDialog):
 
     def _open_trash(self, tid: str, rel: str):
         self.current = ("trash", tid, rel)
+        if self.stack.currentIndex() == 2:
+            self.stack.setCurrentIndex(0)
         try:
             item = next(t for t in self.vault.trash() if t.id == tid)
             text = self.vault.store.read(rel).decode("utf-8", "replace")
@@ -954,6 +967,8 @@ class VaultPanel(QDialog):
 
     def _show_none(self):
         self.current = None
+        self.stack.setCurrentIndex(0)
+        self.btn_read.setChecked(True)
         for w in (self.crumb, self.title, self.meta, self.tokens):
             w.setText("")
         self._set_html(f'<p class="muted">{tr("Nessun progetto: creane uno dal selettore Progetto.")}</p>')
@@ -966,12 +981,53 @@ class VaultPanel(QDialog):
         self._clear_ctx()
 
     def _mode(self, edit: bool):
+        if self.stack.currentIndex() == 2:   # dal grafo: torna alla nota con la sua intestazione
+            if self.current:
+                self._open(self.current)
+            if edit and self.btn_edit.isEnabled():
+                self.btn_edit.setChecked(True)   # ora dalla lettura alla modifica
+            return
         if not edit and self._dirty():
             self._cancel_edit()
             return
         self.stack.setCurrentIndex(1 if edit else 0)
         if edit:
             self.editor.setFocus()
+
+    # ------------------------------------------------------------ grafo
+    def _show_graph(self):
+        if not self.current or self.current[0] == "trash":
+            return
+        if self._dirty() and QMessageBox.question(
+                self, tr("Vault"), tr("Le modifiche non salvate andranno perse. Continuare?")) != \
+                QMessageBox.StandardButton.Yes:
+            self.btn_edit.setChecked(True)
+            return
+        kind, slug, rel = self.current
+        p = self.vault.project(slug)
+        try:
+            graph = p.graph(recent=pj.RECENT_NOTES)
+        except (KeyError, VaultError):
+            return
+        self.crumb.setText(f"{self.vault.name}  /  {p.name}  /  {tr('Grafo')}")
+        self.title.setText(p.name)
+        self.meta.setText(tr("Il percorso del lavoro: le note dalla prima all'ultima, poi lo stato attuale; "
+                             "a destra, i file citati"))
+        self.meter_box.hide()
+        self.btn_paste.hide()
+        self.btn_restore.hide()
+        self.graph_page.set_graph(graph, current=rel)
+        self.stack.setCurrentIndex(2)
+
+    def _graph_open(self, rel: str):
+        """Clic su un nodo: apre la nota (o il file, o PROJECT.md) nel pannello, in lettura."""
+        it = self._items.get(rel)
+        if it is not None and self.tree.currentItem() is it:
+            self._open(it.data(0, _ROLE))   # è già quella scelta nell'albero: la riapro in lettura
+        else:
+            self.select(rel)
+        if self.stack.currentIndex() == 2:   # non è nell'albero (filtro di ricerca): apro lo stesso
+            self._open(("file", self.current[1], rel))
 
     def _cancel_edit(self):
         if self.current:

@@ -616,6 +616,38 @@ def _title(text: str) -> str:
 _NOTE_LINE = re.compile(r"^-\s*(\d{4}-\d{2}-\d{2})\s*·\s*\[\[([^|\]]+)(?:\|([^\]]+))?\]\]\s*(?:—\s*(.*))?$")
 
 
+_WIKILINK = re.compile(r"!?\[\[([^\]|#\n]+)(?:#[^\]|\n]*)?(?:\|[^\]\n]*)?\]\]")
+
+
+@dataclass
+class GraphNode:
+    rel: str
+    kind: str          # "project", "note", "file"
+    title: str
+    date: str
+    summary: str
+    in_context: bool   # va all'IA all'inizio di una chat nuova (PROJECT.md e le ultime note dell'indice)
+
+
+@dataclass
+class GraphEdge:
+    src: str
+    dst: str
+    kind: str          # "next" (percorso nel tempo) o "link" ([[…]])
+
+
+@dataclass
+class Graph:
+    nodes: list[GraphNode]
+    edges: list[GraphEdge]
+
+    def node(self, rel: str) -> GraphNode | None:
+        return next((n for n in self.nodes if n.rel == rel), None)
+
+    def neighbours(self, rel: str) -> set[str]:
+        return {e.dst if e.src == rel else e.src for e in self.edges if rel in (e.src, e.dst)}
+
+
 @dataclass
 class NoteInfo:
     rel: str
@@ -840,6 +872,53 @@ class Project:
             except KeyError:
                 continue
         return out
+
+    def graph(self, recent: int = 3) -> "Graph":
+        """Nodi e collegamenti del progetto per la vista Grafo.
+
+        - nodi: PROJECT.md (stato attuale), le note in ordine di indice (dalla più vecchia) e i file di `file/`;
+          le bozze automatiche, l'indice e le versioni restano fuori (non sono lavoro del progetto);
+        - collegamenti: «poi» tra una nota e la successiva, dall'ultima nota a PROJECT.md (il percorso del
+          lavoro), e «link» per ogni [[…]] scritto in una nota, in PROJECT.md o in un file Markdown.
+        Un link a qualcosa che non esiste viene ignorato; nessun collegamento si ripete."""
+        nodes: list[GraphNode] = []
+        notes = self.notes()
+        in_ctx = {n.rel for n in notes[-recent:]} if recent else set()
+        for n in notes:
+            nodes.append(GraphNode(n.rel, "note", n.title, n.date, n.summary, n.rel in in_ctx))
+        for rel in self.files():
+            nodes.append(GraphNode(rel, "file", rel[len(self.rel(FILES)) + 1:], "", "", False))
+        nodes.append(GraphNode(self.rel(PROJECT_FILE), "project", self.name, "", "", True))
+        # nomi con cui un link può indicare un nodo: nome del file, percorso nel progetto, titolo
+        keys: dict[str, str] = {}
+        for node in nodes:
+            tail = node.rel[len(self.rel()) + 1:]
+            stem = tail.rsplit("/", 1)[-1]
+            for k in (tail, tail.removesuffix(".md"), stem, stem.removesuffix(".md"), node.title):
+                keys.setdefault(k.strip().lower(), node.rel)
+        edges: list[GraphEdge] = []
+        seen: set[tuple[str, str]] = set()
+
+        def add(a: str, b: str, kind: str):
+            if a != b and (a, b) not in seen and (b, a) not in seen:
+                seen.add((a, b))
+                edges.append(GraphEdge(a, b, kind))
+        for a, b in zip(notes, notes[1:]):
+            add(a.rel, b.rel, "next")
+        if notes:
+            add(notes[-1].rel, self.rel(PROJECT_FILE), "next")
+        for node in nodes:
+            if not node.rel.endswith(".md"):
+                continue
+            try:
+                text = self.read_text(node.rel)
+            except KeyError:
+                continue
+            for m in _WIKILINK.finditer(text):
+                target = keys.get(m.group(1).strip().lower())
+                if target:
+                    add(node.rel, target, "link")
+        return Graph(nodes, edges)
 
     def write_session_draft(self, session_id: str, text: str) -> str:
         rel = self.rel(SESSIONS, f"{slugify(session_id, 40)}.md")
