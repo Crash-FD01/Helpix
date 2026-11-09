@@ -95,6 +95,9 @@ class ProjectsMixin:
         self._schedule_toolbar_fit()
         if hasattr(self, "act_projects_beta"):
             self.act_projects_beta.setChecked(on)
+        limit = pj.TOKEN_LIMIT
+        if pj.set_token_limit(self.settings.get("project_token_limit", 1000)) != limit and self.vault_panel:
+            self.vault_panel.reload()   # misuratore con il tetto nuovo
         minutes = int(self.settings.get("project_autosave_min", 10) or 0)
         self._draft_timer.stop()
         if on and minutes:

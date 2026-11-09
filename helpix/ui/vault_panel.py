@@ -754,6 +754,7 @@ class VaultPanel(QDialog):
         self.meter_box.setVisible(is_project)
         if is_project:
             n = pj.estimate_tokens(pj.strip_private(text))
+            self.meter.setRange(0, pj.TOKEN_LIMIT)   # il tetto si può cambiare dalle impostazioni
             self.meter.setValue(min(n, pj.TOKEN_LIMIT))
             self.meter.setProperty("over", n > pj.TOKEN_LIMIT)
             self.meter.style().unpolish(self.meter)

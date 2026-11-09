@@ -61,7 +61,9 @@ Sezioni fisse, in quest'ordine:
 
 - **Solo per me** non viene mai inviata a nessuna IA (né incollata, né scritta nei file degli agenti) e le
   modifiche proposte dall'IA non la toccano.
-- Tetto consigliato: **1000 token** (stima: caratteri / 4). Oltre, Helpix propone *Compatta il progetto*.
+- Tetto consigliato: **1000 token** (stima: caratteri / 4), regolabile in *Progetto › Impostazioni dei progetti…*
+  (500, 1000, 2000 o 4000: i valori alti servono a chi usa modelli con contesti grandi e accetta di pagare quei
+  token a ogni chat). Oltre, Helpix propone *Compatta il progetto*; non blocca niente.
 - Una decisione superata esce da `PROJECT.md` e resta nella nota della sessione in cui è stata sostituita
   («Decisione superata: … → …»): l'IA vede solo quelle in vigore.
 

@@ -770,6 +770,8 @@ class VaultUnlockDialog(QDialog):
 
 # ------------------------------------------------------------------ impostazioni
 AUTOSAVE = [(0, "spento"), (5, "ogni 5 minuti"), (10, "ogni 10 minuti"), (15, "ogni 15 minuti")]
+TOKEN_LIMITS = [(500, "~500 token (molto corto)"), (1000, "~1000 token (consigliato)"),
+                (2000, "~2000 token"), (4000, "~4000 token (contesti grandi)")]
 
 
 class ProjectSettingsDialog(QDialog):
@@ -841,6 +843,18 @@ class ProjectSettingsDialog(QDialog):
         self.versions.setCurrentIndex(self.versions.findData(keep))
         self.versions.currentIndexChanged.connect(lambda _i: self._set("project_versions", self.versions.currentData()))
         grid.addWidget(self.versions, r, 1, 1, 2)
+        r += 1
+        grid.addWidget(QLabel(tr("Tetto di PROJECT.md")), r, 0)
+        self.limit = QComboBox()
+        for n, label in TOKEN_LIMITS:
+            self.limit.addItem(tr(label), n)
+        cur_limit = pj.set_token_limit(settings.get("project_token_limit", 1000))
+        self.limit.setCurrentIndex(max(0, self.limit.findData(cur_limit)))
+        self.limit.currentIndexChanged.connect(lambda _i: self._set("project_token_limit", self.limit.currentData()))
+        self.limit.setToolTip(tr("PROJECT.md va all'IA all'inizio di ogni chat nuova (con API e agenti a ogni "
+                                 "richiesta): più è corto, meno costa e meglio viene seguito. Oltre il tetto Helpix "
+                                 "propone di compattarlo; non blocca niente."))
+        grid.addWidget(self.limit, r, 1, 1, 2)
         r += 1
         self.reminder = QCheckBox(tr("Ricordami di salvare (cambio progetto, nuovo task, altra IA, chiusura)"))
         self.reminder.setChecked(bool(settings.get("project_reminder", True)))
