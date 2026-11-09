@@ -280,6 +280,9 @@ def main(argv: list[str] | None = None) -> int:
     secrets = SecretStore()
     theme.setup(app, settings.get("theme", "auto"))
     app.setWindowIcon(theme.app_icon())
+    from .ui import dialog_frame  # finestre di dialogo con la barra di Helpix
+    dialog_frame.configure(not settings.get("system_titlebar", False), settings.get("rounded_corners", True))
+    dialog_frame.install()
     engine = settings.start_engine()
     provider = settings.get("default_provider")
     if provider not in PROVIDERS:

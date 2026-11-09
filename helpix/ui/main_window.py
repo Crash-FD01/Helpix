@@ -16,7 +16,7 @@ import os
 import time
 from pathlib import Path
 
-from PySide6.QtCore import QDir, QEvent, QProcess, Qt, QTimer
+from PySide6.QtCore import QDir, QEvent, QObject, QProcess, Qt, QTimer
 from PySide6.QtGui import QActionGroup, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QDialog, QFileDialog, QFileSystemModel, QFrame, QHBoxLayout, QInputDialog, QLabel, QLineEdit,
@@ -58,6 +58,46 @@ from ..system import SOURCE_URL  # noqa: E402,F401 - anche per chi lo importa da
 MAX_SHARE = 12_000  # caratteri di output inviati all'IA per comando (motore API)
 
 
+class _ResizeWatch(QObject):
+    """Chiama `callback` quando `widget` cambia dimensione (filtro solo per quel widget)."""
+
+    def __init__(self, widget, callback):
+        super().__init__(widget)
+        self.callback = callback
+        widget.installEventFilter(self)
+
+    def eventFilter(self, _obj, event):  # noqa: N802
+        if event.type() == QEvent.Type.Resize:
+            self.callback()
+        return False
+
+
+class _ElidedLabel(QLabel):
+    """Etichetta che si può accorciare con «…» (o nascondere): text() resta quella intera."""
+
+    def __init__(self):
+        super().__init__()
+        self._full, self._limit = "", None
+
+    def setText(self, text: str):  # noqa: N802
+        self._full = text or ""
+        self._show()
+
+    def text(self) -> str:
+        return self._full
+
+    def set_limit(self, px: int | None):
+        if px != self._limit:
+            self._limit = px
+            self._show()
+
+    def _show(self):
+        lim = self._limit
+        self.setVisible(lim != 0)
+        shown = self._full if not lim else self.fontMetrics().elidedText(self._full, Qt.TextElideMode.ElideRight, lim)
+        QLabel.setText(self, shown)
+
+
 class PickerButton(QPushButton):
     """Selettore dell'assistente nella barra: avatar, nome, stato, freccia."""
 
@@ -71,7 +111,7 @@ class PickerButton(QPushButton):
         h.setSpacing(8)
         self.avatar = QLabel()
         self.avatar.setFixedSize(20, 20)
-        self.name = QLabel()
+        self.name = _ElidedLabel()
         self.name.setStyleSheet("font-weight: 600;")
         self.status = QLabel()
         self.status.setObjectName("secondary")
@@ -90,7 +130,19 @@ class PickerButton(QPushButton):
         self.setAccessibleName(tr("Assistente: {name}, {status}. Apri il menu").format(name=name, status=status))
         self.setToolTip(tr("Scegli l'assistente o cambia motore"))
         self._icons()
-        self.setMinimumWidth(self.layout().sizeHint().width())
+        self._fit()
+
+    def set_compact(self, status: bool, name_px: int | None):
+        """Barra stretta: senza lo stato, con il nome accorciato (`name_px`) o senza nome (0)."""
+        self.status.setVisible(status)
+        self.name.set_limit(name_px)
+        self._fit()
+
+    def _fit(self):
+        self.layout().invalidate()
+        w = self.layout().sizeHint().width()
+        self.setMinimumWidth(w)
+        self.setMaximumWidth(w)
 
     def _icons(self):
         self.avatar.setPixmap(site_icons.pixmap(self._key, 20))
@@ -257,6 +309,13 @@ class MainWindow(ProjectsMixin, QMainWindow):
         self.toolbar = QFrame()
         self.toolbar.setObjectName("toolbar")
         self.toolbar.setFixedHeight(52)
+        # barra che si adatta alla larghezza: accorcia o toglie i testi invece di sovrapporre i pulsanti
+        self._tb_level = 0
+        self._tb_timer = QTimer(self)
+        self._tb_timer.setSingleShot(True)
+        self._tb_timer.setInterval(0)
+        self._tb_timer.timeout.connect(self._fit_toolbar)
+        self._tb_watch = _ResizeWatch(self.toolbar, self._fit_toolbar)
         th = QHBoxLayout(self.toolbar)
         th.setContentsMargins(14, 0, 10, 0)
         th.setSpacing(8)
@@ -433,6 +492,9 @@ class MainWindow(ProjectsMixin, QMainWindow):
         self.hsplit.setSizes([220, 900])
 
         self.rounded = self.frameless and bool(self.settings.get("rounded_corners", True))
+        from . import dialog_frame  # anche le finestre di dialogo usano la barra di Helpix
+        dialog_frame.configure(self.frameless, self.rounded)
+        dialog_frame.install()
         if self.rounded:
             # finestra trasparente: lo sfondo con gli angoli arrotondati lo dipinge RoundedCentral
             self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
@@ -697,7 +759,55 @@ class MainWindow(ProjectsMixin, QMainWindow):
             bottom += self.command_bar.parentWidget().height()
         self.toast.show_message(text, ms, bottom)
 
+    # livelli della barra, dal più comodo al più stretto: si usa il primo che ci sta
+    _TB_LEVELS = (
+        # stato dell'assistente, nome (px; 0 = niente), testo di modello e progetto (px; 0 = solo icona),
+        # Screenshot e Diagnosi solo icona
+        (True, None, 220, False),
+        (False, None, 220, False),
+        (False, None, 140, False),
+        (False, None, 140, True),
+        (False, 96, 96, True),
+        (False, 96, 0, True),
+        (False, 0, 0, True),
+    )
+
+    def _schedule_toolbar_fit(self):
+        t = getattr(self, "_tb_timer", None)
+        if t is not None:
+            t.start()
+
+    def _apply_toolbar_level(self, i: int):
+        status, name_px, chip_px, compact = self._TB_LEVELS[i]
+        self.picker.set_compact(status, name_px)
+        for b in (self.model_btn, getattr(self, "project_btn", None)):
+            if b is not None:
+                b.set_text_limit(chip_px)
+        self.shot.set_compact(compact)
+        self.btn_diag.set_text_limit(0 if compact else None)
+
+    def _fit_toolbar(self):
+        lay = self.toolbar.layout()
+        if lay is None or not hasattr(self, "btn_diag"):
+            return
+        avail = self.toolbar.width()
+        last = len(self._TB_LEVELS) - 1
+        level = last
+        for i in range(last + 1):
+            self._apply_toolbar_level(i)
+            lay.invalidate()
+            if lay.minimumSize().width() <= avail:
+                level = i
+                break
+        self._tb_level = level
+        if level == last:
+            # neanche la barra più stretta ci sta: la finestra non può diventare più stretta di così
+            need = lay.minimumSize().width() + (self.width() - avail)
+            if need > self.minimumWidth():
+                self.setMinimumWidth(need)
+
     def _update_picker(self):
+        self._schedule_toolbar_fit()
         if self.engine == "agent" and self.agent:
             self.picker.set_agent(self.agent.icon_key(), self.agent.label, tr("nel terminale"))
         elif self.engine == "web":
@@ -2032,6 +2142,7 @@ class MainWindow(ProjectsMixin, QMainWindow):
         return bool(self.settings.get("lock_enabled", False)) and unlock_available() and policy_installed()
 
     def _apply_lock_settings(self):
+        self._schedule_toolbar_fit()
         if getattr(self, "tray_lock", None):
             self.tray_lock.setVisible(self.lock_enabled)
         self.btn_lock.setVisible(self.lock_enabled)

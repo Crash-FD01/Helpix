@@ -46,10 +46,11 @@ class _Grip(QWidget):
 
 
 class FramelessHelper(QObject):
-    def __init__(self, window: QWidget, drag_area: QWidget):
+    def __init__(self, window: QWidget, drag_area: QWidget, maximize: bool = True):
         super().__init__(window)
         self.win = window
         self.drag_area = drag_area
+        self.maximize = maximize  # doppio clic sulla barra: ingrandisci / ripristina
         window.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
         self.grips = [_Grip(window, k) for k in _SPECS]
         drag_area.installEventFilter(self)
@@ -71,6 +72,8 @@ class FramelessHelper(QObject):
             g.raise_()
 
     def eventFilter(self, obj, event):  # noqa: N802
+        if "win" not in self.__dict__:   # finestra in chiusura: l'oggetto Python è già smontato
+            return False
         et = event.type()
         if obj is self.win:
             if et in (QEvent.Type.Resize, QEvent.Type.WindowStateChange, QEvent.Type.Show):
@@ -81,7 +84,8 @@ class FramelessHelper(QObject):
                 handle = self.win.windowHandle()
                 if handle and handle.startSystemMove():
                     return True
-            elif et == QEvent.Type.MouseButtonDblClick and event.button() == Qt.MouseButton.LeftButton:
+            elif (et == QEvent.Type.MouseButtonDblClick and event.button() == Qt.MouseButton.LeftButton
+                  and self.maximize):
                 self.win.showNormal() if self.win.isMaximized() else self.win.showMaximized()
                 return True
         return False

@@ -350,6 +350,62 @@ def test_pannello_e_nuovo_progetto():
     win.close()
 
 
+def test_barra_stretta_e_finestre_helpix():
+    """La barra in alto non sovrappone i pulsanti quando la finestra si stringe; le finestre di dialogo
+    (impostazioni dei progetti, conferme, richieste di testo) usano la barra di Helpix."""
+    from PySide6.QtWidgets import QInputDialog
+    from helpix.ui import dialog_frame
+    win = make_window()
+    win.show()
+    win.project_btn.setText("Un progetto con un nome davvero molto lungo")
+    win.model_btn.setText("modello predefinito · high")
+    pump(100)
+    levels = []
+    for w in (1400, 1100, 950, 820, 760):
+        win.resize(w, 640)
+        pump(120)
+        levels.append(win._tb_level)
+        bar = win.toolbar
+        items = [bar.layout().itemAt(i).widget() for i in range(bar.layout().count())]
+        shown = [x for x in items if x is not None and x.isVisible()]
+        for a, b in zip(shown, shown[1:]):
+            assert a.geometry().right() < b.geometry().left(), (w, a, b)   # niente sovrapposizioni
+        pills = (win.picker, win.model_btn, win.project_btn, win.shot, win.btn_diag)
+        assert len({p.geometry().top() for p in pills if p.isVisible()}) == 1, w   # tutti allineati
+        assert len({p.height() for p in pills if p.isVisible()}) == 1, w
+    assert levels == sorted(levels) and levels[0] == 0 and levels[-1] > 0, levels
+    # il nome intero resta (per i test, i suggerimenti e i lettori di schermo)
+    assert win.project_btn.text() == "Un progetto con un nome davvero molto lungo"
+    assert "molto lungo" in win.project_btn.toolTip()
+    win.resize(1400, 640)
+    pump(120)
+    assert win._tb_level == 0 and win.picker.status.isVisible()
+
+    # finestre di dialogo con la cornice di Helpix
+    seen = {}
+
+    def grab(key):
+        w = QApplication.activeModalWidget()
+        seen[key] = (type(w).__name__, w.property("hxframe") if w else None,
+                     bool(w and w.windowFlags() & dialog_frame.Qt.WindowType.FramelessWindowHint))
+        if w:
+            w.close()
+    QTimer.singleShot(200, lambda: grab("box"))
+    answer = QMessageBox.question(win, "Domanda", "Va bene?")
+    assert answer == QMessageBox.StandardButton.No, answer   # chiusa con la × = No, come in Qt
+    QTimer.singleShot(200, lambda: grab("text"))
+    QInputDialog.getText(win, "Rinomina", "Nome:")
+    dlg = vault_dialogs.ProjectSettingsDialog(win.settings, win._get_vault, win)
+    QTimer.singleShot(200, lambda: grab("settings"))
+    dlg.exec()
+    assert seen == {"box": ("QMessageBox", "true", True), "text": ("QInputDialog", "true", True),
+                    "settings": ("ProjectSettingsDialog", "true", True)}, seen
+    assert dlg.findChild(dialog_frame._DialogBar).title.text() == dlg.windowTitle()
+    # percorso del vault su una riga, accorciato al centro, intero nel suggerimento
+    assert "\n" not in dlg.folder.text() and dlg.folder.toolTip() == dlg.folder.full_text()
+    win.close()
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):
