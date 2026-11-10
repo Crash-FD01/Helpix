@@ -137,11 +137,12 @@ _SEND_JS = r"""
 _OUTLINE_JS = r"""
 (function () {
   const composer = document.querySelector('#prompt-textarea, [contenteditable="true"], textarea');
-  const root = document.body;
+  // solo la conversazione: la barra laterale (titoli delle altre chat, nome dell'account) non serve e resta fuori
+  const root = (composer && composer.closest('main')) || document.querySelector('main') || document.body;
   const out = ['main: ' + document.querySelectorAll('main').length + ', casella dentro main: ' +
-               !!(composer && composer.closest('main'))];
+               !!(composer && composer.closest('main')) + ', radice: ' + root.tagName.toLowerCase()];
   function walk(el, depth) {
-    if (out.length > 1500 || depth > 40) return;
+    if (out.length > 1500 || depth > 70) return;
     if (/^(SCRIPT|STYLE|SVG|PATH|NOSCRIPT)$/i.test(el.tagName)) return;
     const own = [...el.childNodes].filter(n => n.nodeType === 3).map(n => n.nodeValue).join(' ')
         .replace(/\s+/g, ' ').trim();
@@ -205,7 +206,10 @@ _ANSWER_JS = r"""
   const isOld = el => el.__helpixOld && ![...el.querySelectorAll('*')].some(e => !e.__helpixOld);
   // ChatGPT senza account (chatgpt.com/uc/…, classi generate): ogni risposta è in section[aria-label="DIL content"]
   // dentro ol[aria-label="Conversation"] > li; l'intestazione nascosta del turno dice «ChatGPT said:»
+  // ChatGPT con account (interfaccia nuova, chatgpt.com/c/…, Linux Mint 2026-11-10): nessun contrassegno sui turni,
+  // la risposta è in div.MarkdownRoot-<hash>; la bolla dell'utente sta in .bg-user-message
   const sels = ['[data-message-author-role="assistant"]', 'section[aria-label="DIL content"]',
+                '[class*="MarkdownRoot"]:not([class*="user-message"] *)',
                 'li:has(> h4[aria-label="ChatGPT said:"]), li:has(> h4[aria-label="ChatGPT ha detto:"])',
                 '[data-is-streaming]', '.font-claude-response',
                 '[data-testid="assistant-message"]', 'model-response message-content', 'model-response',
@@ -242,12 +246,25 @@ _ANSWER_JS = r"""
     return out;
   }
   function body(msg) {  // la parte con il testo vero e proprio, se il sito la distingue
-    const parts = [...msg.querySelectorAll('[class*="markdown"], .prose')].filter(e => !e.parentElement.closest(
-        '[class*="markdown"], .prose') || !msg.contains(e.parentElement.closest('[class*="markdown"], .prose')));
+    const MD = '[class*="markdown" i], .prose';  // anche «MarkdownRoot-…» (ChatGPT con account)
+    const parts = [...msg.querySelectorAll(MD)].filter(e => !e.parentElement.closest(MD) ||
+        !msg.contains(e.parentElement.closest(MD)));
     return parts.length ? parts : [msg];
   }
+  // solo la conversazione della pagina: fuori da <main> possono esserci copie nascoste di altre chat (la chat
+  // «flottante» ridotta di ChatGPT con account), che altrimenti sarebbero l'«ultima risposta»
+  // (il <main> della casella, altrimenti quello visibile: dopo un cambio di pagina può restarne uno vecchio e
+  // nascosto prima di quello vero); tra le risposte, se ce ne sono di mostrate, solo quelle
+  const shown = e => e.getClientRects().length > 0;
+  const box0 = document.querySelector('#prompt-textarea, [contenteditable="true"], textarea');
+  const convo = (box0 && box0.closest('main')) || [...document.querySelectorAll('main')].find(shown);
   for (const sel of sels) {
-    const els = [...document.querySelectorAll(sel)];
+    const all = [...document.querySelectorAll(sel)];
+    const inside = convo ? all.filter(e => convo.contains(e)) : [];
+    // fuori dalla conversazione contano solo le risposte mostrate: una copia nascosta (la chat flottante ridotta)
+    // non è la pagina che si sta guardando, e con lei la lettura senza contrassegni non partirebbe mai
+    let els = inside.length ? inside : all.filter(shown);
+    if (els.some(shown)) els = els.filter(shown);
     if (!els.length) continue;
     const last = els[els.length - 1];
     const raw = body(last).map(e => text(e, false)).join('\n');
@@ -287,14 +304,15 @@ _ANSWER_JS = r"""
       // salgo dal messaggio finché il contenitore è ancora «il messaggio» (il turno dell'utente). Al primo livello
       // in cui dopo c'è qualcosa di nuovo (comparso dopo l'invio), quello è il posto della risposta: se è ancora
       // vuoto si aspetta. Ciò che c'era già prima (avvisi come «ChatGPT può commettere errori») non conta mai.
-      for (let a = user, depth = 0; a && a !== root && depth < 12; a = a.parentElement, depth++) {
+      // Un fratello nuovo ma senza testo (la barra «Copia/Modifica» accanto alla bolla, il turno dell'IA ancora
+      // vuoto) non ferma la salita: con l'account ChatGPT annida la bolla in molti livelli e la barra delle azioni
+      // sta a metà, sotto il livello del turno. Ci si ferma solo quando il contenitore ha più testo del messaggio.
+      for (let a = user, depth = 0; a && a !== root && depth < 30; a = a.parentElement, depth++) {
         if (norm(a.innerText).length > limit) break;
         const parts = [];
-        let slot = false;
         for (let sib = a.nextElementSibling; sib; sib = sib.nextElementSibling) {
           if (sib.matches(EDIT) || sib.querySelector(EDIT) || (composer && sib.contains(composer))) break;
           if (sib.matches(SKIP) || hidden(sib) || isOld(sib)) continue;
-          slot = true;
           const t = body(sib).map(e => text(e, false)).join('\n');
           if (norm(t)) parts.push(t);
         }
@@ -303,7 +321,6 @@ _ANSWER_JS = r"""
               .replace(/\n{3,}/g, '\n\n').trim();
           return JSON.stringify({ count: 1, text: clean, busy, fallback: true });
         }
-        if (slot) break;  // il posto della risposta c'è ma è ancora vuoto
       }
     }
     return JSON.stringify({ count: 0, text: '', busy, fallback: true, candidates: cands.length });
