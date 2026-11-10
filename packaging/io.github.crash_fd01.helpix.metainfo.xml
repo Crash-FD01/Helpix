@@ -69,6 +69,13 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.19.7" date="2026-11-10">
+      <description>
+        <p>Quick window: answers from ChatGPT with an account (new interface) are read again; before, the quick window
+          stayed empty while the answer was visible in Helpix. The page outline saved for troubleshooting now covers
+          only the conversation, without the sidebar.</p>
+      </description>
+    </release>
     <release version="0.19.6" date="2026-11-09">
       <description>
         <p>A shorter settings menu: on/off options are grouped under Configuration and Appearance. “Report a problem…” is

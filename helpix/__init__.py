@@ -2,5 +2,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Helpix — assistente AI per il troubleshooting su Linux e Windows."""
 
-__version__ = "0.19.6"
+__version__ = "0.19.7"
 APP_NAME = "Helpix"
