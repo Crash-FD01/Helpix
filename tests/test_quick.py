@@ -221,14 +221,35 @@ def test_quick_window():
             assert (question in got) == quote, got
     js(gpt, "window.ucMarkup = false; window.ucNoLabel = false; window.quoteQuestion = false; 0")
 
+    # ChatGPT con account, interfaccia nuova (pagina-chat.txt dal PC di prova con Linux Mint): nessun contrassegno
+    # sui turni, bolla molto annidata con accanto la riga di azioni vuota (la lettura dopo il messaggio si fermava lì:
+    # «testo 0 caratteri» per sempre), risposta in MarkdownRoot-<hash>, chat flottante nascosta fuori da <main>.
+    # Prima con il contrassegno MarkdownRoot, poi senza (lettura del testo dopo il messaggio inviato)
+    for no_marker in (False, True):
+        js(gpt, "document.getElementById('thread').innerHTML = ''; window.shellMarkup = true; "
+                f"window.shellNoMarker = {str(no_marker).lower()}; 0")
+        for question, quote in (("test", False), ("test", False), ("quanti messaggi ti ho mandato?", True)):
+            js(gpt, f"window.quoteQuestion = {str(quote).lower()}; 0")
+            before = q.answers.toPlainText().count("NetworkManager")
+            q.input.setPlainText(question)
+            q.send()
+            until(lambda: q.answers.toPlainText().count("NetworkManager") > before, timeout=25,
+                  what=f"risposta ChatGPT con account ({question!r}, senza contrassegno: {no_marker})")
+            until(lambda: q.btn_send.isEnabled(), timeout=25, what="risposta completa (ChatGPT con account)")
+            got = q._history[-1][1]
+            assert got.startswith("Risposta finta: controlla il driver") and "flottante" not in got, got
+            assert "said" not in got and "Copy" not in got, got
+            assert (question in got) == quote, got
+    js(gpt, "window.shellMarkup = false; window.shellNoMarker = false; window.quoteQuestion = false; 0")
+
     # Helpix ridotto a icona: la pagina resta «visibile» per il motore web finché arriva la risposta
     win.showMinimized()
     pump(800)
     q.input.setPlainText("terza domanda")
     q.send()
-    until(lambda: js(gpt, "window.sent.length") == 14, timeout=20, what="messaggio con Helpix ridotto a icona")
+    until(lambda: js(gpt, "window.sent.length") == 20, timeout=20, what="messaggio con Helpix ridotto a icona")
     until(lambda: q.btn_send.isEnabled(), timeout=25, what="risposta con Helpix ridotto a icona")
-    assert q.answers.toPlainText().count("NetworkManager") >= 14
+    assert q.answers.toPlainText().count("NetworkManager") >= 20
     win.showNormal()
     pump(300)
 

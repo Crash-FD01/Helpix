@@ -70,6 +70,60 @@ Problema: il wifi non va</code></pre>
       code.textContent = text.slice(fence + 3).split('```')[0].trim();
       pre.appendChild(code); thread.appendChild(pre);
     }
+    if (window.shellMarkup && !text.includes('HELPIX-TASK')) {
+      // come ChatGPT con account (interfaccia nuova, pagina-chat.txt dal PC di prova con Linux Mint, 2026-11-10):
+      // nessun contrassegno sui turni; turno = div con h4.sr-only «You said:» / «ChatGPT said:»; la bolla
+      // dell'utente è molto annidata e accanto ha una riga di azioni nuova e senza testo; la risposta è in
+      // div.MarkdownRoot-<hash>. Fuori da <main>, la chat «flottante» ridotta con una vecchia risposta nascosta.
+      if (!document.getElementById('floating')) {
+        const fl = document.createElement('section'); fl.id = 'floating'; fl.setAttribute('role', 'dialog');
+        fl.innerHTML = '<div class="hidden" style="display:none"><div class="MarkdownRoot-rZKhxa">' +
+                       '<p>vecchia risposta della chat flottante</p></div></div>';
+        document.body.appendChild(fl);
+      }
+      const sr = label => '<h4 class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;' +
+                          'clip:rect(0,0,0,0)"><span>' + label + '</span></h4>';
+      let bubble = '<div class="whitespace-pre-wrap"></div>';
+      for (let i = 0; i < 8; i++) bubble = '<div class="b' + i + '">' + bubble + '</div>';
+      const user = document.createElement('div'); user.className = 'flex flex-col';
+      user.innerHTML = '<div class="block-BQZwFn">' + sr('You said:') + '<div class="group/user-message"><div class="w-full">' +
+                       '<div class="group/user-message flex"><div class="bg-user-message">' + bubble + '</div>' +
+                       '<div class="flex flex-row-reverse"><button aria-label="Copy"></button>' +
+                       '<button aria-label="Edit message"></button></div></div></div></div></div>';
+      user.querySelector('.whitespace-pre-wrap').textContent = text;
+      thread.appendChild(user);
+      const stop = document.createElement('button'); stop.setAttribute('data-testid', 'stop-button');
+      stop.textContent = 'Stop'; document.body.appendChild(stop);
+      const turn = document.createElement('div'); turn.className = 'flex flex-col';
+      turn.innerHTML = '<div class="block-BQZwFn"><span></span><div>' + sr('ChatGPT said:') +
+                       '<div><div class="group flex"><div class="' +
+                       (window.shellNoMarker ? 'Answer-x1' : 'MarkdownRoot-rZKhxa') + '"><p></p></div></div></div>' +
+                       '</div></div>';
+      const p = turn.querySelector('p');
+      setTimeout(() => thread.appendChild(turn), 500);
+      const words = ('Risposta finta: controlla il driver del wifi con nmcli device status e riavvia ' +
+                     'NetworkManager.').split(' ');
+      let w = -6;
+      const t4 = setInterval(() => {
+        const n = ++w;
+        if (n <= 0) return;
+        requestAnimationFrame(() => {
+          p.textContent = words.slice(0, n).join(' ');
+          if (n >= words.length && window.quoteQuestion) {  // la risposta cita la domanda in un elenco
+            const ol2 = document.createElement('ol'); const li = document.createElement('li');
+            li.textContent = text; ol2.appendChild(li); p.parentElement.appendChild(ol2);
+          }
+          if (n >= words.length) {  // a risposta finita compare la riga di azioni del turno
+            const row = document.createElement('div'); row.className = 'actionRow-nqqZbm';
+            row.innerHTML = '<button aria-label="Copy"></button><button aria-label="Read aloud"></button>';
+            thread.appendChild(row);
+            setTimeout(() => stop.remove(), 400);
+          }
+        });
+        if (n >= words.length) clearInterval(t4);
+      }, 120);
+      return;
+    }
     if (window.ucMarkup && !text.includes('HELPIX-TASK')) {
       // come ChatGPT senza account (chatgpt.com/uc/…, struttura vista sul PC di prova): la conversazione è un
       // ol[aria-label=Conversation] di <li>, intestazione nascosta per turno, risposta in section «DIL content»
