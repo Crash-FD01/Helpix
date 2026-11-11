@@ -219,6 +219,7 @@ class VaultPanel(QDialog):
     paste = Signal(str)           # incolla questo testo nella chat attiva
     lock_requested = Signal()
     export_requested = Signal()
+    import_requested = Signal()   # importa da un'esportazione o da un altro vault
     tour_requested = Signal()     # giro guidato del pannello
     changed = Signal(str)         # un file del progetto (slug) è stato modificato
     project_deleted = Signal(str)  # progetto (slug) spostato nel cestino
@@ -414,6 +415,7 @@ class VaultPanel(QDialog):
         msg.setMinimumWidth(120)
         bh.addWidget(msg, 1)
         for label, slot in ((tr("Esporta in chiaro"), self.export_requested.emit),
+                            (tr("Importa…"), self.import_requested.emit),
                             (tr("Guida"), self.tour_requested.emit)):
             b = QPushButton(label)
             b.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)  # mai tagliati

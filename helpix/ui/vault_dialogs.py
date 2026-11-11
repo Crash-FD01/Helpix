@@ -773,6 +773,7 @@ class ProjectSettingsDialog(QDialog):
 
     changed = Signal()        # impostazioni cambiate (l'app rilegge)
     export_requested = Signal()
+    import_requested = Signal()
 
     def __init__(self, settings, vault_getter, parent=None, system_unlock=None):
         super().__init__(parent)
@@ -879,8 +880,12 @@ class ProjectSettingsDialog(QDialog):
         self.b_unlock.clicked.connect(self._unlock)
         self.b_export = QPushButton(tr("Esporta in chiaro…"))
         self.b_export.clicked.connect(self.export_requested.emit)
+        self.b_import = QPushButton(tr("Importa un vault…"))
+        self.b_import.setToolTip(tr("Progetti da un'esportazione o da un altro vault, in chiaro o cifrato: "
+                                    "niente viene sovrascritto."))
+        self.b_import.clicked.connect(self.import_requested.emit)
         for i, b in enumerate((self.b_encrypt, self.b_unlock, self.b_password, self.b_codes, self.b_recovery,
-                               self.b_keyring, self.b_export)):
+                               self.b_keyring, self.b_export, self.b_import)):
             rows.addWidget(b, i // 2, i % 2)
         sv.addLayout(rows)
         v.addWidget(sec)
@@ -906,7 +911,7 @@ class ProjectSettingsDialog(QDialog):
         vault = self.vault_getter() if self.settings.get("projects_beta") else None
         enabled = vault is not None
         for b in (self.b_encrypt, self.b_password, self.b_codes, self.b_recovery, self.b_keyring, self.b_unlock,
-                  self.b_export):
+                  self.b_export, self.b_import):
             b.setVisible(False)
         if not enabled:
             self.status.setText(tr("Attiva la funzione per gestire il vault."))
@@ -916,6 +921,7 @@ class ProjectSettingsDialog(QDialog):
                                    "utente. Per la protezione a PC spento basta la cifratura del disco."))
             self.b_encrypt.setVisible(True)
             self.b_export.setVisible(True)
+            self.b_import.setVisible(True)
             return
         if not vault.is_open:
             self.status.setText(tr("Vault cifrato e bloccato: sbloccalo per gestire password, codici e file di recupero."))
@@ -930,7 +936,7 @@ class ProjectSettingsDialog(QDialog):
         self.b_keyring.setText(tr("Togli lo sblocco dal portachiavi") if vault.keyring_enabled()
                                else tr("Sblocca anche dal portachiavi"))
         self.b_keyring.setEnabled(vault.keyring_enabled() or keyring_available())
-        for b in (self.b_password, self.b_codes, self.b_recovery, self.b_keyring, self.b_export):
+        for b in (self.b_password, self.b_codes, self.b_recovery, self.b_keyring, self.b_export, self.b_import):
             b.setVisible(True)
 
     def _choose_folder(self):

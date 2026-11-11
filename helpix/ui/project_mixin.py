@@ -622,6 +622,7 @@ class ProjectsMixin:
         panel.paste.connect(self._paste_text_anywhere)
         panel.lock_requested.connect(self.lock_vault)
         panel.export_requested.connect(self.export_vault)
+        panel.import_requested.connect(self.import_vault)
         panel.changed.connect(lambda slug: self._refresh_agent_project()
                               if self.project and self.project.slug == slug else None)
         panel.finished.connect(lambda _r: setattr(self, "vault_panel", None))
@@ -669,6 +670,7 @@ class ProjectsMixin:
                                     system_unlock=self._vault_system_unlock)
         dlg.changed.connect(lambda: (self._apply_project_settings(), self._update_project_button()))
         dlg.export_requested.connect(self.export_vault)
+        dlg.import_requested.connect(self.import_vault)
         dlg.exec()
         self._apply_project_settings()
 
@@ -733,6 +735,71 @@ class ProjectsMixin:
             return
         QMessageBox.information(self, tr("Vault"), tr("{n} file esportati in chiaro in:\n{path}\n\nRicordati che "
                                                       "questa copia non è cifrata.").format(n=n, path=dest))
+
+    def import_vault(self):
+        """Importa i progetti da un'esportazione o da un altro vault (in chiaro o cifrato). Non sovrascrive mai:
+        un progetto già presente e uguale si salta, uno con lo stesso nome ma diverso entra come copia."""
+        vault = self._vault_open()
+        if vault is None:
+            return
+        from .vault_dialogs import VaultUnlockDialog, run_busy
+        owner = self.vault_panel if self.vault_panel is not None and self.vault_panel.isVisible() else self
+        folder = QFileDialog.getExistingDirectory(owner, tr("Quale vault importo?"), str(Path.home()))
+        if not folder:
+            return
+        try:
+            src = Vault.open_source(folder)
+        except VaultError:
+            QMessageBox.warning(owner, tr("Importa nel vault"),
+                                tr("In questa cartella non c'è un vault di Helpix. Scegli la cartella creata da "
+                                   "«Esporta in chiaro» oppure la cartella di un altro vault (quella con "
+                                   "helpix-vault.json o con la cartella «progetti»)."))
+            return
+        if src.encrypted and not src.is_open:
+            dlg = VaultUnlockDialog(src, owner)
+            if dlg.exec() != QDialog.DialogCode.Accepted or not src.is_open:
+                return
+        try:
+            plan = vault.import_plan(src)
+            if not plan:
+                QMessageBox.information(owner, tr("Importa nel vault"), tr("Nel vault scelto non ci sono progetti."))
+                return
+            lines = []
+            for it in plan:
+                if it.action == "new":
+                    lines.append(tr("• «{name}»: nuovo").format(name=it.name))
+                elif it.action == "same":
+                    lines.append(tr("• «{name}»: c'è già uguale, lo salto").format(name=it.name))
+                else:
+                    lines.append(tr("• «{name}»: c'è già un progetto con questo nome, lo importo come "
+                                    "«{name} ({label})»").format(name=it.name, label=tr("importato")))
+            todo = [it for it in plan if it.action != "same"]
+            if not todo:
+                QMessageBox.information(owner, tr("Importa nel vault"),
+                                        tr("Questi progetti ci sono già, uguali:") + "\n\n" + "\n".join(lines))
+                return
+            extra = [tr("Niente di questo vault viene sovrascritto; la cartella di origine resta com'è.")]
+            if vault.encrypted:
+                extra.append(tr("I progetti importati vengono cifrati con la chiave di questo vault."))
+            elif src.encrypted:
+                extra.append(tr("Attenzione: questo vault non è cifrato, quindi i progetti importati saranno "
+                                "leggibili sul disco."))
+            if QMessageBox.question(owner, tr("Importa nel vault"),
+                                    tr("Importo {n} progetti in «{vault}»?").format(n=len(todo), vault=vault.name)
+                                    + "\n\n" + "\n".join(lines) + "\n\n" + " ".join(extra)) \
+                    != QMessageBox.StandardButton.Yes:
+                return
+            n = run_busy(owner, vault.import_projects, src, plan, tr("importato"))
+        except (VaultError, OSError) as exc:
+            QMessageBox.warning(owner, tr("Importa nel vault"), tr("Importazione non riuscita: {exc}").format(exc=exc))
+            return
+        finally:
+            if src.encrypted and src.is_open:
+                src.lock()
+        if self.vault_panel is not None:
+            self.vault_panel.reload()
+        self._update_project_button()
+        self.notify(tr("{n} progetti importati nel vault.").format(n=n), 8000)
 
     # ------------------------------------------------------------ helpix vault … (agenti)
     def _vault_request(self, msg: dict) -> dict:

@@ -211,6 +211,15 @@ class ProjectInfo:
     updated: float
 
 
+@dataclass
+class ImportItem:
+    slug: str      # cartella del progetto nel vault di origine
+    name: str
+    files: int
+    action: str    # "new" entra così; "same" c'è già uguale (si salta); "copy" stesso nome, entra come copia
+    target: str    # cartella nel vault di destinazione
+
+
 class Vault:
     def __init__(self, root: str | Path | None = None):
         self.root = Path(root) if root else default_root()
@@ -429,6 +438,82 @@ class Vault:
             out.write(rel, self.store.read(rel))
         vc.Header.new_plain(self.name).save(dest)
         return len(files)
+
+    # --- importazione (da un'esportazione, da un altro vault in chiaro o cifrato)
+    @classmethod
+    def open_source(cls, path: str | Path) -> "Vault":
+        """Il vault da cui importare: un vault di Helpix (anche cifrato: va sbloccato prima di leggerlo) o una
+        cartella con `progetti/<nome>/PROJECT.md` senza intestazione (es. copiata a mano o da Obsidian)."""
+        root = Path(path)
+        if not root.is_dir():
+            raise VaultError("la cartella non esiste")
+        src = cls(root)
+        if src.exists:
+            return src
+        bare = PlainStore(root)
+        if any(len(r.split("/")) == 3 and r.endswith("/" + PROJECT_FILE) for r in bare.list(PROJECTS + "/")):
+            src.store = bare
+            return src
+        raise VaultError("nella cartella non c'è un vault di Helpix")
+
+    def import_plan(self, src: "Vault") -> list[ImportItem]:
+        """Cosa farebbe l'importazione, senza toccare niente. Non sovrascrive mai: un progetto con lo stesso
+        nome di cartella ma contenuto diverso entra come copia («… (importato)»), uno identico si salta."""
+        self._need_open()
+        if not src.is_open:
+            raise VaultError("il vault da importare è bloccato")
+        a, b = self.root.resolve(), src.root.resolve()
+        if a == b or a in b.parents or b in a.parents:
+            raise VaultError("scegli una cartella fuori da questo vault")
+        taken = {i.slug for i in self.projects()}
+        items = []
+        for info in src.projects():
+            files = src.store.list(f"{PROJECTS}/{info.slug}/")
+            action, target = "new", info.slug
+            if info.slug in taken:
+                mine = self.store.list(f"{PROJECTS}/{info.slug}/")
+                if mine == files and all(self.store.read(r) == src.store.read(r) for r in files):
+                    action = "same"
+                else:
+                    action, n = "copy", 2
+                    target = f"{info.slug}-importato"
+                    while target in taken:
+                        target, n = f"{info.slug}-importato-{n}", n + 1
+            taken.add(target)
+            items.append(ImportItem(info.slug, info.name, len(files), action, target))
+        return items
+
+    def import_projects(self, src: "Vault", items: list[ImportItem] | None = None, label: str = "importato") -> int:
+        """Copia i progetti del piano (tutti i file: note, file, bozze, versioni) nel vault, cifrandoli se
+        questo vault è cifrato; le copie prendono «(label)» nel nome. Ogni file si rilegge dopo averlo scritto; se un progetto non entra tutto, i suoi
+        file già scritti si tolgono. Restituisce il numero di progetti importati."""
+        items = self.import_plan(src) if items is None else items
+        done = 0
+        for it in items:
+            if it.action == "same":
+                continue
+            src_prefix, dst_prefix = f"{PROJECTS}/{it.slug}/", f"{PROJECTS}/{it.target}/"
+            if self.store.list(dst_prefix):
+                raise VaultError(f"la cartella del progetto esiste già: {it.target}")
+            written = []
+            try:
+                for rel in src.store.list(src_prefix):
+                    data = src.store.read(rel)
+                    dst = dst_prefix + rel[len(src_prefix):]
+                    self.store.write(dst, data)
+                    written.append(dst)
+                    if self.store.read(dst) != data:
+                        raise VaultError(f"copia non riuscita: {rel}")
+                if it.action == "copy":
+                    self.rename_project(it.target, f"{it.name} ({label})")
+            except Exception:
+                for rel in written:
+                    self.store.delete(rel)
+                self._prune_dirs()
+                raise
+            done += 1
+            log.info("Progetto importato nel vault: %s -> %s (%d file)", it.slug, it.target, len(written))
+        return done
 
     # --- progetti
     def projects(self) -> list[ProjectInfo]:

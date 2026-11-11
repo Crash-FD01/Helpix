@@ -1393,6 +1393,30 @@ EN: dict[str, str] = {
     "Progetto attivo": "Active project",
     "Salvataggio non riuscito: {exc}": "Saving failed: {exc}",
     "Esportazione non riuscita: {exc}": "Export failed: {exc}",
+    "Importazione non riuscita: {exc}": "Import failed: {exc}",
+    "Quale vault importo?": "Which vault should I import?",
+    "Importa nel vault": "Import into the vault",
+    "Importa…": "Import…",
+    "Importa un vault…": "Import a vault…",
+    "Progetti da un'esportazione o da un altro vault, in chiaro o cifrato: niente viene sovrascritto.":
+        "Projects from an export or from another vault, unencrypted or encrypted: nothing gets overwritten.",
+    "In questa cartella non c'è un vault di Helpix. Scegli la cartella creata da «Esporta in chiaro» oppure la cartella di un altro vault (quella con helpix-vault.json o con la cartella «progetti»).":
+        "There's no Helpix vault in this folder. Choose the folder created by “Export unencrypted” or the folder of another vault (the one with helpix-vault.json or with the “progetti” folder).",
+    "Nel vault scelto non ci sono progetti.": "The chosen vault has no projects.",
+    "• «{name}»: nuovo": "• “{name}”: new",
+    "• «{name}»: c'è già uguale, lo salto": "• “{name}”: already here and identical, skipped",
+    "• «{name}»: c'è già un progetto con questo nome, lo importo come «{name} ({label})»":
+        "• “{name}”: there's already a project with this name, imported as “{name} ({label})”",
+    "importato": "imported",
+    "Questi progetti ci sono già, uguali:": "These projects are already here, identical:",
+    "Niente di questo vault viene sovrascritto; la cartella di origine resta com'è.":
+        "Nothing in this vault is overwritten; the source folder stays as it is.",
+    "I progetti importati vengono cifrati con la chiave di questo vault.":
+        "Imported projects are encrypted with this vault's key.",
+    "Attenzione: questo vault non è cifrato, quindi i progetti importati saranno leggibili sul disco.":
+        "Note: this vault isn't encrypted, so the imported projects will be readable on disk.",
+    "Importo {n} progetti in «{vault}»?": "Import {n} projects into “{vault}”?",
+    "{n} progetti importati nel vault.": "{n} projects imported into the vault.",
     "Non riesco a leggere il vault: {exc}": "Can't read the vault: {exc}",
     "Non riesco a creare il vault: {exc}": "Can't create the vault: {exc}",
     "Sblocco dal portachiavi non riuscito: {exc}": "Unlocking from the keyring failed: {exc}",

@@ -160,7 +160,7 @@ Finestra separata (dal selettore *Progetto › Apri il vault…*) in tre colonne
 riduci/ingrandisci/chiudi): non resta sopra alle altre, si porta in primo piano Helpix con un clic e si chiude da
 sola quando esci da Helpix. All'apertura si adatta allo schermo.
 
-In alto una striscia *Beta* con *Esporta in chiaro* e *Guida*; *Segnala un problema* è nell'ingranaggio delle
+In alto una striscia *Beta* con *Esporta in chiaro*, *Importa…* e *Guida*; *Segnala un problema* è nell'ingranaggio delle
 impostazioni.
 
 ### Grafo: la mappa delle decisioni
@@ -263,6 +263,13 @@ Fatta da Helpix, senza filesystem montati né driver: funziona uguale su Linux, 
 ### Uscire dal formato
 
 - *Esporta in chiaro* copia il vault decifrato in una cartella a scelta.
+- *Importa…* (striscia *Beta* del pannello, o *Impostazioni dei progetti › Importa un vault…*) porta nel vault aperto
+  i progetti di un'altra cartella: un'esportazione, un altro vault in chiaro, un vault cifrato (si sblocca solo per
+  l'importazione, poi si richiude) o una cartella con `progetti/<nome>/PROJECT.md`. Ogni progetto entra intero (note,
+  file, bozze, versioni), cifrato se il vault di destinazione è cifrato. **Non sovrascrive mai**: un progetto con lo
+  stesso nome di cartella e lo stesso contenuto si salta, uno diverso entra come copia *«nome (importato)»*. Prima
+  mostra cosa farà e chiede conferma; ogni file si rilegge dopo averlo scritto e, se un progetto non entra tutto, i
+  suoi file già scritti si tolgono. Non si importa da questo vault né da una cartella che lo contiene.
 - `helpix/vault_crypto.py` funziona anche da solo, senza Helpix (serve solo `cryptography`):
   `python3 vault_crypto.py decrypt <vault> <cartella>` chiede password, codice o file di recupero.
 
