@@ -51,6 +51,7 @@ jobs:
         run: pip install .
       - name: Librerie di sistema per Qt (le installa Helpix stesso, come sul PC degli utenti)
         run: |
+          sudo .github/scripts/apt-mirrors.sh
           sudo apt-get update -q
           .github/scripts/annotate.sh "Dipendenze di sistema" python -m helpix.sysdeps install --yes
       - name: Schemi dei desktop per i test delle scorciatoie
