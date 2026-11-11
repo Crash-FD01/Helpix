@@ -69,6 +69,13 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.19.8" date="2026-11-11">
+      <description>
+        <p>Vault (beta): “Import…” brings in the projects of an export or of another vault, unencrypted or encrypted
+          (unlocked only for the import). Nothing is overwritten: identical projects are skipped, different ones with
+          the same name come in as a copy. A preview shows what will happen before anything is written.</p>
+      </description>
+    </release>
     <release version="0.19.7" date="2026-11-10">
       <description>
         <p>Quick window: answers from ChatGPT with an account (new interface) are read again; before, the quick window
