@@ -92,6 +92,7 @@ jobs:
           python-version: "3.13"
       - name: Strumenti e librerie di sistema (servono a calcolare le dipendenze del .deb)
         run: |
+          sudo .github/scripts/apt-mirrors.sh
           sudo apt-get update -q
           sudo apt-get install -y -q rpm
           python -m venv /tmp/probe
@@ -202,6 +203,7 @@ jobs:
           merge-multiple: true
       - name: Strumenti
         run: |
+          sudo .github/scripts/apt-mirrors.sh
           sudo apt-get update -q
           sudo apt-get install -y -q rpm createrepo-c apt-utils
       - name: Chiave di firma
