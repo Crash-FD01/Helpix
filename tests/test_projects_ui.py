@@ -236,6 +236,77 @@ def test_cifratura_dalle_finestre():
     win.close()
 
 
+def test_importa_dalle_finestre():
+    from PySide6.QtWidgets import QFileDialog, QPushButton, QTreeWidgetItemIterator
+    from helpix import passwords
+    # sorgenti: un'esportazione in chiaro e un vault cifrato
+    a = Vault(os.path.join(_tmp, "vault-sorgente"))
+    a.create_plain("Ufficio")
+    a.create_project("Rete ufficio", pj.template("Rete ufficio", "VLAN separate", "Sophos XGS"))
+    exported = os.path.join(_tmp, "esportato")
+    a.export_plain(exported)
+    b = Vault(os.path.join(_tmp, "vault-cifrato-sorgente"))
+    b.create_plain("Casa")
+    b.create_project("Lab Proxmox casa", pj.template("Lab Proxmox casa", "Cluster a 3 nodi"))
+    b.create_encrypted(PASSWORD, passwords.generate_codes())
+    b.lock()
+
+    win = make_window(vault_dir=os.path.join(_tmp, "vault-importa"))
+    vault = win._get_vault()
+    win.open_vault_panel()
+    panel = win.vault_panel
+    assert any(b_.text() == "Importa…" for b_ in panel.findChildren(QPushButton))
+    dlg = vault_dialogs.ProjectSettingsDialog(win.settings, lambda: win._get_vault(), win)
+    assert not dlg.b_import.isHidden()
+    dlg.close()
+
+    asked, said = [], []
+    real = (QFileDialog.getExistingDirectory, QMessageBox.question, QMessageBox.information, QMessageBox.warning,
+            vault_dialogs.VaultUnlockDialog)
+    folder = {"path": exported}
+
+    class FakeUnlock:
+        def __init__(self, v, parent=None, allow_system=False):
+            self.v = v
+
+        def exec(self):
+            self.v.unlock("password", PASSWORD)
+            return QDialog.DialogCode.Accepted
+    QFileDialog.getExistingDirectory = staticmethod(lambda *a_, **k: folder["path"])
+    QMessageBox.question = staticmethod(lambda _p, _t, text, *a_, **k: (asked.append(text),
+                                                                       QMessageBox.StandardButton.Yes)[1])
+    QMessageBox.information = staticmethod(lambda _p, _t, text, *a_, **k: said.append(text))
+    QMessageBox.warning = staticmethod(lambda _p, _t, text, *a_, **k: said.append(text))
+    vault_dialogs.VaultUnlockDialog = FakeUnlock
+    try:
+        win.import_vault()
+        assert "«Rete ufficio»: nuovo" in asked[-1] and "Niente di questo vault viene sovrascritto" in asked[-1]
+        assert [i.name for i in vault.projects()] == ["Rete ufficio"]
+        shown, it = [], QTreeWidgetItemIterator(panel.tree)
+        while it.value():
+            shown.append(it.value().text(0))
+            it += 1
+        assert any("Rete ufficio" in t for t in shown), shown   # il pannello aperto si aggiorna
+        # di nuovo: niente da fare, nessuna domanda
+        n_asked = len(asked)
+        win.import_vault()
+        assert len(asked) == n_asked and "ci sono già, uguali" in said[-1]
+        # dal vault cifrato: chiede lo sblocco, avvisa che qui finiscono in chiaro, poi lo richiude
+        folder["path"] = str(b.root)
+        win.import_vault()
+        assert "leggibili sul disco" in asked[-1]
+        assert {i.name for i in vault.projects()} == {"Rete ufficio", "Lab Proxmox casa"}
+        # cartella qualsiasi: avviso, niente importato
+        folder["path"] = os.path.join(_tmp, "config")
+        win.import_vault()
+        assert "non c'è un vault di Helpix" in said[-1] and len(vault.projects()) == 2
+    finally:
+        (QFileDialog.getExistingDirectory, QMessageBox.question, QMessageBox.information, QMessageBox.warning,
+         vault_dialogs.VaultUnlockDialog) = real
+    panel.close()
+    win.close()
+
+
 def test_pannello_e_nuovo_progetto():
     win = make_window(vault_dir=os.path.join(_tmp, "vault-pannello"))
     vault = win._get_vault()

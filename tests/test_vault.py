@@ -399,6 +399,115 @@ def test_esporta_e_script_autonomo():
         assert (target / rel).read_bytes() == data
 
 
+def test_importa():
+    def files(v, slug):
+        pre = f"progetti/{slug}/"
+        return {r[len(pre):]: v.store.read(r) for r in v.store.list(pre)}
+
+    a, p = plain_vault_with_project()
+    exp = new_root() / "export"
+    a.export_plain(exp)
+    b = Vault(new_root())
+    b.create_plain("Casa")
+    mine = b.create_project("Rete di casa", pj.template("Rete di casa", "Wi-Fi", "Fritz"))
+    # dall'esportazione: il progetto entra intero (note, file, indice), il vault di destinazione resta suo
+    src = Vault.open_source(exp)
+    plan = b.import_plan(src)
+    assert [(i.slug, i.action, i.target) for i in plan] == [(p.slug, "new", p.slug)]
+    assert b.import_projects(src, plan) == 1
+    assert files(b, p.slug) == files(a, p.slug) and b.project(mine.slug).name == "Rete di casa"
+    # di nuovo: uguale, si salta
+    assert [i.action for i in b.import_plan(src)] == ["same"] and b.import_projects(src) == 0
+    # stesso progetto cambiato: entra come copia, l'originale non si tocca
+    p.save_text(p.text().replace("VPN stabile", "VPN stabile e ridondata"))
+    exp2 = new_root() / "export2"
+    a.export_plain(exp2)
+    before = files(b, p.slug)
+    plan = b.import_plan(Vault.open_source(exp2))
+    assert [(i.action, i.target) for i in plan] == [("copy", p.slug + "-importato")]
+    assert b.import_projects(Vault.open_source(exp2), plan) == 1
+    assert files(b, p.slug) == before
+    copy = b.project(p.slug + "-importato")
+    assert copy.name == "Cliente Rossi — firewall (importato)" and "ridondata" in copy.text()
+    assert set(files(a, p.slug)) <= set(files(b, copy.slug))   # in più solo la versione salvata dal cambio di nome
+    # una seconda copia diversa non sovrascrive la prima
+    p.save_text(p.text().replace("ridondata", "ridondata due volte"))
+    exp3 = new_root() / "export3"
+    a.export_plain(exp3)
+    assert [i.target for i in b.import_plan(Vault.open_source(exp3))] == [p.slug + "-importato-2"]
+
+    # da un vault cifrato (va sbloccato) a un vault cifrato: i file importati sono cifrati con la chiave nuova
+    codes = passwords.generate_codes()
+    a.create_encrypted(PASSWORD, codes)
+    a.lock()
+    enc = Vault.open_source(a.root)
+    assert enc.encrypted and not enc.is_open
+    c = Vault(new_root())
+    c.create_plain("Ufficio")
+    c.create_encrypted("unaltra frase lunga per il vault", passwords.generate_codes())
+    try:
+        c.import_plan(enc)
+        raise AssertionError("importato da un vault bloccato")
+    except VaultError:
+        pass
+    enc.unlock("code", codes[0])
+    assert c.import_projects(enc) == 1
+    assert files(c, p.slug) == files(enc, p.slug)
+    assert not (c.root / "progetti").exists()
+    for f in (c.root / "dati").iterdir():
+        assert b"Rossi" not in f.read_bytes()
+    c.lock()
+    reopened = Vault(c.root)
+    reopened.unlock("password", "unaltra frase lunga per il vault")
+    assert files(reopened, p.slug) == files(enc, p.slug)
+
+    # cartella senza intestazione ma con progetti/<nome>/PROJECT.md: si importa; senza progetti no
+    bare = new_root()
+    (bare / "progetti" / "a-mano").mkdir(parents=True)
+    (bare / "progetti" / "a-mano" / "PROJECT.md").write_text("# Scritto a mano\n\n## Stato\n- prova\n")
+    plan = b.import_plan(Vault.open_source(bare))
+    assert [(i.slug, i.name, i.action) for i in plan] == [("a-mano", "Scritto a mano", "new")]
+    for bad in (new_root(), bare / "non-esiste"):
+        try:
+            Vault.open_source(bad)
+            raise AssertionError(f"aperta come vault: {bad}")
+        except VaultError:
+            pass
+    # mai da sé stesso o da una cartella che lo contiene
+    for bad in (b.root, b.root.parent):
+        try:
+            b.import_plan(Vault.open_source(bad) if bad == b.root else _fake_source(bad, b))
+            raise AssertionError(f"importato da {bad}")
+        except VaultError:
+            pass
+
+    # se un file non si scrive, il progetto a metà non resta nel vault
+    d = Vault(new_root())
+    d.create_plain()
+    real, n = d.store.write, {"n": 0}
+
+    def flaky(rel, data):
+        n["n"] += 1
+        if n["n"] == 3:
+            raise OSError("disco pieno")
+        real(rel, data)
+    d.store.write = flaky
+    try:
+        d.import_projects(Vault.open_source(exp))
+        raise AssertionError("errore di scrittura ignorato")
+    except OSError:
+        pass
+    d.store.write = real
+    assert d.store.list("progetti/") == [] and not (d.root / "progetti" / p.slug).exists()
+
+
+def _fake_source(root: Path, inside: Vault) -> Vault:
+    """Una cartella che contiene il vault di destinazione, vista come sorgente già aperta."""
+    v = Vault(root)
+    v.store = PlainStore(root)
+    return v
+
+
 def test_store_cifrato_scrive_e_cancella():
     v = Vault(new_root())
     v.create_encrypted(PASSWORD, passwords.generate_codes())
