@@ -91,6 +91,18 @@ class Settings:
             pass
         except (OSError, ValueError) as exc:
             log.warning("Impostazioni illeggibili (%s): uso i valori predefiniti", exc)
+            self._keep_broken()
+
+    @staticmethod
+    def _keep_broken() -> None:
+        """Il file illeggibile si mette da parte (settings.json.rotto) prima che il primo salvataggio lo
+        sovrascriva con i valori predefiniti: da lì le impostazioni si possono recuperare a mano."""
+        try:
+            if SETTINGS_FILE.is_file() and SETTINGS_FILE.stat().st_size:
+                os.replace(SETTINGS_FILE, SETTINGS_FILE.with_name(SETTINGS_FILE.name + ".rotto"))
+                log.warning("Il file delle impostazioni rovinato è in %s.rotto", SETTINGS_FILE.name)
+        except OSError:
+            pass
 
     def save(self) -> None:
         ensure_dirs()

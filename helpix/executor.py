@@ -37,20 +37,25 @@ _SUDO_OPTS = re.compile(_PREFIX + r"sudo\s+-", re.M)
 _ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07]*\x07|\x1b[()][A-Z0-9]")
 
 DANGEROUS: list[tuple[re.Pattern, str]] = [
-    (re.compile(r"\brm\s+(\S+\s+)*-\w*[rR]"), tr("cancellazione ricorsiva di file (rm -r)")),
+    (re.compile(r"\brm\s+(\S+\s+)*(-\w*[rR]|--recursive\b)"), tr("cancellazione ricorsiva di file (rm -r)")),
+    (re.compile(r"\bfind\b[^\n|;&]*\s(-delete\b|-exec(dir)?\s+(sudo\s+)?rm\b)"), tr("cancellazione dei file trovati con find")),
+    (re.compile(r"\bgit\s+(\S+\s+)*clean\s+(\S+\s+)*-\w*f"), tr("cancellazione dei file non tracciati (git clean)")),
     (re.compile(r"\bmkfs(\.\w+)?\b"), tr("formattazione di un filesystem")),
     (re.compile(r"\bdd\b[^\n]*\bof=/dev/"), tr("scrittura diretta su un dispositivo")),
     (re.compile(r">\s*/dev/(sd|nvme|vd|hd|mmcblk)"), tr("scrittura diretta su un disco")),
     (re.compile(r"\b(wipefs|shred|fdisk|sfdisk|parted|gdisk|sgdisk|cfdisk)\b"), tr("modifica delle partizioni o cancellazione sicura")),
     (re.compile(r":\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;"), tr("fork bomb")),
-    (re.compile(r"\b(chmod|chown|chgrp)\s+(\S+\s+)*-\w*R"), tr("modifica ricorsiva di permessi o proprietario")),
+    (re.compile(r"\b(chmod|chown|chgrp)\s+(\S+\s+)*(-\w*R|--recursive\b)"), tr("modifica ricorsiva di permessi o proprietario")),
     (re.compile(r"\b(shutdown|reboot|poweroff|halt)\b|\binit\s+[06]\b|\bsystemctl\s+(reboot|poweroff|halt)\b"), tr("riavvio o spegnimento")),
-    (re.compile(r"\b(curl|wget)\b[^\n|;]*\|\s*(sudo\s+)?(ba|z|da)?sh\b"), tr("esecuzione di uno script scaricato da Internet")),
+    (re.compile(r"\b(curl|wget)\b[^\n|;]*\|\s*(sudo\s+(-\S+\s+)*)?(ba|z|da)?sh\b"), tr("esecuzione di uno script scaricato da Internet")),
+    # bash <(curl …), source <(curl …), eval "$(curl …)"
+    (re.compile(r"(\b(ba|z|da)?sh|\bsource|\beval|(?<![\w./-])\.)\s+[\"']?[<$]\(\s*(curl|wget)\b"), tr("esecuzione di uno script scaricato da Internet")),
     (re.compile(r"\b(dnf|yum|apt|apt-get|zypper|pacman|rpm)\b[^\n;|]*\s(remove|erase|purge|autoremove|-R\w*|-e)\b"), tr("rimozione di pacchetti")),
     (re.compile(r"\bsystemctl\s+(stop|disable|mask)\s+\S*(NetworkManager|network|sshd|gdm|sddm|lightdm|dbus|polkit)"), tr("arresto di un servizio essenziale")),
     (re.compile(r"\b(userdel|groupdel|deluser)\b"), tr("cancellazione di utenti o gruppi")),
     (re.compile(r"\bmv\s+(\S+\s+)*/(etc|usr|boot|bin|lib|lib64|sbin)(/\S*)?\s"), tr("spostamento di file di sistema")),
     (re.compile(r">\s*/etc/(passwd|shadow|fstab|sudoers|group)\b"), tr("sovrascrittura di un file di sistema critico")),
+    (re.compile(r"\b(tee|truncate)\b[^\n|;&]*\s/etc/(passwd|shadow|fstab|sudoers|group)\b"), tr("sovrascrittura di un file di sistema critico")),
 ]
 
 INTERACTIVE = {

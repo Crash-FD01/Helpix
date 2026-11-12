@@ -195,6 +195,8 @@ Problema: il wifi non va</code></pre>
       const words = ('Risposta finta: controlla il driver del wifi con nmcli device status e riavvia ' +
                      'NetworkManager.').split(' ');
       let w = window.plainMarkup ? -12 : 0;  // senza contrassegni: la risposta compare dopo circa 1,5 s
+      // l'IA «ragiona»: il posto della risposta c'è subito ma resta vuoto per circa 8 s, senza pulsante Stop
+      if (window.thinkFirst && !window.plainMarkup) { w = -70; stop.remove(); }
       // come le chat vere (React): il testo si aggiorna al prossimo fotogramma, che con la pagina nascosta non arriva
       const t2 = setInterval(() => {
         const n = ++w;
@@ -202,6 +204,7 @@ Problema: il wifi non va</code></pre>
         if (n >= words.length) clearInterval(t2);
         requestAnimationFrame(() => {
           if (msg.addTurn) msg.addTurn();
+          if (window.thinkFirst && !stop.isConnected && n < words.length) document.body.appendChild(stop);
           msg.textContent = words.slice(0, n).join(' ');
           if (window.quoteQuestion && n >= words.length) {  // la risposta cita la domanda in un elenco
             const ol = document.createElement('ol'); const li = document.createElement('li');
