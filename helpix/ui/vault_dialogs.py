@@ -17,7 +17,7 @@ from .. import passwords, project as pj
 from ..i18n import tr
 from ..system import IS_WINDOWS
 from ..theme import C, mono_font
-from ..vault import Vault, VaultError, WrongSecret, in_onedrive, keyring_available
+from ..vault import Vault, VaultError, WrongSecret, folder_kind, in_onedrive, keyring_available
 from .workers import FuncWorker
 
 
@@ -944,6 +944,26 @@ class ProjectSettingsDialog(QDialog):
                                                 self.settings.get("vault_dir") or str(Path.home()))
         if not path:
             return
+        if folder_kind(path) == "other":
+            # il vault vuole una cartella sua: in mezzo ad altri file (Documenti, una cartella di lavoro) no
+            sub = Path(path) / tr("Vault Helpix")
+            if folder_kind(sub) == "other":
+                QMessageBox.warning(self, tr("Cartella del vault"),
+                                    tr("La cartella contiene già altri file. Scegli una cartella vuota oppure la "
+                                       "cartella di un vault di Helpix."))
+                return
+            if QMessageBox.question(
+                    self, tr("Cartella del vault"),
+                    tr("La cartella contiene già altri file e il vault ha bisogno di una cartella tutta sua. "
+                       "Uso «{sub}» dentro quella cartella?").format(sub=sub.name)) != QMessageBox.StandardButton.Yes:
+                return
+            try:
+                sub.mkdir(parents=True, exist_ok=True)
+            except OSError as exc:
+                QMessageBox.warning(self, tr("Cartella del vault"),
+                                    tr("Non riesco a creare il vault: {exc}").format(exc=exc))
+                return
+            path = str(sub)
         if in_onedrive(path) and QMessageBox.question(
                 self, tr("Cartella del vault"),
                 tr("La cartella è dentro OneDrive: possono nascere conflitti di sincronizzazione e file «solo online» "

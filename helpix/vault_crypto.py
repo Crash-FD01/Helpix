@@ -181,8 +181,19 @@ class Header:
             raise VaultError(f"intestazione del vault illeggibile: {exc}") from exc
         if not isinstance(data, dict) or data.get("format") != FORMAT:
             raise VaultError("la cartella non contiene un vault di Helpix")
-        if int(data.get("version", 0)) > VERSION:
+        version = data.get("version", 0)
+        if isinstance(version, bool) or not isinstance(version, int):
+            raise VaultError("intestazione del vault rovinata: versione non valida")
+        if version > VERSION:
             raise VaultError("il vault è stato creato con una versione più recente di Helpix: aggiornala")
+        if not isinstance(data.get("id"), str) or not data["id"].isascii() or not data["id"]:
+            raise VaultError("intestazione del vault rovinata: identificativo mancante")
+        slots = data.get("slots", [])
+        if not isinstance(slots, list) or not all(isinstance(s, dict) for s in slots):
+            raise VaultError("intestazione del vault rovinata: chiavi non valide")
+        if data.get("encrypted") and not slots:
+            raise VaultError("intestazione del vault rovinata: il vault è cifrato ma non ha chiavi "
+                             f"(le copie precedenti sono in {BACKUP_DIR}/)")
         return cls(data)
 
     @property

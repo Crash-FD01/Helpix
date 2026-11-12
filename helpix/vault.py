@@ -18,7 +18,6 @@ from __future__ import annotations
 import logging
 import os
 import re
-import shutil
 import time
 import unicodedata
 from dataclasses import dataclass, field
@@ -40,6 +39,9 @@ TRASH = ".cestino"   # progetti e note eliminati: si ripristinano o si eliminano
 _INDEX_LINES = "riga-indice.txt"   # nel cestino, la riga dell'indice di una nota eliminata
 KEYRING_SERVICE = "helpix-vault"
 _SKIP_PLAIN = {vc.HEADER, vc.BACKUP_DIR, vc.DATA_DIR}
+# Le sole cartelle che il vault considera sue quando è in chiaro. Tutto il resto che sta nella cartella scelta
+# (documenti dell'utente, `.obsidian`, una sua cartella «dati») non si elenca, non si cifra e non si cancella.
+_OWNED = (PROJECTS, TRASH)
 
 
 def default_root() -> Path:
@@ -54,6 +56,18 @@ def in_onedrive(path: str | Path) -> bool:
     if any(r and p.lower().startswith(r.lower()) for r in roots):
         return True
     return any(part.lower().startswith("onedrive") for part in Path(p).parts)
+
+
+def folder_kind(path: str | Path) -> str:
+    """Com'è una cartella scelta per il vault: «vault» (ne contiene già uno), «empty» (vuota o da creare) o
+    «other» (ha già altri file: il vault ha bisogno di una cartella sua)."""
+    p = Path(path)
+    if (p / vc.HEADER).is_file():
+        return "vault"
+    try:
+        return "other" if p.exists() and any(p.iterdir()) else "empty"
+    except OSError:
+        return "other"
 
 
 def slugify(name: str, limit: int = 60) -> str:
@@ -107,14 +121,13 @@ class PlainStore:
             return out
         for dirpath, dirnames, filenames in os.walk(self.root):
             rel_dir = Path(dirpath).relative_to(self.root)
-            if rel_dir == Path("."):
-                dirnames[:] = [d for d in dirnames if d not in _SKIP_PLAIN]
+            if rel_dir == Path("."):  # solo le cartelle del vault: il resto della cartella non è suo
+                dirnames[:] = [d for d in dirnames if d in _OWNED]
+                continue
             for f in filenames:
                 if f.startswith(".") and f.endswith(".tmp"):
                     continue
-                rel = (rel_dir / f).as_posix() if rel_dir != Path(".") else f
-                if rel in _SKIP_PLAIN or rel.split("/")[0] in _SKIP_PLAIN:
-                    continue
+                rel = (rel_dir / f).as_posix()
                 try:  # nomi messi da fuori che il vault non sa gestire (es. con «:»): li ignoro
                     clean_relpath(rel)
                 except VaultError:
@@ -293,9 +306,7 @@ class Vault:
             header.add_slot("recovery", key, master)
             text = vc.recovery_text(key, header.id, name)
         self.root.mkdir(parents=True, exist_ok=True)
-        data_dir = self.root / vc.DATA_DIR
-        if data_dir.exists():  # resti di una cifratura interrotta prima di scrivere l'intestazione: illeggibili
-            shutil.rmtree(data_dir)
+        self._set_aside_data_dir()
         store = EncryptedStore(self.root, header.keys(master))
         files = old_plain.list() if old_plain else []
         for rel in files:
@@ -308,6 +319,32 @@ class Vault:
         self.header, self.store, self._master = header, store, master
         self._remove_plain_copies()
         return text
+
+    def _set_aside_data_dir(self) -> None:
+        """Prima di cifrare: la cartella `dati/` dev'essere libera. Se contiene file dell'utente (il vault è stato
+        messo in una cartella che aveva già una sua «dati») non si tocca e la cifratura si ferma. Se contiene solo
+        file cifrati (.hxv: una cifratura interrotta, o un vault cifrato a cui è tornata un'intestazione vecchia)
+        non si cancella: va in .backup/, da dove si recupera con l'intestazione giusta."""
+        data_dir = self.root / vc.DATA_DIR
+        if not data_dir.exists():
+            return
+        if not data_dir.is_dir():
+            raise VaultError(f"nella cartella del vault c'è già un file «{vc.DATA_DIR}»: spostalo o scegli un'altra "
+                             "cartella per il vault")
+        entries = list(data_dir.iterdir())
+        foreign = [e for e in entries if not (e.is_file() and (e.name.endswith(vc.FILE_EXT)
+                                                              or (e.name.startswith(".") and e.name.endswith(".tmp"))))]
+        if foreign:
+            raise VaultError(f"nella cartella del vault c'è già una cartella «{vc.DATA_DIR}» con altri file "
+                             f"({foreign[0].name}…): spostala o scegli un'altra cartella per il vault")
+        if not entries:
+            data_dir.rmdir()
+            return
+        backups = self.root / vc.BACKUP_DIR
+        backups.mkdir(parents=True, exist_ok=True)
+        dest = backups / f"{vc.DATA_DIR}-{time.strftime('%Y%m%d-%H%M%S')}-{time.time_ns() % 1_000_000:06d}"
+        os.replace(data_dir, dest)
+        log.warning("Cartella %s già presente prima della cifratura: messa da parte in %s", vc.DATA_DIR, dest.name)
 
     def _remove_plain_copies(self) -> int:
         """Cancella le copie in chiaro rimaste dopo la cifratura (anche se era stata interrotta)."""
@@ -323,12 +360,13 @@ class Vault:
                 self.store.write(rel, plain.read(rel))
                 plain.delete(rel)
                 removed += 1
-        for dirpath, _dirs, _files in os.walk(self.root / PROJECTS, topdown=False):
-            try:
-                if not os.listdir(dirpath):
-                    os.rmdir(dirpath)
-            except OSError:
-                pass
+        for top in _OWNED:
+            for dirpath, _dirs, _files in os.walk(self.root / top, topdown=False):
+                try:
+                    if not os.listdir(dirpath):
+                        os.rmdir(dirpath)
+                except OSError:
+                    pass
         return removed
 
     def unlock(self, kind: str, secret) -> dict:

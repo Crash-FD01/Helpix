@@ -1394,6 +1394,11 @@ EN: dict[str, str] = {
     "Salvataggio non riuscito: {exc}": "Saving failed: {exc}",
     "Esportazione non riuscita: {exc}": "Export failed: {exc}",
     "Importazione non riuscita: {exc}": "Import failed: {exc}",
+    "Vault Helpix": "Helpix Vault",
+    "La cartella contiene già altri file. Scegli una cartella vuota oppure la cartella di un vault di Helpix.":
+        "The folder already contains other files. Choose an empty folder or the folder of a Helpix vault.",
+    "La cartella contiene già altri file e il vault ha bisogno di una cartella tutta sua. Uso «{sub}» dentro quella cartella?":
+        "The folder already contains other files and the vault needs a folder of its own. Use “{sub}” inside that folder?",
     "Quale vault importo?": "Which vault should I import?",
     "Importa nel vault": "Import into the vault",
     "Importa…": "Import…",
@@ -1409,8 +1414,10 @@ EN: dict[str, str] = {
         "• “{name}”: there's already a project with this name, imported as “{name} ({label})”",
     "importato": "imported",
     "Questi progetti ci sono già, uguali:": "These projects are already here, identical:",
-    "Niente di questo vault viene sovrascritto; la cartella di origine resta com'è.":
-        "Nothing in this vault is overwritten; the source folder stays as it is.",
+    "Niente di questo vault viene sovrascritto; i progetti del vault di origine restano dove sono.":
+        "Nothing in this vault is overwritten; the projects of the source vault stay where they are.",
+    "Per aprire il vault di origine hai usato un codice usa e getta: quel codice ora è annullato (gliene restano {n}).":
+        "To open the source vault you used a one-time code: that code is now void ({n} left on that vault).",
     "I progetti importati vengono cifrati con la chiave di questo vault.":
         "Imported projects are encrypted with this vault's key.",
     "Attenzione: questo vault non è cifrato, quindi i progetti importati saranno leggibili sul disco.":

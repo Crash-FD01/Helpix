@@ -399,6 +399,89 @@ def test_esporta_e_script_autonomo():
         assert (target / rel).read_bytes() == data
 
 
+def test_cartella_con_altri_file():
+    """Il vault messo in una cartella che ha già file dell'utente (Documenti, una cartella di lavoro): cifrarlo non
+    deve toccare niente che non sia del vault. Prima cancellava la cartella «dati» e inglobava tutto il resto."""
+    root = new_root()
+    (root / "dati").mkdir()
+    (root / "dati" / "clienti.xlsx").write_bytes(b"importante")
+    (root / "Fatture").mkdir()
+    (root / "Fatture" / "2026.pdf").write_bytes(b"%PDF fattura")
+    (root / "appunti.txt").write_text("miei appunti")
+    (root / ".obsidian").mkdir()
+    (root / ".obsidian" / "app.json").write_text("{}")
+    mine = {str(f.relative_to(root)): f.read_bytes() for f in root.rglob("*") if f.is_file()}
+
+    def untouched():
+        return all((root / rel).read_bytes() == data for rel, data in mine.items())
+
+    v = Vault(root)
+    v.create_plain("Lavoro")
+    p = v.create_project("Rete", pj.template("Rete", "Wi-Fi"))
+    assert v.store.list() == sorted([p.rel("PROJECT.md"), p.rel("INDEX.md")])   # i file dell'utente non sono del vault
+    # con una «dati» dell'utente la cifratura si ferma, senza toccare niente
+    try:
+        v.create_encrypted(PASSWORD, passwords.generate_codes())
+        raise AssertionError("cifrato sopra la cartella «dati» dell'utente")
+    except VaultError as exc:
+        assert "dati" in str(exc)
+    assert untouched() and not v.encrypted and Vault(root).project(p.slug).text() == p.text()
+    # tolta quella, si cifra solo il vault: gli altri file restano dove sono, in chiaro
+    os.rename(root / "dati", root / "dati-miei")
+    mine = {str(f.relative_to(root)): f.read_bytes() for f in root.rglob("*")
+            if f.is_file() and f.name != "helpix-vault.json" and "progetti" not in f.parts}
+    v.create_encrypted(PASSWORD, passwords.generate_codes())
+    assert untouched() and v.store.list() == sorted([p.rel("PROJECT.md"), p.rel("INDEX.md")])
+    assert not (root / "progetti").exists()
+    exp = new_root() / "export"
+    v.export_plain(exp)
+    assert sorted(str(f.relative_to(exp)) for f in exp.rglob("*") if f.is_file()) == sorted(
+        ["helpix-vault.json", f"progetti/{p.slug}/PROJECT.md", f"progetti/{p.slug}/INDEX.md"])
+    v.lock()
+    v2 = Vault(root)
+    v2.unlock("password", PASSWORD)   # allo sblocco: niente dei file dell'utente entra nel vault o sparisce
+    assert untouched() and len(v2.store.list()) == 2
+
+    # una «dati» con soli file cifrati (cifratura interrotta, intestazione vecchia tornata da una copia): non si
+    # cancella, va in .backup/
+    root = new_root()
+    v = Vault(root)
+    v.create_plain()
+    v.create_project("Uno", pj.template("Uno", "x"))
+    (root / "dati").mkdir()
+    (root / "dati" / ("ab" * 20 + ".hxv")).write_bytes(b"HXV1 vecchio file cifrato")
+    v.create_encrypted(PASSWORD, passwords.generate_codes())
+    kept = [f for f in (root / ".backup").rglob("*.hxv")]
+    assert len(kept) == 1 and kept[0].read_bytes() == b"HXV1 vecchio file cifrato"
+    assert len(list((root / "dati").glob("*.hxv"))) == 2 and not v.store.damaged
+
+
+def test_intestazione_rovinata():
+    """Un'intestazione con campi sbagliati dà un VaultError (messaggio «non riesco a leggere il vault»), mai un
+    errore qualsiasi che chiude la finestra."""
+    good = {"format": "helpix-vault", "version": 1, "id": "abc123", "name": "x", "encrypted": False}
+    for change in ({"version": "uno"}, {"version": None}, {"version": True}, {"version": 99}, {"id": None}, {"id": 5},
+                   {"id": ""}, {"slots": "x"}, {"slots": [1]}, {"encrypted": True}, {"encrypted": True, "slots": []}):
+        root = new_root()
+        (root / "helpix-vault.json").write_text(json.dumps({**good, **change}))
+        try:
+            Vault(root)
+            raise AssertionError(f"intestazione accettata: {change}")
+        except VaultError:
+            pass
+    for text in ("[]", "{", "null", '"helpix-vault"'):
+        root = new_root()
+        (root / "helpix-vault.json").write_text(text)
+        try:
+            Vault(root)
+            raise AssertionError(f"intestazione accettata: {text}")
+        except VaultError:
+            pass
+    root = new_root()
+    (root / "helpix-vault.json").write_text(json.dumps(good))
+    assert Vault(root).is_open
+
+
 def test_importa():
     def files(v, slug):
         pre = f"progetti/{slug}/"

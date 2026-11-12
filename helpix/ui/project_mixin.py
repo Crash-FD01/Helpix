@@ -83,6 +83,7 @@ class ProjectsMixin:
         self.web.note_requested.connect(self._note_requested)
         self._draft_timer = QTimer(self)
         self._draft_timer.timeout.connect(self._write_draft)
+        agents.clear_project_files()   # resti di un'uscita non pulita: niente testo del progetto senza progetto aperto
         self._apply_project_settings(initial=True)
 
     @property
@@ -712,12 +713,7 @@ class ProjectsMixin:
             self.vault_panel = None
         vault.lock()
         self.note_bar.hide()
-        agents.set_project_context(None)
-        if self.agent is not None:
-            try:
-                agents.write_context(self.agent.key)
-            except OSError:
-                pass
+        agents.clear_project_files()
         self._update_project_button()
 
     def export_vault(self):
@@ -755,10 +751,13 @@ class ProjectsMixin:
                                    "«Esporta in chiaro» oppure la cartella di un altro vault (quella con "
                                    "helpix-vault.json o con la cartella «progetti»)."))
             return
+        used_code = None   # codici rimasti al vault di origine, se per aprirlo se n'è usato uno
         if src.encrypted and not src.is_open:
             dlg = VaultUnlockDialog(src, owner)
             if dlg.exec() != QDialog.DialogCode.Accepted or not src.is_open:
                 return
+            if (dlg.info or {}).get("used_code"):
+                used_code = src.codes_left()
         try:
             plan = vault.import_plan(src)
             if not plan:
@@ -778,7 +777,11 @@ class ProjectsMixin:
                 QMessageBox.information(owner, tr("Importa nel vault"),
                                         tr("Questi progetti ci sono già, uguali:") + "\n\n" + "\n".join(lines))
                 return
-            extra = [tr("Niente di questo vault viene sovrascritto; la cartella di origine resta com'è.")]
+            extra = [tr("Niente di questo vault viene sovrascritto; i progetti del vault di origine restano "
+                        "dove sono.")]
+            if used_code is not None:   # l'unica cosa che cambia nell'origine: va detta
+                extra.append(tr("Per aprire il vault di origine hai usato un codice usa e getta: quel codice ora "
+                                "è annullato (gliene restano {n}).").format(n=used_code))
             if vault.encrypted:
                 extra.append(tr("I progetti importati vengono cifrati con la chiave di questo vault."))
             elif src.encrypted:
@@ -847,4 +850,7 @@ class ProjectsMixin:
                 return False
         if self.vault_panel is not None:  # finestra a sé: si chiude con Helpix
             self.vault_panel.close()
+        agents.clear_project_files()   # il testo del progetto non resta nella cartella dell'agente a Helpix chiuso
+        if self.vault is not None:
+            self.vault.lock()          # chiave e contenuti fuori dalla memoria prima di uscire
         return True

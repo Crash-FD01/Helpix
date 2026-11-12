@@ -26,6 +26,7 @@ TASK_FILE = "HELPIX-TASK.md"
 PROJECT_FILE = "HELPIX-PROJECT.md"   # aggiornamento del progetto scritto dall'agente (beta)
 NOTE_FILE = "HELPIX-NOTA.md"         # nota letta con «helpix vault cat … --out» (Windows)
 _project_context: dict = {"text": None}
+_PROJECT_TAG = "<!-- helpix: progetto attivo -->"   # segna le istruzioni che contengono il testo di un progetto
 
 AGENTS: dict[str, dict] = {
     "claude-code": {
@@ -354,7 +355,7 @@ def write_context(key: str, task_text: str | None = None) -> Path:
     text = _TEMPLATE.get(current(), _TEMPLATE["it"]).format(
         task=TASK_FILE, summary=SUMMARY_FILE, marker=SUMMARY_MARKER, pc=_pc_lines())
     if _project_context["text"]:
-        text = text.rstrip("\n") + "\n\n" + _project_context["text"].strip() + "\n"
+        text = text.rstrip("\n") + f"\n\n{_PROJECT_TAG}\n" + _project_context["text"].strip() + "\n"
     from . import privacy
     text = privacy.filter_paste(text, notify=False)  # scudo acceso: l'agente non riceve utente e nome del PC
     for agent in AGENTS.values():  # tutti e tre: si può cambiare agente nella stessa cartella
@@ -442,6 +443,31 @@ def set_project_context(text: str | None) -> None:
     """Testo del progetto attivo da aggiungere alle istruzioni (None = nessun progetto). Vale dalla prossima
     write_context; senza «Solo per me» (lo toglie chi lo prepara)."""
     _project_context["text"] = text
+
+
+def clear_project_files() -> None:
+    """Toglie dalla cartella dell'agente quello che viene dal vault: il testo del progetto dentro le istruzioni
+    (CLAUDE.md, AGENTS.md, GEMINI.md), la nota letta con «vault cat --out» e l'aggiornamento scritto dall'agente.
+    Si chiama al blocco del vault, all'uscita e all'avvio (se Helpix si era chiuso male): con il vault cifrato quei
+    testi non devono restare in chiaro sul disco quando Helpix non è aperto."""
+    _project_context["text"] = None
+    if not WORKSPACE.is_dir():
+        return
+    for name in (PROJECT_FILE, NOTE_FILE):
+        try:
+            (WORKSPACE / name).unlink(missing_ok=True)
+        except OSError:
+            pass
+    try:
+        stale = False
+        for a in AGENTS.values():
+            f = WORKSPACE / a["context"]
+            if f.exists() and _PROJECT_TAG in f.read_text(encoding="utf-8", errors="replace"):
+                stale = True
+        if stale:
+            write_context(next(iter(AGENTS)))   # istruzioni senza progetto, per tutti gli agenti
+    except OSError:
+        pass
 
 
 def vault_commands() -> tuple[str, str]:
