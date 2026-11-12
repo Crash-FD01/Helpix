@@ -435,7 +435,7 @@ def test_cartella_con_altri_file():
     assert not (root / "progetti").exists()
     exp = new_root() / "export"
     v.export_plain(exp)
-    assert sorted(str(f.relative_to(exp)) for f in exp.rglob("*") if f.is_file()) == sorted(
+    assert sorted(f.relative_to(exp).as_posix() for f in exp.rglob("*") if f.is_file()) == sorted(
         ["helpix-vault.json", f"progetti/{p.slug}/PROJECT.md", f"progetti/{p.slug}/INDEX.md"])
     v.lock()
     v2 = Vault(root)
