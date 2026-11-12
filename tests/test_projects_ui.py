@@ -169,6 +169,28 @@ def test_note_e_comando_vault():
     win._set_project(None, announce=False)
     agents.write_context("claude-code")
     assert "Casa — Wi-Fi" not in (agents.workspace() / "CLAUDE.md").read_text(encoding="utf-8")
+    # uscendo da Helpix nella cartella dell'agente non resta niente del progetto (con il vault cifrato sarebbe il
+    # suo testo in chiaro sul disco): istruzioni senza progetto, via la nota letta e l'aggiornamento scritto
+    ws = agents.workspace()
+    contexts = [ws / a["context"] for a in agents.AGENTS.values()]
+
+    def leftovers():
+        return [f.name for f in contexts if "Casa — Wi-Fi" in f.read_text(encoding="utf-8")] + \
+               [n for n in (agents.NOTE_FILE, agents.PROJECT_FILE) if (ws / n).exists()]
+    win._open_project(p.slug)
+    agents.write_context("claude-code")
+    (ws / agents.NOTE_FILE).write_text("Canale 36 a 80 MHz.\n", encoding="utf-8")
+    (ws / agents.PROJECT_FILE).write_text("HELPIX-PROJECT\nNOTA: x\n", encoding="utf-8")
+    assert len(leftovers()) == len(contexts) + 2
+    assert win._projects_on_quit() and leftovers() == []
+    assert all(f.exists() and "Helpix" in f.read_text(encoding="utf-8") for f in contexts)   # le istruzioni restano
+    # Helpix chiuso male con il progetto aperto: all'avvio dopo, i resti si tolgono
+    win._open_project(p.slug)
+    agents.write_context("claude-code")
+    assert leftovers()
+    win2 = make_window()
+    assert leftovers() == []
+    win2.close()
     win.close()
 
 
@@ -248,7 +270,8 @@ def test_importa_dalle_finestre():
     b = Vault(os.path.join(_tmp, "vault-cifrato-sorgente"))
     b.create_plain("Casa")
     b.create_project("Lab Proxmox casa", pj.template("Lab Proxmox casa", "Cluster a 3 nodi"))
-    b.create_encrypted(PASSWORD, passwords.generate_codes())
+    b_codes = passwords.generate_codes()
+    b.create_encrypted(PASSWORD, b_codes)
     b.lock()
 
     win = make_window(vault_dir=os.path.join(_tmp, "vault-importa"))
@@ -266,11 +289,15 @@ def test_importa_dalle_finestre():
     folder = {"path": exported}
 
     class FakeUnlock:
+        how = ("code", b_codes[0])   # la prima volta con un codice usa e getta, poi con la password
+
         def __init__(self, v, parent=None, allow_system=False):
             self.v = v
+            self.info = None
 
         def exec(self):
-            self.v.unlock("password", PASSWORD)
+            self.info = self.v.unlock(*FakeUnlock.how)
+            FakeUnlock.how = ("password", PASSWORD)
             return QDialog.DialogCode.Accepted
     QFileDialog.getExistingDirectory = staticmethod(lambda *a_, **k: folder["path"])
     QMessageBox.question = staticmethod(lambda _p, _t, text, *a_, **k: (asked.append(text),
@@ -296,6 +323,13 @@ def test_importa_dalle_finestre():
         win.import_vault()
         assert "leggibili sul disco" in asked[-1]
         assert {i.name for i in vault.projects()} == {"Rete ufficio", "Lab Proxmox casa"}
+        # aperto con un codice usa e getta: l'origine perde quel codice, e la conferma lo dice
+        left = len(b_codes) - 1
+        assert f"gliene restano {left}" in asked[-1] and Vault(b.root).codes_left() == left
+        assert "restano dove sono" in asked[-1] and "resta com'è" not in asked[-1]
+        n_asked = len(asked)
+        win.import_vault()   # di nuovo, con la password: niente da importare e nessun codice consumato
+        assert len(asked) == n_asked and Vault(b.root).codes_left() == left
         # cartella qualsiasi: avviso, niente importato
         folder["path"] = os.path.join(_tmp, "config")
         win.import_vault()
@@ -304,6 +338,53 @@ def test_importa_dalle_finestre():
         (QFileDialog.getExistingDirectory, QMessageBox.question, QMessageBox.information, QMessageBox.warning,
          vault_dialogs.VaultUnlockDialog) = real
     panel.close()
+    win.close()
+
+
+def test_cartella_del_vault_tutta_sua():
+    """«Cartella del vault»: una cartella con altri file non si usa così com'è (cifrando il vault ci andrebbero di
+    mezzo): Helpix propone una sottocartella sua."""
+    from PySide6.QtWidgets import QFileDialog
+    win = make_window(vault_dir=os.path.join(_tmp, "vault-cartella"))
+    docs = Path(_tmp) / "Documenti"
+    docs.mkdir()
+    (docs / "fattura.pdf").write_bytes(b"%PDF")
+    empty = Path(_tmp) / "vuota"
+    empty.mkdir()
+    existing = Vault(Path(_tmp) / "vault-gia-fatto")
+    existing.create_plain("Altro")
+    dlg = vault_dialogs.ProjectSettingsDialog(win.settings, lambda: win._get_vault(), win)
+    asked, warned, answer = [], [], {"yes": True}
+    real = (QFileDialog.getExistingDirectory, QMessageBox.question, QMessageBox.warning)
+    pick = {"path": str(docs)}
+    QFileDialog.getExistingDirectory = staticmethod(lambda *a, **k: pick["path"])
+    QMessageBox.question = staticmethod(lambda _p, _t, text, *a, **k: (asked.append(text), (
+        QMessageBox.StandardButton.Yes if answer["yes"] else QMessageBox.StandardButton.No))[1])
+    QMessageBox.warning = staticmethod(lambda _p, _t, text, *a, **k: warned.append(text))
+    try:
+        before = win.settings.get("vault_dir")
+        answer["yes"] = False
+        dlg._choose_folder()
+        assert "cartella tutta sua" in asked[-1] and win.settings.get("vault_dir") == before
+        answer["yes"] = True
+        dlg._choose_folder()
+        assert win.settings.get("vault_dir") == str(docs / "Vault Helpix") and (docs / "Vault Helpix").is_dir()
+        assert sorted(f.name for f in docs.iterdir() if f.is_file()) == ["fattura.pdf"]
+        # la sottocartella proposta è già occupata da altro: avviso, niente cambio
+        work = Path(_tmp) / "Lavoro"
+        (work / "Vault Helpix").mkdir(parents=True)
+        (work / "Vault Helpix" / "altro.txt").write_text("x")
+        pick["path"] = str(work)
+        dlg._choose_folder()
+        assert "contiene già altri file" in warned[-1] and win.settings.get("vault_dir") == str(docs / "Vault Helpix")
+        for ok in (empty, existing.root):   # vuota o già un vault: si usa così, senza domande
+            n = len(asked)
+            pick["path"] = str(ok)
+            dlg._choose_folder()
+            assert win.settings.get("vault_dir") == str(ok) and len(asked) == n
+    finally:
+        QFileDialog.getExistingDirectory, QMessageBox.question, QMessageBox.warning = real
+    dlg.close()
     win.close()
 
 

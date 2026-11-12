@@ -28,6 +28,12 @@ Posizione predefinita: `~/.local/share/helpix/vault` su Linux, `%LOCALAPPDATA%\H
 (non in Documenti: su molti PC è dentro OneDrive, che crea conflitti e file «solo online»). Si può scegliere
 un'altra cartella; se è dentro OneDrive Helpix avvisa.
 
+Il vault vuole una cartella tutta sua: scegliendone una che ha già altri file, Helpix propone la sottocartella
+«Vault Helpix». In ogni caso del vault fanno parte solo `progetti/` e `.cestino/` (più intestazione, `.backup/` e
+`dati/`): qualunque altro file nella cartella non viene elencato, cifrato, esportato né cancellato. Se nella
+cartella c'è già una `dati/` con file non cifrati la cifratura si ferma con un messaggio; una `dati/` con soli file
+cifrati rimasta da prima (cifratura interrotta) non si cancella, va in `.backup/`.
+
 ```
 vault/
 ├── helpix-vault.json          intestazione: formato, versione, cifratura (slot delle chiavi)
@@ -83,7 +89,10 @@ Selettore *Progetto* nella barra. Scegliendo un progetto Helpix apre un task nuo
   istruzioni per chiedere le note; l'utente preme Invio;
 - **motore API**: lo stesso testo va nel messaggio di sistema di ogni richiesta;
 - **agenti nel terminale**: lo stesso testo va in `CLAUDE.md`/`AGENTS.md`/`GEMINI.md`, con i comandi per leggere
-  le note.
+  le note. Questi file stanno nella cartella dell'agente (`agent/` nei dati di Helpix), **in chiaro anche se il
+  vault è cifrato**: l'agente deve poterli leggere. Helpix toglie da lì il testo del progetto, la nota letta e
+  l'aggiornamento scritto dall'agente quando si chiude il progetto, si blocca il vault o si esce (e all'avvio, se
+  si era chiuso male).
 
 Il filtro privacy, se acceso, si applica a tutto quello che esce.
 
@@ -269,7 +278,9 @@ Fatta da Helpix, senza filesystem montati né driver: funziona uguale su Linux, 
   file, bozze, versioni), cifrato se il vault di destinazione è cifrato. **Non sovrascrive mai**: un progetto con lo
   stesso nome di cartella e lo stesso contenuto si salta, uno diverso entra come copia *«nome (importato)»*. Prima
   mostra cosa farà e chiede conferma; ogni file si rilegge dopo averlo scritto e, se un progetto non entra tutto, i
-  suoi file già scritti si tolgono. Non si importa da questo vault né da una cartella che lo contiene.
+  suoi file già scritti si tolgono. Non si importa da questo vault né da una cartella che lo contiene. I progetti
+  del vault di origine non vengono toccati; se però lo si apre con un codice usa e getta, quel codice viene
+  annullato come sempre (la conferma lo dice).
 - `helpix/vault_crypto.py` funziona anche da solo, senza Helpix (serve solo `cryptography`):
   `python3 vault_crypto.py decrypt <vault> <cartella>` chiede password, codice o file di recupero.
 
