@@ -45,6 +45,20 @@ def test_analyze():
     assert analyze("rm -rf ~/tmp").dangers
     assert analyze("sudo dnf remove firefox").dangers
     assert analyze("curl -fsSL x.sh | sudo bash").dangers
+    # le stesse cose scritte in un altro modo: l'avviso non deve mancare
+    for cmd in ("rm --recursive --force ~/tmp", "rm -f --recursive x", "chmod --recursive 777 /srv",
+                "chown user:user --recursive /srv", "find / -name '*.log' -delete", "find . -type f -exec rm {} +",
+                "git clean -fdx", "git -C repo clean -f", "curl -s https://x.sh | sudo -E bash",
+                "bash <(curl -s https://x.sh)", "source <(wget -qO- https://x.sh)", 'eval "$(curl -s https://x.sh)"',
+                ". <(curl https://x.sh)", "echo x | sudo tee /etc/sudoers", "tee -a /etc/fstab < riga",
+                "truncate -s0 /etc/passwd"):
+        assert len(set(analyze(cmd).dangers)) == 1, cmd
+    # e i comandi normali restano senza avviso
+    for cmd in ("find . -name '*.py'", "git clean -n", "git status", "chmod 644 file", "rm file.txt", "ls -R",
+                "curl -s https://example.com -o pagina.html", "bash script.sh", "source ~/.bashrc", ". ./env.sh",
+                "tee uscita.txt", "cat /etc/fstab", "echo ciao | tee /tmp/x", "truncate -s0 registro.log",
+                "git log --oneline"):
+        assert not analyze(cmd).dangers, cmd
     assert not analyze("journalctl -b -p err --no-pager").dangers
     assert analyze("nano /etc/fstab").interactive
     assert analyze("journalctl -f").interactive
@@ -134,6 +148,46 @@ def test_parse_response():
     assert parse_response("openai", {"choices": [{"message": {"content": " ciao "}}]}) == "ciao"
     assert "troncata" in parse_response("anthropic", {"content": [{"type": "text", "text": "x"}],
                                                       "stop_reason": "max_tokens"})
+
+
+def test_impostazioni_rovinate_messe_da_parte():
+    """Un settings.json illeggibile non si perde: prima era sovrascritto dai valori predefiniti al primo salvataggio."""
+    from helpix import config
+    config.ensure_dirs()
+    good = config.Settings()
+    good.set("theme", "dark")
+    assert config.Settings().get("theme") == "dark"
+    broken = '{"theme": "dark", "vault_dir": "/dati/vault", '   # scrittura interrotta
+    config.SETTINGS_FILE.write_text(broken, encoding="utf-8")
+    s = config.Settings()
+    assert s.get("theme") == config.DEFAULT_SETTINGS["theme"]
+    kept = config.SETTINGS_FILE.with_name(config.SETTINGS_FILE.name + ".rotto")
+    assert kept.read_text(encoding="utf-8") == broken and not config.SETTINGS_FILE.exists()
+    s.set("theme", "light")   # il salvataggio dopo non tocca la copia
+    assert kept.read_text(encoding="utf-8") == broken and config.Settings().get("theme") == "light"
+    config.SETTINGS_FILE.write_text("", encoding="utf-8")   # file vuoto: niente da conservare
+    config.Settings()
+    assert kept.read_text(encoding="utf-8") == broken
+
+
+def test_registro_con_limite():
+    """helpix.log non cresce senza fine: oltre il limite diventa helpix.log.1 e si riparte."""
+    import logging
+    from helpix.app import log_handler
+    path = os.path.join(tempfile.mkdtemp(), "helpix.log")
+    handler = log_handler(path, max_bytes=2000)
+    lg = logging.getLogger("helpix.test-registro")
+    lg.propagate = False
+    lg.addHandler(handler)
+    try:
+        for i in range(200):
+            lg.warning("riga di prova numero %d con un po' di testo per riempire il registro", i)
+    finally:
+        lg.removeHandler(handler)
+        handler.close()
+    assert os.path.getsize(path) <= 2000 and os.path.getsize(path + ".1") <= 2000
+    assert not os.path.exists(path + ".2")
+    assert "numero 199" in open(path, encoding="utf-8").read()
 
 
 if __name__ == "__main__":

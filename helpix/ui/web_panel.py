@@ -191,8 +191,10 @@ _SUMMARY_JS = r"""
     const filled = lines.filter(l => !/^[^:]{2,80}:$/.test(l)).length;
     if (filled >= 2) { found = texts[i]; break; }
   }
-  const busy = !!document.querySelector('[data-testid="stop-button"], button[aria-label*="Stop" i], ' +
-                                         'button[aria-label*="Interrompi" i]');
+  // «sta scrivendo» = c'è un pulsante Stop che si vede: uno nascosto lasciato nella pagina non conta
+  const busy = [...document.querySelectorAll('[data-testid="stop-button"], button[aria-label*="Stop" i], ' +
+                                             'button[aria-label*="Interrompi" i]')]
+      .some(b => b.getClientRects().length > 0 && getComputedStyle(b).visibility !== 'hidden');
   return JSON.stringify({ text: found, busy: busy });
 })(%s);
 """
@@ -214,8 +216,10 @@ _ANSWER_JS = r"""
                 '[data-is-streaming]', '.font-claude-response',
                 '[data-testid="assistant-message"]', 'model-response message-content', 'model-response',
                 '[data-content="ai-message"]', '.ds-markdown'];
-  const busy = !!document.querySelector('[data-testid="stop-button"], button[aria-label*="Stop" i], ' +
-                                         'button[aria-label*="Interrompi" i]');
+  // «sta scrivendo» = c'è un pulsante Stop che si vede: uno nascosto lasciato nella pagina non conta
+  const busy = [...document.querySelectorAll('[data-testid="stop-button"], button[aria-label*="Stop" i], ' +
+                                             'button[aria-label*="Interrompi" i]')]
+      .some(b => b.getClientRects().length > 0 && getComputedStyle(b).visibility !== 'hidden');
   // solo il testo che l'utente vede nel messaggio: niente etichette per lettori di schermo
   // («Claude responded:»), pulsanti, scorciatoie, orari («just now») e barre che compaiono al passaggio
   const SKIP = 'button, [role="button"], [role="toolbar"], [role="menu"], [role="tooltip"], svg, kbd, time, ' +

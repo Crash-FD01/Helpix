@@ -168,6 +168,22 @@ def test_quick_window():
     assert "pagina cambiata durante l'attesa" in log and "risposta completa alla finestra rapida" in log, log[-1500:]
     assert "domanda con la pagina" not in log, "il registro non contiene il testo dei messaggi"
 
+    # il posto della risposta compare subito ma resta vuoto per qualche secondo, senza «Stop» (l'IA ragiona): prima la
+    # finestra rapida chiudeva con una risposta vuota. E un pulsante Stop nascosto lasciato nella pagina non deve
+    # far sembrare che l'IA stia scrivendo per sempre.
+    js(gpt, "window.thinkFirst = true; const hs = document.createElement('button'); hs.id = 'hidden-stop'; "
+            "hs.setAttribute('aria-label', 'Stop generating'); hs.style.display = 'none'; "
+            "document.body.appendChild(hs); 0")
+    before = q.answers.toPlainText().count("NetworkManager")
+    n_history = len(q._history)
+    q.input.setPlainText("domanda a cui l'IA pensa un po'")
+    q.send()
+    until(lambda: not q.btn_send.isEnabled() or len(q._history) > n_history, timeout=10, what="invio (IA che ragiona)")
+    until(lambda: q.btn_send.isEnabled(), timeout=40, what="risposta completa (IA che ragiona, Stop nascosto)")
+    assert q.answers.toPlainText().count("NetworkManager") > before, "risposta vuota data per completa"
+    assert q._history[-1][1].startswith("Risposta finta: controlla il driver"), q._history[-1]
+    js(gpt, "window.thinkFirst = false; document.getElementById('hidden-stop').remove(); 0")
+
     # pagina senza contrassegni sui messaggi (ChatGPT senza account, Linux Mint: la rapida restava in attesa):
     # la risposta è il testo che segue il messaggio inviato
     js(gpt, "document.querySelectorAll('[data-message-author-role]').forEach(e => e.remove()); "
@@ -247,9 +263,9 @@ def test_quick_window():
     pump(800)
     q.input.setPlainText("terza domanda")
     q.send()
-    until(lambda: js(gpt, "window.sent.length") == 20, timeout=20, what="messaggio con Helpix ridotto a icona")
+    until(lambda: js(gpt, "window.sent.length") == 21, timeout=20, what="messaggio con Helpix ridotto a icona")
     until(lambda: q.btn_send.isEnabled(), timeout=25, what="risposta con Helpix ridotto a icona")
-    assert q.answers.toPlainText().count("NetworkManager") >= 20
+    assert q.answers.toPlainText().count("NetworkManager") >= 21
     win.showNormal()
     pump(300)
 

@@ -2908,6 +2908,22 @@ class MainWindow(ProjectsMixin, QMainWindow):
                           count, w["count"], len(text), bool(data.get("busy")),
                           "" if data.get("candidates") is None else
                           f", punti con il messaggio inviato {data['candidates']}")
+                if fresh and not text and not data.get("fallback"):
+                    # il posto della risposta c'è ma è ancora vuoto (l'IA sta ragionando, il testo arriva dopo):
+                    # non è una risposta finita. Prima, vuoto e senza «Stop» per due letture, la finestra rapida
+                    # chiudeva con una risposta vuota. Si aspetta; se resta vuoto e fermo a lungo, lo si dice.
+                    now = time.monotonic()
+                    if data.get("busy") or "empty_since" not in w:
+                        w["empty_since"] = now
+                    if now - w["empty_since"] > 25:
+                        _qlog("risposta comparsa ma rimasta vuota: struttura della pagina in pagina-chat.txt")
+                        self.web.page_outline(_save_outline)
+                        self._quick_stop()
+                        self.instance.reply(w["sock"], {"type": "answer_unavailable", "text": tr(
+                            "_Non vedo la risposta nella pagina: guardala in Helpix (↗)._")})
+                        return
+                    QTimer.singleShot(900, self._quick_poll)
+                    return
                 if not fresh:  # la risposta non è ancora comparsa
                     if time.monotonic() - w.get("t0", time.monotonic()) > 120:
                         _qlog("nessuna risposta vista in 2 minuti: struttura della pagina in pagina-chat.txt")
@@ -2975,10 +2991,10 @@ class MainWindow(ProjectsMixin, QMainWindow):
         BrowserDialog(self.bridge if self.bridge_ok else None, self).exec()
 
     def _ext_run(self, msg: dict):
+        """«Esegui con Helpix» nella chat del browser: stessi controlli del pulsante Esegui."""
         if getattr(self, "locked", False):  # bloccato: niente comandi o catture dal browser
             self.bridge.run_status(msg, "rejected", reason=tr("Helpix è bloccato: sbloccalo e riprova."))
             return
-        """«Esegui con Helpix» nella chat del browser: stessi controlli del pulsante Esegui."""
         text = msg.get("cmd", "")
         summary = parse_summary(text)
         if summary:

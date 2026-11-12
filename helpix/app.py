@@ -53,6 +53,13 @@ def restart() -> None:
         app.quit()
 
 
+def log_handler(path, max_bytes: int = 1_000_000):
+    """Registro di Helpix con un limite: arrivato a 1 MB il file diventa helpix.log.1 (uno solo) e si riparte.
+    Prima cresceva senza fine."""
+    from logging.handlers import RotatingFileHandler
+    return RotatingFileHandler(str(path), maxBytes=max_bytes, backupCount=1, encoding="utf-8")
+
+
 def _test_shortcut() -> int:
     import logging as lg
     import time
@@ -248,7 +255,7 @@ def main(argv: list[str] | None = None) -> int:
     from .config import LOG_FILE, SecretStore, Settings, ensure_dirs
 
     ensure_dirs()
-    logging.basicConfig(filename=str(LOG_FILE), level=logging.INFO,
+    logging.basicConfig(handlers=[log_handler(LOG_FILE)], level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
     settings = Settings()

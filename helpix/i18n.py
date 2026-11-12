@@ -69,6 +69,8 @@ EN: dict[str, str] = {
 
     # --- esecuzione comandi
     "cancellazione ricorsiva di file (rm -r)": "recursive file deletion (rm -r)",
+    "cancellazione dei file trovati con find": "deletion of the files found by find",
+    "cancellazione dei file non tracciati (git clean)": "deletion of untracked files (git clean)",
     "formattazione di un filesystem": "formatting a filesystem",
     "scrittura diretta su un dispositivo": "writing directly to a device",
     "scrittura diretta su un disco": "writing directly to a disk",
