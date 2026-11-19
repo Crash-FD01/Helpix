@@ -275,7 +275,7 @@ Fatta da Helpix, senza filesystem montati né driver: funziona uguale su Linux, 
   casella (le bozze contengono pezzi delle chat). C'è anche un `LEGGIMI.txt` che spiega come aprirlo. Il file si
   scrive con un nome temporaneo, si rilegge (con la password, se cifrato) e solo allora prende il nome scelto; mai
   dentro il vault.
-- *Importa un progetto…* (menu *Progetto*, clic destro nell'elenco del pannello, anche nel vuoto) va dritto alla
+- *Importa un progetto…* (menu *Progetto*, o clic destro nel vuoto dell'elenco del pannello) va dritto alla
   scelta del file `.zip`. *Importa…* (striscia *Beta* del pannello, o *Impostazioni dei progetti › Importa un vault…*)
   chiede se importare un file `.zip` o una cartella. Entrambi portano nel vault aperto
   i progetti di un progetto esportato (*Un file .zip…*: chiede la password se è cifrato; il file si legge in memoria,

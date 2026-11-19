@@ -836,12 +836,12 @@ class VaultPanel(QDialog):
 
     # ------------------------------------------------------------ rinomina, elimina, cestino
     def _list_actions(self, menu: QMenu):
-        """Azioni sull'elenco dei progetti (clic destro nel vuoto, e in fondo al menu di ogni progetto)."""
+        """Azioni sull'elenco dei progetti: clic destro nel vuoto (e ⋯ senza niente selezionato), mai sul progetto."""
         menu.addAction(icon("plus", C["text"], 16), tr("Nuovo progetto…"), self.new_project_requested.emit)
         menu.addAction(icon("download", C["text"], 16), tr("Importa un progetto…"), self.import_project_requested.emit)
 
     def _fill_menu(self, menu: QMenu, data):
-        """Prima le azioni su questo progetto, poi quelle sull'elenco, in fondo l'eliminazione."""
+        """Solo le azioni su questo progetto; in fondo, separata, l'eliminazione."""
         menu.clear()
         if not data:
             self._list_actions(menu)
@@ -863,8 +863,6 @@ class VaultPanel(QDialog):
             menu.addAction(icon("trash", C["errText"], 16), label, lambda: self._delete_file(rel))
         elif f"/{SESSIONS}/" in rel:
             menu.addAction(icon("trash", C["errText"], 16), tr("Elimina la bozza…"), lambda: self._delete_file(rel))
-        menu.addSeparator()
-        self._list_actions(menu)
         menu.addSeparator()
         menu.addAction(icon("trash", C["errText"], 16), tr("Elimina il progetto…"), lambda: self._delete_project(slug))
 

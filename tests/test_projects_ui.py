@@ -324,11 +324,20 @@ def test_esporta_un_progetto_dalle_finestre():
 
     def texts(menu):
         return [a.text() for a in menu.actions() if not a.isSeparator()]
-    # menu del progetto: prima le azioni sul progetto, poi quelle sull'elenco, in fondo l'eliminazione
+    # menu del progetto: solo le azioni su quel progetto (niente «nuovo» né «importa»), in fondo l'eliminazione
     menu = QMenu()
     panel._fill_menu(menu, panel.current)
-    assert texts(menu) == ["Rinomina il progetto…", "Esporta il progetto…", "Nuovo progetto…", "Importa un progetto…",
-                           "Elimina il progetto…"], texts(menu)
+    assert texts(menu) == ["Rinomina il progetto…", "Esporta il progetto…", "Elimina il progetto…"], texts(menu)
+    from PySide6.QtWidgets import QTreeWidgetItemIterator
+    it, row = QTreeWidgetItemIterator(panel.tree), None
+    while it.value():
+        if (it.value().data(0, Qt.ItemDataRole.UserRole) or ("",))[0] == "project":
+            row = it.value()
+            break
+        it += 1
+    on_project = panel._context_menu(panel.tree.visualItemRect(row).center())   # clic destro vero su una riga
+    assert texts(on_project) == ["Rinomina il progetto…", "Esporta il progetto…", "Elimina il progetto…"], \
+        texts(on_project)
     assert "esporta" in panel.btn_more.toolTip()
     # clic destro nel vuoto dell'elenco: solo le azioni sull'elenco; «Importa un progetto…» va dritto al .zip
     QApplication.processEvents()
