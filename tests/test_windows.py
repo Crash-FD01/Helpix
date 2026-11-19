@@ -539,6 +539,22 @@ def test_codex_without_junctions():
     srv.shutdown()
 
 
+def test_logo_a_ogni_scala():
+    """Il logo in alto a sinistra resta della sua misura anche con lo schermo al 125%, 150%, 200%."""
+    import subprocess
+    code = ("from PySide6.QtWidgets import QApplication; app = QApplication([]); from helpix import theme\n"
+            "for s in (22, 28, 76):\n"
+            "    p = theme.logo_pixmap(s); d = p.deviceIndependentSize()\n"
+            "    assert (round(d.width(), 3), round(d.height(), 3)) == (s, s), (s, d, p.devicePixelRatio())\n"
+            "    assert p.width() >= s * app.devicePixelRatio(), (s, p.width())\n")
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for scale in ("1", "1.25", "1.5", "2"):
+        env = dict(os.environ, QT_SCALE_FACTOR=scale, QT_QPA_PLATFORM=os.environ.get("QT_QPA_PLATFORM", "offscreen"))
+        r = subprocess.run([sys.executable, "-c", code], cwd=root, env=env, capture_output=True, text=True,
+                           timeout=120)
+        assert r.returncode == 0, (scale, r.stderr[-1500:])
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):
