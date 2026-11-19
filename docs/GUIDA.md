@@ -284,7 +284,7 @@ piccolo (circa 1000 token) invece di una cronologia che cresce. Specifica comple
   Helpix (blocco di Impostazioni › Sicurezza, anche per inattività), con *Progetto › Blocca il vault* o chiudendo
   Helpix. *Esporta in chiaro* ne fa una copia leggibile; *Esporta il progetto…* (menu Progetto o clic destro sul
   progetto nel pannello) mette un solo progetto in un file `.zip`, cifrato con una password sua o in chiaro, da
-  passare a un collega; *Importa un progetto…* (menu Progetto, o clic destro nell'elenco del pannello) e *Importa…*
+  passare a un collega; *Importa un progetto…* (menu Progetto, o clic destro nel vuoto dell'elenco del pannello) e *Importa…*
   riportano nel vault i progetti di un file `.zip` esportato, di un'esportazione o di un altro vault (anche cifrato)
   senza sovrascrivere niente; `helpix/vault_crypto.py` lo decifra anche senza Helpix.
   Persi password, codici e file, i dati non si recuperano.
