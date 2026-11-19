@@ -277,9 +277,13 @@ def app_icon() -> QIcon:
 
 
 def logo_pixmap(size: int):
-    """Icona dell'app in alta risoluzione per la barra e la finestra di avvio."""
+    """Icona dell'app in alta risoluzione per la barra e la finestra di avvio: sempre `size` punti a schermo.
+
+    Qt 6 restituisce già la pixmap moltiplicata per la scala dello schermo (125%, 150%… su Windows): il rapporto
+    va ricavato dalla misura vera, altrimenti il logo esce più grande del suo spazio e viene tagliato."""
     pix = app_icon().pixmap(size * 3, size * 3)
-    pix.setDevicePixelRatio(3)
+    if not pix.isNull():
+        pix.setDevicePixelRatio(max(pix.width(), pix.height()) / size)
     return pix
 
 
