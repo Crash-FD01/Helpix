@@ -273,6 +273,7 @@ def test_importa_dalle_finestre():
             self.v.unlock("password", PASSWORD)
             return QDialog.DialogCode.Accepted
     QFileDialog.getExistingDirectory = staticmethod(lambda *a_, **k: folder["path"])
+    win._ask_import_kind = lambda _owner: "folder"
     QMessageBox.question = staticmethod(lambda _p, _t, text, *a_, **k: (asked.append(text),
                                                                        QMessageBox.StandardButton.Yes)[1])
     QMessageBox.information = staticmethod(lambda _p, _t, text, *a_, **k: said.append(text))
@@ -305,6 +306,93 @@ def test_importa_dalle_finestre():
          vault_dialogs.VaultUnlockDialog) = real
     panel.close()
     win.close()
+
+
+def test_esporta_un_progetto_dalle_finestre():
+    """Pannello Vault › ⋯ › «Esporta il progetto…»: file .zip cifrato con una password sua; poi «Importa…» ›
+    «Un file .zip» in un altro Helpix chiede quella password e porta dentro il progetto."""
+    from PySide6.QtWidgets import QFileDialog, QInputDialog
+    win = make_window(vault_dir=os.path.join(_tmp, "vault-esporta"))
+    vault = win._get_vault()
+    p = vault.create_project("Cliente Bianchi — VPN", pj.template("Cliente Bianchi — VPN", "IPsec stabile", "XGS"))
+    vault.create_project("Altro", pj.template("Altro", "niente"))
+    win.open_vault_panel()
+    panel = win.vault_panel
+    panel.select(f"progetti/{p.slug}/PROJECT.md")
+    from PySide6.QtWidgets import QMenu
+    menu = QMenu()
+    panel._fill_menu(menu, panel.current)
+    assert "Esporta il progetto…" in [a.text() for a in menu.actions()]
+    assert "esporta" in panel.btn_more.toolTip()
+
+    # la finestra: cifrato di default, «Esporta…» attivo solo con una password valida e ripetuta
+    dlg = vault_dialogs.ExportProjectDialog(p.name, panel)
+    assert dlg.encrypted.isChecked() and not dlg.ok.isEnabled() and not dlg.include_drafts()
+    dlg.fields.pw.setText("frase lunga per il collega")
+    assert not dlg.ok.isEnabled()
+    dlg.fields.pw2.setText("frase lunga per il collega")
+    assert dlg.ok.isEnabled() and dlg.password() == "frase lunga per il collega"
+    dlg.plain.setChecked(True)
+    assert dlg.ok.isEnabled() and dlg.password() is None and not dlg.pw_box.isEnabled()
+    dlg.close()
+
+    said = []
+    zpath = os.path.join(_tmp, "bianchi-esportato.zip")
+    real = (vault_dialogs.ExportProjectDialog, QFileDialog.getSaveFileName, QFileDialog.getOpenFileName,
+            QMessageBox.information, QMessageBox.warning, QMessageBox.question, QInputDialog.getText)
+
+    class FakeExport:
+        def __init__(self, name, parent=None):
+            pass
+
+        def exec(self):
+            return QDialog.DialogCode.Accepted
+
+        def password(self):
+            return "frase lunga per il collega"
+
+        def include_drafts(self):
+            return False
+    vault_dialogs.ExportProjectDialog = FakeExport
+    QFileDialog.getSaveFileName = staticmethod(lambda *a_, **k: (zpath[:-4], ""))   # «.zip» lo aggiunge Helpix
+    QMessageBox.information = staticmethod(lambda _p, _t, text, *a_, **k: said.append(text))
+    QMessageBox.warning = staticmethod(lambda _p, _t, text, *a_, **k: said.append(text))
+    try:
+        panel._export_project(p.slug)
+        assert os.path.isfile(zpath) and "esportato, cifrato" in said[-1], said
+        assert b"Bianchi" not in open(zpath, "rb").read()
+        panel.close()
+        win.close()
+
+        # un altro Helpix (il collega): importa il file, la prima password è sbagliata
+        win2 = make_window(vault_dir=os.path.join(_tmp, "vault-collega"))
+        other = win2._get_vault()
+        win2._ask_import_kind = lambda _owner: "file"
+        QFileDialog.getOpenFileName = staticmethod(lambda *a_, **k: (zpath, ""))
+        answers = iter([("sbagliata davvero", True), ("frase lunga per il collega", True)])
+        QInputDialog.getText = staticmethod(lambda *a_, **k: next(answers))
+        asked = []
+        QMessageBox.question = staticmethod(lambda _p, _t, text, *a_, **k: (asked.append(text),
+                                                                           QMessageBox.StandardButton.Yes)[1])
+        win2.import_vault()
+        assert "Password sbagliata." in said, said
+        assert "«Cliente Bianchi — VPN»: nuovo" in asked[-1], asked
+        assert [i.name for i in other.projects()] == ["Cliente Bianchi — VPN"]
+        # annullare la password non importa niente
+        QInputDialog.getText = staticmethod(lambda *a_, **k: ("", False))
+        n = len(asked)
+        win2.import_vault()
+        assert len(asked) == n
+        # un file qualsiasi: avviso, niente importato
+        junk = os.path.join(_tmp, "non-progetto.zip")
+        open(junk, "wb").write(b"niente")
+        QFileDialog.getOpenFileName = staticmethod(lambda *a_, **k: (junk, ""))
+        win2.import_vault()
+        assert "non è un progetto esportato da Helpix" in said[-1] and len(other.projects()) == 1
+        win2.close()
+    finally:
+        (vault_dialogs.ExportProjectDialog, QFileDialog.getSaveFileName, QFileDialog.getOpenFileName,
+         QMessageBox.information, QMessageBox.warning, QMessageBox.question, QInputDialog.getText) = real
 
 
 def test_pannello_e_nuovo_progetto():

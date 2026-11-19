@@ -282,8 +282,10 @@ piccolo (circa 1000 token) invece di una cronologia che cresce. Specifica comple
   vault…*): password, 8 codici usa e getta per reimpostarla se la dimentichi, file di recupero facoltativo, sblocco
   facoltativo con il portachiavi (dopo la conferma di polkit o Windows Hello). Il vault cifrato si blocca insieme a
   Helpix (blocco di Impostazioni › Sicurezza, anche per inattività), con *Progetto › Blocca il vault* o chiudendo
-  Helpix. *Esporta in chiaro* ne fa una copia leggibile; *Importa…* riporta nel vault i progetti di un'esportazione
-  o di un altro vault (anche cifrato) senza sovrascrivere niente; `helpix/vault_crypto.py` lo decifra anche senza
+  Helpix. *Esporta in chiaro* ne fa una copia leggibile; *Esporta il progetto…* (menu ⋯ del progetto) mette un solo
+  progetto in un file `.zip`, cifrato con una password sua o in chiaro, da passare a un collega; *Importa…* riporta nel
+  vault i progetti di un file `.zip` esportato, di un'esportazione o di un altro vault (anche cifrato) senza
+  sovrascrivere niente; `helpix/vault_crypto.py` lo decifra anche senza
   Helpix.
   Persi password, codici e file, i dati non si recuperano.
 

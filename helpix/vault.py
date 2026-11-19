@@ -15,12 +15,15 @@ Qui non c'è niente di Qt: lo usano l'interfaccia, `helpix vault …` e i test. 
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
 import shutil
 import time
 import unicodedata
+import zipfile
+import zlib
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
@@ -40,6 +43,9 @@ TRASH = ".cestino"   # progetti e note eliminati: si ripristinano o si eliminano
 _INDEX_LINES = "riga-indice.txt"   # nel cestino, la riga dell'indice di una nota eliminata
 KEYRING_SERVICE = "helpix-vault"
 _SKIP_PLAIN = {vc.HEADER, vc.BACKUP_DIR, vc.DATA_DIR}
+PACKAGE_README = "LEGGIMI.txt"            # nel .zip di un progetto esportato: cos'è e come si importa
+PACKAGE_MAX_BYTES = 512 * 1024 * 1024     # un progetto è testo: oltre è un archivio sbagliato (o una zip bomb)
+PACKAGE_MAX_FILES = 20000
 
 
 def default_root() -> Path:
@@ -174,6 +180,68 @@ class EncryptedStore:
         """Toglie dalla memoria contenuti e chiavi (blocco del vault)."""
         self._cache.clear()
         self.keys = None
+
+
+class MemoryStore:
+    """File di un progetto esportato (.zip), letti in memoria: in sola lettura, niente finisce sul disco."""
+
+    def __init__(self, files: dict[str, bytes], encrypted: bool):
+        self.encrypted = encrypted
+        self._files = dict(files)
+        self.damaged: list[str] = []
+
+    def read(self, rel: str) -> bytes:
+        return self._files[clean_relpath(rel)]
+
+    def exists(self, rel: str) -> bool:
+        return clean_relpath(rel) in self._files
+
+    def write(self, rel: str, data: bytes) -> None:
+        raise VaultError("il file esportato si può solo leggere")
+
+    def delete(self, rel: str) -> None:
+        raise VaultError("il file esportato si può solo leggere")
+
+    def list(self, prefix: str = "") -> list[str]:
+        return sorted(r for r in self._files if r.startswith(prefix))
+
+    def wipe(self) -> None:
+        self._files.clear()
+
+
+def _read_zip(path: Path) -> dict[str, bytes]:
+    """Tutti i file di un .zip, in memoria, con i percorsi ripuliti (mai estratti sul disco). Rifiuta archivi
+    rovinati o enormi; ignora i nomi che il vault non sa gestire. Se tutto sta in una sola cartella (zip fatto a
+    mano da una cartella esportata) la toglie."""
+    try:
+        zf = zipfile.ZipFile(path)
+    except (zipfile.BadZipFile, OSError) as exc:
+        raise VaultError("il file non è un archivio .zip leggibile") from exc
+    files: dict[str, bytes] = {}
+    total = 0
+    with zf:
+        infos = [i for i in zf.infolist() if not i.is_dir() and not i.filename.startswith("__MACOSX/")]
+        if len(infos) > PACKAGE_MAX_FILES or sum(i.file_size for i in infos) > PACKAGE_MAX_BYTES:
+            raise VaultError("l'archivio è troppo grande per un progetto di Helpix")
+        for info in infos:
+            try:
+                rel = clean_relpath(info.filename)
+            except VaultError:
+                continue
+            try:
+                with zf.open(info) as fh:
+                    data = fh.read(PACKAGE_MAX_BYTES - total + 1)
+            except (zipfile.BadZipFile, NotImplementedError, RuntimeError, OSError, EOFError, zlib.error) as exc:
+                raise VaultError(f"archivio rovinato o protetto: {info.filename} ({exc})") from exc
+            total += len(data)
+            if total > PACKAGE_MAX_BYTES:
+                raise VaultError("l'archivio è troppo grande per un progetto di Helpix")
+            files[rel] = data
+    if vc.HEADER not in files and not any(r.startswith(PROJECTS + "/") for r in files):
+        tops = {r.split("/", 1)[0] for r in files}
+        if len(tops) == 1 and all("/" in r for r in files):
+            files = {r.split("/", 1)[1]: d for r, d in files.items()}
+    return files
 
 
 # ------------------------------------------------------------------ portachiavi
@@ -439,12 +507,67 @@ class Vault:
         vc.Header.new_plain(self.name).save(dest)
         return len(files)
 
+    # --- esportazione di un solo progetto (file .zip da passare a un collega o tenere da parte)
+    def export_project(self, slug: str, dest: str | Path, password: str | None = None, drafts: bool = False) -> int:
+        """Esporta un progetto in un file .zip: in chiaro (file Markdown, si leggono anche con Obsidian) o cifrato con
+        una password solo sua (AES-256-GCM e scrypt come il vault; niente codici né file di recupero, e nel file non
+        c'è in chiaro nemmeno il nome del progetto). Si reimporta con «Importa…», anche in un altro vault.
+
+        Senza `drafts` restano fuori le bozze delle sessioni e le versioni precedenti di PROJECT.md. Il file si
+        scrive accanto con un nome temporaneo, si rilegge e si verifica (con la password, se cifrato) e solo allora
+        prende il nome scelto. Restituisce quanti file del progetto contiene."""
+        self._need_open()
+        p = self.project(slug)
+        dest = Path(dest)
+        if dest.is_dir():
+            raise VaultError("indica il nome del file, non una cartella")
+        target, root = dest.resolve(), self.root.resolve()
+        if target == root or root in target.parents:
+            raise VaultError("scegli una cartella fuori dal vault")
+        prefix = p.rel() + "/"
+        skip = () if drafts else (prefix + SESSIONS + "/", prefix + VERSIONS + "/")
+        files = {r: self.store.read(r) for r in self.store.list(prefix) if not r.startswith(skip)}
+        keys = None
+        if password:
+            header, master = vc.Header.new_encrypted("")
+            header.add_slot("password", password, master)
+            keys = header.keys(master)
+        else:
+            header = vc.Header.new_plain(p.name)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        tmp = dest.with_name(f".{dest.name}.{os.getpid()}.tmp")
+        try:
+            with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zf:
+                zf.writestr(vc.HEADER, json.dumps(header.data, indent=1, ensure_ascii=False))
+                zf.writestr(PACKAGE_README, _package_readme(p.name, keys is not None))
+                for rel, data in files.items():
+                    if keys is None:
+                        zf.writestr(rel, data)
+                    else:
+                        name, blob = keys.encrypt(rel, data)
+                        zf.writestr(f"{vc.DATA_DIR}/{name}", blob, compress_type=zipfile.ZIP_STORED)
+            check = PackageVault(tmp)   # riletto da disco come lo leggerà chi lo importa
+            if keys is not None:
+                check.unlock("password", password)
+            got = {r: check.store.read(r) for r in check.store.list(PROJECTS + "/")}
+            check.lock()
+            if got != files:
+                raise VaultError("verifica dell'esportazione non riuscita")
+            os.replace(tmp, dest)
+        finally:
+            tmp.unlink(missing_ok=True)
+        log.info("Progetto esportato: %s (%d file, %s)", p.slug, len(files), "cifrato" if keys else "in chiaro")
+        return len(files)
+
     # --- importazione (da un'esportazione, da un altro vault in chiaro o cifrato)
     @classmethod
     def open_source(cls, path: str | Path) -> "Vault":
-        """Il vault da cui importare: un vault di Helpix (anche cifrato: va sbloccato prima di leggerlo) o una
-        cartella con `progetti/<nome>/PROJECT.md` senza intestazione (es. copiata a mano o da Obsidian)."""
+        """Il vault da cui importare: un vault di Helpix (anche cifrato: va sbloccato prima di leggerlo), una
+        cartella con `progetti/<nome>/PROJECT.md` senza intestazione (es. copiata a mano o da Obsidian) o un
+        progetto esportato in un file .zip."""
         root = Path(path)
+        if root.is_file():
+            return PackageVault(root)
         if not root.is_dir():
             raise VaultError("la cartella non esiste")
         src = cls(root)
@@ -689,6 +812,81 @@ class Vault:
         self.store.write(p.rel(PROJECT_FILE), text.encode("utf-8"))
         self.store.write(p.rel(INDEX_FILE), f"# Indice — {name}\n\n".encode("utf-8"))
         return p
+
+
+def _package_readme(name: str, encrypted: bool) -> str:
+    from . import __version__
+    from .i18n import tr
+    when = time.strftime("%Y-%m-%d %H:%M")
+    if encrypted:
+        head = tr("Progetto esportato da Helpix {version} il {date}, cifrato con una password (AES-256-GCM)."
+                  ).format(version=__version__, date=when)
+        how = tr("In Helpix: pannello Vault › Importa… › Un file .zip, scegli questo file e scrivi la password. "
+                 "Niente viene sovrascritto.")
+        alone = tr("Senza Helpix: estrai l'archivio e usa vault_crypto.py (https://github.com/Crash-FD01/Helpix, "
+                   "cartella helpix): python3 vault_crypto.py decrypt <cartella estratta> <cartella di destinazione>")
+    else:
+        head = tr("Progetto «{name}» esportato da Helpix {version} il {date}.").format(
+            name=name, version=__version__, date=when)
+        how = tr("In Helpix: pannello Vault › Importa… › Un file .zip e scegli questo file. Niente viene sovrascritto.")
+        alone = tr("Senza Helpix: i file Markdown sono nella cartella «progetti» (si aprono anche con Obsidian); "
+                   "PROJECT.md è lo stato attuale del progetto.")
+    return f"{head}\n\n{how}\n\n{alone}\n"
+
+
+class PackageVault(Vault):
+    """Un progetto (o un vault) esportato in un file .zip, letto in memoria senza estrarlo: serve per importarlo.
+    Se è cifrato, prima dello sblocco con la password in memoria ci sono solo i dati cifrati."""
+
+    def __init__(self, path: str | Path):
+        self.root = Path(path)
+        self.header = None
+        self.store = None
+        self._master = None
+        files = _read_zip(self.root)
+        raw = files.pop(vc.HEADER, None)
+        if raw is not None:
+            self.header = vc.Header.parse(raw.decode("utf-8", "replace"))
+            if not isinstance(self.header.data.get("id"), str):
+                raise VaultError("intestazione del vault non valida")
+        if self.encrypted:
+            pre = vc.DATA_DIR + "/"
+            self._sealed = {r[len(pre):]: d for r, d in files.items()
+                            if r.startswith(pre) and "/" not in r[len(pre):] and r.endswith(vc.FILE_EXT)}
+            return
+        self._sealed = {}
+        plain = {r: d for r, d in files.items() if r.split("/")[0] not in _SKIP_PLAIN}
+        if not any(len(r.split("/")) == 3 and r.startswith(PROJECTS + "/") and r.endswith("/" + PROJECT_FILE)
+                   for r in plain):
+            raise VaultError("nel file non c'è un progetto di Helpix")
+        self.store = MemoryStore(plain, encrypted=False)
+
+    def reload(self) -> None:
+        pass
+
+    def unlock(self, kind: str, secret) -> dict:
+        """Decifra in memoria. Il file non cambia: un codice usa e getta qui non si consuma."""
+        if not self.encrypted:
+            raise VaultError("il vault non è cifrato")
+        master, _slot = self.header.unlock(kind, secret)
+        keys = self.header.keys(master)
+        files, damaged = {}, []
+        for name, blob in self._sealed.items():
+            try:
+                rel, content = keys.decrypt(name, blob)
+                files[clean_relpath(rel)] = content
+            except (vc.CorruptFile, VaultError):
+                damaged.append(name)
+        self._master = master
+        self.store = MemoryStore(files, encrypted=True)
+        self.store.damaged = damaged
+        return {"kind": kind, "codes_left": self.header.count("code"), "used_code": False, "damaged": damaged}
+
+    def lock(self) -> None:
+        if self.encrypted and self.store is not None:
+            self.store.wipe()
+            self.store = None
+        self._master = None
 
 
 def _title(text: str) -> str:

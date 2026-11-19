@@ -111,7 +111,7 @@ class PasswordFields(QWidget):
 
     changed = Signal()
 
-    def __init__(self, parent=None, label: str | None = None):
+    def __init__(self, parent=None, label: str | None = None, file_password: bool = False):
         super().__init__(parent)
         v = QVBoxLayout(self)
         v.setContentsMargins(0, 0, 0, 0)
@@ -120,8 +120,12 @@ class PasswordFields(QWidget):
             v.addWidget(QLabel(label))
         self.pw = QLineEdit()
         self.pw.setEchoMode(QLineEdit.EchoMode.Password)
-        self.pw.setPlaceholderText(tr("Password del vault (almeno {n} caratteri)").format(n=passwords.MIN_LENGTH))
-        self.pw.setAccessibleName(tr("Password del vault"))
+        if file_password:   # password di un progetto esportato, diversa da quella del vault
+            self.pw.setPlaceholderText(tr("Password del file (almeno {n} caratteri)").format(n=passwords.MIN_LENGTH))
+            self.pw.setAccessibleName(tr("Password del file"))
+        else:
+            self.pw.setPlaceholderText(tr("Password del vault (almeno {n} caratteri)").format(n=passwords.MIN_LENGTH))
+            self.pw.setAccessibleName(tr("Password del vault"))
         self.pw2 = QLineEdit()
         self.pw2.setEchoMode(QLineEdit.EchoMode.Password)
         self.pw2.setPlaceholderText(tr("Ripeti la password"))
@@ -760,6 +764,74 @@ class VaultUnlockDialog(QDialog):
                 QMessageBox.StandardButton.Yes:
             regenerate_codes(self, self.vault)
         self.accept()
+
+
+# ------------------------------------------------------------------ esportazione di un progetto
+class ExportProjectDialog(QDialog):
+    """Esporta un solo progetto in un file .zip, cifrato con una password sua o in chiaro."""
+
+    def __init__(self, project_name: str, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(tr("Esporta il progetto"))
+        self.setMinimumWidth(500)
+        v = QVBoxLayout(self)
+        v.setContentsMargins(22, 18, 22, 16)
+        v.setSpacing(10)
+        v.addWidget(_title(tr("Esporta «{name}»").format(name=project_name)))
+        v.addWidget(_wrap(tr("Un file .zip con questo progetto soltanto (PROJECT.md, note e file), da passare a un "
+                             "collega o da tenere come copia. Si apre con «Importa…» nel pannello Vault, anche in un "
+                             "altro vault: niente viene sovrascritto.")))
+        self.encrypted = QRadioButton(tr("Cifrato con una password (consigliato se lo passi ad altri)"))
+        self.plain = QRadioButton(tr("In chiaro: file Markdown leggibili da chiunque (anche con Obsidian)"))
+        self.encrypted.setChecked(True)
+        v.addWidget(self.encrypted)
+        self.pw_box = QWidget()
+        pv = QVBoxLayout(self.pw_box)
+        pv.setContentsMargins(24, 0, 0, 0)
+        pv.setSpacing(6)
+        self.fields = PasswordFields(file_password=True)
+        pv.addWidget(self.fields)
+        pv.addWidget(_wrap(tr("Vale solo per questo file, non è la password del vault. Dilla al collega per "
+                              "un'altra strada (non nella stessa email). Non ci sono codici di recupero: se la "
+                              "dimentichi, esporta di nuovo il progetto.")))
+        v.addWidget(self.pw_box)
+        v.addWidget(self.plain)
+        self.drafts = QCheckBox(tr("Includi le bozze delle sessioni e le versioni precedenti di PROJECT.md"))
+        self.drafts.setToolTip(tr("Le bozze contengono pezzi delle chat: di solito a un collega non servono."))
+        v.addWidget(self.drafts)
+        row = QHBoxLayout()
+        row.addStretch(1)
+        cancel = QPushButton(tr("Annulla"))
+        cancel.clicked.connect(self.reject)
+        row.addWidget(cancel)
+        self.ok = QPushButton(tr("Esporta…"))
+        self.ok.setObjectName("primary")
+        self.ok.setDefault(True)
+        self.ok.clicked.connect(self.accept)
+        row.addWidget(self.ok)
+        v.addLayout(row)
+        self.encrypted.toggled.connect(self._update)
+        self.fields.changed.connect(self._update)
+        self._update()
+
+    def _update(self):
+        self.pw_box.setEnabled(self.encrypted.isChecked())
+        self.ok.setEnabled(self.plain.isChecked() or self.fields.valid())
+
+    def password(self) -> str | None:
+        return self.fields.password() if self.encrypted.isChecked() else None
+
+    def include_drafts(self) -> bool:
+        return self.drafts.isChecked()
+
+
+def ask_package_password(parent, path: str) -> str | None:
+    """Password di un progetto esportato cifrato (file .zip). None se l'utente annulla."""
+    from PySide6.QtWidgets import QInputDialog
+    pw, ok = QInputDialog.getText(parent, tr("Progetto cifrato"),
+                                  tr("«{file}» è cifrato. Scrivi la password che ti ha dato chi l'ha esportato:"
+                                     ).format(file=Path(path).name), QLineEdit.EchoMode.Password)
+    return pw if ok and pw else None
 
 
 # ------------------------------------------------------------------ impostazioni

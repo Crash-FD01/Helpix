@@ -174,10 +174,19 @@ class Header:
     def load(cls, root: str | Path) -> "Header":
         path = Path(root) / HEADER
         try:
-            data = json.loads(path.read_text(encoding="utf-8"))
+            text = path.read_text(encoding="utf-8")
         except FileNotFoundError:
             raise
         except (OSError, ValueError) as exc:
+            raise VaultError(f"intestazione del vault illeggibile: {exc}") from exc
+        return cls.parse(text)
+
+    @classmethod
+    def parse(cls, text: str) -> "Header":
+        """Intestazione dal testo JSON (anche dentro un progetto esportato in .zip), con gli stessi controlli."""
+        try:
+            data = json.loads(text)
+        except ValueError as exc:
             raise VaultError(f"intestazione del vault illeggibile: {exc}") from exc
         if not isinstance(data, dict) or data.get("format") != FORMAT:
             raise VaultError("la cartella non contiene un vault di Helpix")

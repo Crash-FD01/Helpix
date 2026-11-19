@@ -501,6 +501,162 @@ def test_importa():
     assert d.store.list("progetti/") == [] and not (d.root / "progetti" / p.slug).exists()
 
 
+def test_esporta_un_progetto():
+    import zipfile
+
+    def files(v, slug):
+        pre = f"progetti/{slug}/"
+        return {r[len(pre):]: v.store.read(r) for r in v.store.list(pre)}
+
+    a, p = plain_vault_with_project()
+    other = a.create_project("Altro cliente", pj.template("Altro cliente", "niente", "x"))
+    p.save_text(p.text().replace("VPN stabile", "VPN stabile e ridondata"))   # una versione precedente
+    p.write_session_draft("s1", "bozza della sessione con dati della chat")
+    full = files(a, p.slug)
+    assert any(k.startswith(".versioni/") for k in full) and any(k.startswith("sessioni/") for k in full)
+    light = {k: d for k, d in full.items() if not k.startswith((".versioni/", "sessioni/"))}
+    out = new_root()
+
+    # in chiaro: solo questo progetto, senza bozze né versioni; si legge anche a mano
+    zplain = out / "rossi.zip"
+    assert a.export_project(p.slug, zplain) == len(light)
+    with zipfile.ZipFile(zplain) as zf:
+        names = zf.namelist()
+        assert "LEGGIMI.txt" in names and "helpix-vault.json" in names
+        assert f"progetti/{p.slug}/PROJECT.md" in names and not any(other.slug in n for n in names)
+        assert not any("/sessioni/" in n or "/.versioni/" in n for n in names)
+        assert "Cliente Rossi" in zf.read("LEGGIMI.txt").decode("utf-8")
+    assert not list(out.glob(".*.tmp"))
+    # con bozze e versioni, se richiesto
+    assert a.export_project(p.slug, out / "completo.zip", drafts=True) == len(full)
+
+    # si importa in un altro vault (in chiaro e cifrato), letto senza estrarre niente sul disco
+    b = Vault(new_root())
+    b.create_plain("Collega")
+    src = Vault.open_source(zplain)
+    assert src.is_open and not src.encrypted
+    plan = b.import_plan(src)
+    assert [(i.slug, i.action) for i in plan] == [(p.slug, "new")] and b.import_projects(src, plan) == 1
+    assert files(b, p.slug) == light
+    assert [i.action for i in b.import_plan(Vault.open_source(zplain))] == ["same"]
+    try:
+        src.store.write("progetti/x/PROJECT.md", b"no")
+        raise AssertionError("scritto in un file esportato")
+    except VaultError:
+        pass
+
+    # cifrato: password sua, nel file non c'è niente in chiaro (nemmeno il nome); serve la password giusta
+    a.create_encrypted(PASSWORD, passwords.generate_codes())
+    zenc = out / "rossi-cifrato.zip"
+    export_pw = "frase per il collega che apre il progetto"
+    assert a.export_project(p.slug, zenc, password=export_pw, drafts=True) == len(full)
+    raw = zenc.read_bytes()
+    for secret in (b"Rossi", b"VPN", b"config", b"progetti", p.slug.encode()):
+        assert secret not in raw, secret
+    head = json.loads(zipfile.ZipFile(zenc).read("helpix-vault.json"))
+    assert head["encrypted"] and [s["kind"] for s in head["slots"]] == ["password"] and head["name"] == ""
+    enc = Vault.open_source(zenc)
+    assert enc.encrypted and not enc.is_open
+    for wrong in (PASSWORD, "un'altra frase sbagliata"):
+        try:
+            enc.unlock("password", wrong)
+            raise AssertionError("aperto con la password sbagliata")
+        except WrongSecret:
+            pass
+    enc.unlock("password", export_pw)
+    c = Vault(new_root())
+    c.create_plain("Ufficio")
+    c.create_encrypted("la password del vault del collega", passwords.generate_codes())
+    assert c.import_projects(enc) == 1 and files(c, p.slug) == full
+    enc.lock()
+    assert not enc.is_open
+    # lo script autonomo lo decifra anche senza Helpix, dopo averlo estratto
+    ex = new_root()
+    zipfile.ZipFile(zenc).extractall(ex)
+    h = vc.Header.load(ex)
+    master, _ = h.unlock("password", export_pw)
+    assert vc.decrypt_vault(ex, h.keys(master), new_root()) == len(full)
+
+    # mai dentro il vault; niente file a metà se la verifica fallisce
+    for bad in (a.root / "dentro.zip", a.root / "progetti" / "x.zip"):
+        try:
+            a.export_project(p.slug, bad)
+            raise AssertionError(f"esportato in {bad}")
+        except VaultError:
+            pass
+    import helpix.vault as hv
+
+    class Broken(hv.PackageVault):   # la rilettura non torna: il file finale non deve comparire
+        def __init__(self, path):
+            super().__init__(path)
+            self.store._files = {k: v + b"!" for k, v in self.store._files.items()}
+    orig, hv.PackageVault = hv.PackageVault, Broken
+    try:
+        a.export_project(p.slug, out / "rotto.zip")
+        raise AssertionError("verifica fallita ignorata")
+    except VaultError:
+        pass
+    finally:
+        hv.PackageVault = orig
+    assert not (out / "rotto.zip").exists() and not list(out.glob(".*.tmp"))
+    try:
+        a.export_project("non-esiste", out / "x.zip")
+        raise AssertionError("esportato un progetto che non c'è")
+    except KeyError:
+        pass
+
+
+def test_importa_zip_rovinati_o_fatti_a_mano():
+    import zipfile
+    out = new_root()
+    b = Vault(new_root())
+    b.create_plain()
+    # zip fatto a mano da una cartella esportata: la cartella in cima si toglie
+    a, p = plain_vault_with_project()
+    exp = new_root() / "Helpix-vault-copia"
+    a.export_plain(exp)
+    hand = out / "a-mano.zip"
+    with zipfile.ZipFile(hand, "w") as zf:
+        for f in exp.rglob("*"):
+            if f.is_file():
+                zf.write(f, "Helpix-vault-copia/" + f.relative_to(exp).as_posix())
+        zf.writestr("__MACOSX/._x", b"")
+    assert [i.slug for i in b.import_plan(Vault.open_source(hand))] == [p.slug]
+    # percorsi pericolosi ignorati, mai fuori dalla memoria
+    evil = out / "evil.zip"
+    with zipfile.ZipFile(evil, "w") as zf:
+        zf.writestr("progetti/ok/PROJECT.md", "# Ok\n")
+        zf.writestr("../../fuori.txt", "x")
+        zf.writestr("progetti/ok/../../../fuori2.txt", "x")
+    src = Vault.open_source(evil)
+    assert src.store.list() == ["progetti/ok/PROJECT.md"]
+    assert not (out.parent / "fuori.txt").exists()
+    # non zip, zip senza progetti, zip troppo grande
+    junk = out / "junk.zip"
+    junk.write_bytes(b"non sono uno zip")
+    empty = out / "vuoto.zip"
+    with zipfile.ZipFile(empty, "w") as zf:
+        zf.writestr("leggimi.txt", "niente")
+    import helpix.vault as hv
+    old = hv.PACKAGE_MAX_BYTES
+    hv.PACKAGE_MAX_BYTES = 3
+    try:
+        for bad in (junk, empty, evil):
+            try:
+                Vault.open_source(bad)
+                raise AssertionError(f"aperto: {bad}")
+            except VaultError:
+                pass
+    finally:
+        hv.PACKAGE_MAX_BYTES = old
+    for bad in (junk, empty):
+        try:
+            Vault.open_source(bad)
+            raise AssertionError(f"aperto: {bad}")
+        except VaultError:
+            pass
+
+
 def _fake_source(root: Path, inside: Vault) -> Vault:
     """Una cartella che contiene il vault di destinazione, vista come sorgente già aperta."""
     v = Vault(root)
