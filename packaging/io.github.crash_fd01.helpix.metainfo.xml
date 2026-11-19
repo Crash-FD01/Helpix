@@ -69,6 +69,14 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.19.10" date="2026-11-19">
+      <description>
+        <p>Projects (beta): “Import a project…” and “Export the project…” are now also in the Project menu of the main
+          window. In the Vault panel, right-clicking a project shows its actions first, then the list actions (new,
+          import) and deleting last; right-clicking an empty spot of the list offers “New project…” and “Import a
+          project…”. After an import the panel opens on the imported project.</p>
+      </description>
+    </release>
     <release version="0.19.9" date="2026-11-19">
       <description>
         <p>Vault (beta): “Export the project…” puts a single project in a .zip file to hand to a colleague, encrypted
