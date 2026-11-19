@@ -19,7 +19,7 @@ from .. import agents, project as pj, theme
 from ..i18n import tr
 from ..icons import icon
 from ..theme import C
-from ..vault import Vault, VaultError, WrongSecret, default_root
+from ..vault import PROJECT_FILE, PROJECTS, Vault, VaultError, WrongSecret, default_root
 from .controls import IconButton
 
 log = logging.getLogger(__name__)
@@ -232,6 +232,8 @@ class ProjectsMixin:
             if projects:
                 m.addSeparator()
             m.addAction(icon("plus", C["text"], 16), tr("Nuovo progetto…"), self.new_project)
+            m.addAction(icon("download", C["text"], 16), tr("Importa un progetto…"),
+                        lambda: self.import_vault(kind="file"))
             if self.project is not None:
                 m.addAction(icon("upload", C["text"], 16), tr("Salva progetto"), self.save_project)
                 act = m.addAction(tr("Compatta il progetto…"), lambda: self.save_project(compact=True))
@@ -241,6 +243,7 @@ class ProjectsMixin:
                     pass
                 if self._last_update and time.time() - self._last_update["at"] < 1800:
                     m.addAction(tr("Annulla l'ultimo aggiornamento"), self._undo_project_update)
+                m.addAction(icon("transfer", C["text"], 16), tr("Esporta il progetto…"), self.export_current_project)
                 m.addAction(tr("Chiudi il progetto"), lambda: self._close_project())
                 m.addAction(icon("trash", C["errText"], 16), tr("Elimina il progetto…"), self.delete_current_project)
             m.addSeparator()
@@ -256,14 +259,18 @@ class ProjectsMixin:
         vault = self._vault_open()
         if vault is None:
             return
-        dlg = NewProjectDialog(self)
+        panel = self.vault_panel if self.vault_panel is not None and self.vault_panel.isVisible() else None
+        dlg = NewProjectDialog(panel or self)   # dal pannello Vault la finestra si apre sopra al pannello
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
         try:
             p = vault.create_project(dlg.project_name(), dlg.project_text())
         except (VaultError, OSError) as exc:
-            QMessageBox.warning(self, tr("Progetto"), tr("Non riesco a creare il progetto: {exc}").format(exc=exc))
+            QMessageBox.warning(panel or self, tr("Progetto"),
+                                tr("Non riesco a creare il progetto: {exc}").format(exc=exc))
             return
+        if panel is not None:
+            panel.reload(keep=p.rel(PROJECT_FILE))
         self._open_project(p.slug, remind=True)
 
     def _set_project(self, project, announce: bool = True):
@@ -623,6 +630,8 @@ class ProjectsMixin:
         panel.lock_requested.connect(self.lock_vault)
         panel.export_requested.connect(self.export_vault)
         panel.import_requested.connect(self.import_vault)
+        panel.import_project_requested.connect(lambda: self.import_vault(kind="file"))
+        panel.new_project_requested.connect(self.new_project)
         panel.changed.connect(lambda slug: self._refresh_agent_project()
                               if self.project and self.project.slug == slug else None)
         panel.finished.connect(lambda _r: setattr(self, "vault_panel", None))
@@ -752,16 +761,25 @@ class ProjectsMixin:
         clicked = box.clickedButton()
         return "file" if clicked is b_file else "folder" if clicked is b_folder else None
 
-    def import_vault(self):
-        """Importa i progetti da un'esportazione o da un altro vault (in chiaro o cifrato). Non sovrascrive mai:
-        un progetto già presente e uguale si salta, uno con lo stesso nome ma diverso entra come copia."""
+    def export_current_project(self):
+        """Menu Progetto › «Esporta il progetto…»: il progetto attivo in un file .zip, cifrato o in chiaro."""
+        vault = self._vault_open()
+        if vault is None or self.project is None:
+            return
+        from .vault_dialogs import export_project_flow
+        export_project_flow(self, vault, self.project.slug)
+
+    def import_vault(self, kind: str | None = None):
+        """Importa i progetti da un progetto esportato (.zip), da un'esportazione o da un altro vault (in chiaro o
+        cifrato). Non sovrascrive mai: un progetto già presente e uguale si salta, uno con lo stesso nome ma diverso
+        entra come copia. `kind` «file» va dritto alla scelta del .zip (menu Progetto › «Importa un progetto…»)."""
         vault = self._vault_open()
         if vault is None:
             return
         from ..vault import PackageVault
         from .vault_dialogs import VaultUnlockDialog, ask_package_password, run_busy
         owner = self.vault_panel if self.vault_panel is not None and self.vault_panel.isVisible() else self
-        kind = self._ask_import_kind(owner)
+        kind = kind or self._ask_import_kind(owner)
         if kind == "file":
             path, _ = QFileDialog.getOpenFileName(owner, tr("Quale progetto importo?"), str(Path.home()),
                                                   tr("Progetto di Helpix (*.zip);;Tutti i file (*)"))
@@ -838,10 +856,14 @@ class ProjectsMixin:
         finally:
             if src.encrypted and src.is_open:
                 src.lock()
-        if self.vault_panel is not None:
-            self.vault_panel.reload()
+        if self.vault_panel is not None:   # il pannello si apre sul primo progetto importato
+            self.vault_panel.reload(keep=f"{PROJECTS}/{todo[0].target}/{PROJECT_FILE}")
         self._update_project_button()
-        self.notify(tr("{n} progetti importati nel vault.").format(n=n), 8000)
+        if n == 1:
+            name = todo[0].name if todo[0].action == "new" else f"{todo[0].name} ({tr('importato')})"
+            self.notify(tr("Progetto «{name}» importato: lo trovi nel menu Progetto.").format(name=name), 8000)
+        else:
+            self.notify(tr("{n} progetti importati nel vault.").format(n=n), 8000)
 
     # ------------------------------------------------------------ helpix vault … (agenti)
     def _vault_request(self, msg: dict) -> dict:

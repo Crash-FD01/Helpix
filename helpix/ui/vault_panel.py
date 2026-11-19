@@ -7,12 +7,11 @@ from __future__ import annotations
 import html
 import re
 import time
-from pathlib import Path
 
 from PySide6.QtCore import QEvent, QPointF, QRectF, QSize, Qt, QUrl, Signal
 from PySide6.QtGui import QColor, QCursor, QDesktopServices, QFont, QPainter, QPainterPath, QPen, QPolygonF
 from PySide6.QtWidgets import (
-    QButtonGroup, QDialog, QFileDialog, QFrame, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMenu,
+    QButtonGroup, QDialog, QFrame, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMenu,
     QMessageBox,
     QPlainTextEdit, QProgressBar, QPushButton, QSizePolicy, QStackedWidget, QStyle, QStyledItemDelegate, QStyleOptionViewItem,
     QTextBrowser, QToolButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
@@ -22,7 +21,7 @@ from .. import project as pj, theme
 from ..i18n import tr
 from ..icons import icon
 from ..theme import C, mono_font
-from ..vault import FILES, INDEX_FILE, NOTES, PROJECT_FILE, SESSIONS, VERSIONS, Vault, VaultError, slugify
+from ..vault import FILES, INDEX_FILE, NOTES, PROJECT_FILE, SESSIONS, VERSIONS, Vault, VaultError
 from .controls import WindowControls
 from .frameless import FramelessHelper, RoundedCentral
 from .vault_graph import GraphPage
@@ -220,6 +219,8 @@ class VaultPanel(QDialog):
     lock_requested = Signal()
     export_requested = Signal()
     import_requested = Signal()   # importa da un'esportazione o da un altro vault
+    import_project_requested = Signal()   # importa un progetto esportato (.zip)
+    new_project_requested = Signal()
     tour_requested = Signal()     # giro guidato del pannello
     changed = Signal(str)         # un file del progetto (slug) è stato modificato
     project_deleted = Signal(str)  # progetto (slug) spostato nel cestino
@@ -834,10 +835,16 @@ class VaultPanel(QDialog):
             w.hide()
 
     # ------------------------------------------------------------ rinomina, elimina, cestino
+    def _list_actions(self, menu: QMenu):
+        """Azioni sull'elenco dei progetti (clic destro nel vuoto, e in fondo al menu di ogni progetto)."""
+        menu.addAction(icon("plus", C["text"], 16), tr("Nuovo progetto…"), self.new_project_requested.emit)
+        menu.addAction(icon("download", C["text"], 16), tr("Importa un progetto…"), self.import_project_requested.emit)
+
     def _fill_menu(self, menu: QMenu, data):
+        """Prima le azioni su questo progetto, poi quelle sull'elenco, in fondo l'eliminazione."""
         menu.clear()
         if not data:
-            menu.addAction(tr("Nessuna azione")).setEnabled(False)
+            self._list_actions(menu)
             return
         kind, slug, rel = data
         if kind == "bin":
@@ -850,26 +857,35 @@ class VaultPanel(QDialog):
         name = rel.rsplit("/", 1)[-1]
         project_level = kind == "project" or name in (PROJECT_FILE, INDEX_FILE) or f"/{VERSIONS}/" in rel
         menu.addAction(icon("file", C["text"], 16), tr("Rinomina il progetto…"), lambda: self._rename(slug))
-        menu.addAction(icon("download", C["text"], 16), tr("Esporta il progetto…"), lambda: self._export_project(slug))
+        menu.addAction(icon("transfer", C["text"], 16), tr("Esporta il progetto…"), lambda: self._export_project(slug))
         if not project_level and f"/{SESSIONS}/" not in rel:
             label = tr("Elimina la nota…") if f"/{NOTES}/" in rel else tr("Elimina il file…")
             menu.addAction(icon("trash", C["errText"], 16), label, lambda: self._delete_file(rel))
         elif f"/{SESSIONS}/" in rel:
             menu.addAction(icon("trash", C["errText"], 16), tr("Elimina la bozza…"), lambda: self._delete_file(rel))
         menu.addSeparator()
+        self._list_actions(menu)
+        menu.addSeparator()
         menu.addAction(icon("trash", C["errText"], 16), tr("Elimina il progetto…"), lambda: self._delete_project(slug))
 
-    def _tree_menu(self, pos):
+    def _context_menu(self, pos) -> QMenu | None:
+        """Clic destro sull'elenco: su un progetto (o una sua nota) le azioni di quel progetto, nel vuoto quelle
+        sull'elenco (nuovo, importa)."""
         item = self.tree.itemAt(pos)
         data = item.data(0, _ROLE) if item else None
         if data is None and item is not None and item.parent() is not None:
             parent = item.parent().data(0, _ROLE)
             data = ("project", parent[1], parent[2]) if parent and parent[0] == "project" else None
-        if not data:
-            return
+        if item is not None and not data:
+            return None
         menu = theme.prepare_menu(QMenu(self))
         self._fill_menu(menu, data)
-        menu.exec(self.tree.viewport().mapToGlobal(pos))
+        return menu
+
+    def _tree_menu(self, pos):
+        menu = self._context_menu(pos)
+        if menu is not None:
+            menu.exec(self.tree.viewport().mapToGlobal(pos))
 
     def _rename(self, slug: str):
         p = self.vault.project(slug)
@@ -885,35 +901,8 @@ class VaultPanel(QDialog):
         self.reload()
 
     def _export_project(self, slug: str):
-        """Un solo progetto in un file .zip (cifrato con una password sua o in chiaro), da passare a un collega."""
-        from .vault_dialogs import ExportProjectDialog, run_busy
-        try:
-            p = self.vault.project(slug)
-        except (VaultError, KeyError):
-            return
-        dlg = ExportProjectDialog(p.name, self)
-        if dlg.exec() != QDialog.DialogCode.Accepted:
-            return
-        password = dlg.password()
-        suggested = Path.home() / f"{slugify(p.name)}-{time.strftime('%Y%m%d')}.zip"
-        path, _ = QFileDialog.getSaveFileName(self, tr("Dove salvo il progetto esportato?"), str(suggested),
-                                              tr("Progetto di Helpix (*.zip)"))
-        if not path:
-            return
-        if not path.lower().endswith(".zip"):
-            path += ".zip"
-        try:
-            n = run_busy(self, self.vault.export_project, slug, path, password, dlg.include_drafts())
-        except (VaultError, OSError, KeyError) as exc:
-            QMessageBox.warning(self, tr("Esporta il progetto"), tr("Esportazione non riuscita: {exc}").format(exc=exc))
-            return
-        if password:
-            msg = tr("Progetto «{name}» esportato, cifrato ({n} file):\n{path}\n\nPer aprirlo serve la password che "
-                     "hai scelto: dilla al collega per un'altra strada.").format(name=p.name, n=n, path=path)
-        else:
-            msg = tr("Progetto «{name}» esportato in chiaro ({n} file):\n{path}\n\nRicordati che chi ha il file può "
-                     "leggerlo.").format(name=p.name, n=n, path=path)
-        QMessageBox.information(self, tr("Esporta il progetto"), msg)
+        from .vault_dialogs import export_project_flow
+        export_project_flow(self, self.vault, slug)
 
     def _delete_project(self, slug: str):
         p = self.vault.project(slug)

@@ -263,7 +263,8 @@ Fatta da Helpix, senza filesystem montati né driver: funziona uguale su Linux, 
 ### Uscire dal formato
 
 - *Esporta in chiaro* copia il vault decifrato in una cartella a scelta.
-- *Esporta il progetto…* (menu ⋯ del progetto o clic destro nell'elenco) mette **un solo progetto** in un file `.zip`,
+- *Esporta il progetto…* (menu *Progetto* con il progetto aperto, menu ⋯ del progetto o clic destro sul progetto
+  nell'elenco del pannello) mette **un solo progetto** in un file `.zip`,
   da passare a un collega o da tenere come copia:
   - *cifrato* (scelta predefinita) con una password solo sua, diversa da quella del vault: stesso formato del vault
     cifrato (AES-256-GCM, scrypt), uno slot *password* e nient'altro (niente codici né file di recupero: se la
@@ -274,7 +275,9 @@ Fatta da Helpix, senza filesystem montati né driver: funziona uguale su Linux, 
   casella (le bozze contengono pezzi delle chat). C'è anche un `LEGGIMI.txt` che spiega come aprirlo. Il file si
   scrive con un nome temporaneo, si rilegge (con la password, se cifrato) e solo allora prende il nome scelto; mai
   dentro il vault.
-- *Importa…* (striscia *Beta* del pannello, o *Impostazioni dei progetti › Importa un vault…*) porta nel vault aperto
+- *Importa un progetto…* (menu *Progetto*, clic destro nell'elenco del pannello, anche nel vuoto) va dritto alla
+  scelta del file `.zip`. *Importa…* (striscia *Beta* del pannello, o *Impostazioni dei progetti › Importa un vault…*)
+  chiede se importare un file `.zip` o una cartella. Entrambi portano nel vault aperto
   i progetti di un progetto esportato (*Un file .zip…*: chiede la password se è cifrato; il file si legge in memoria,
   senza estrarlo sul disco; anche lo zip fatto a mano di una cartella esportata) o di un'altra cartella
   (*Una cartella…*): un'esportazione, un altro vault in chiaro, un vault cifrato (si sblocca solo per

@@ -1396,6 +1396,8 @@ EN: dict[str, str] = {
     "Importazione non riuscita: {exc}": "Import failed: {exc}",
     # --- esportazione di un solo progetto (.zip) e importazione da file
     "Esporta il progetto…": "Export the project…",
+    "Importa un progetto…": "Import a project…",
+    "Progetto «{name}» importato: lo trovi nel menu Progetto.": "Project “{name}” imported: you'll find it in the Project menu.",
     "Esporta il progetto": "Export the project",
     "Esporta «{name}»": "Export “{name}”",
     "Esporta…": "Export…",
