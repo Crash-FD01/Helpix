@@ -736,29 +736,71 @@ class ProjectsMixin:
         QMessageBox.information(self, tr("Vault"), tr("{n} file esportati in chiaro in:\n{path}\n\nRicordati che "
                                                       "questa copia non è cifrata.").format(n=n, path=dest))
 
+    def _ask_import_kind(self, owner) -> str | None:
+        """«file» (progetto esportato in .zip), «folder» (esportazione o altro vault) o None se annulla."""
+        box = QMessageBox(owner)
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setWindowTitle(tr("Importa nel vault"))
+        box.setText(tr("Cosa importo?"))
+        box.setInformativeText(tr("Un progetto esportato (file .zip, anche cifrato) oppure la cartella di "
+                                  "un'esportazione o di un altro vault. Niente viene sovrascritto."))
+        b_file = box.addButton(tr("Un file .zip…"), QMessageBox.ButtonRole.AcceptRole)
+        b_folder = box.addButton(tr("Una cartella…"), QMessageBox.ButtonRole.AcceptRole)
+        box.addButton(tr("Annulla"), QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(b_file)
+        box.exec()
+        clicked = box.clickedButton()
+        return "file" if clicked is b_file else "folder" if clicked is b_folder else None
+
     def import_vault(self):
         """Importa i progetti da un'esportazione o da un altro vault (in chiaro o cifrato). Non sovrascrive mai:
         un progetto già presente e uguale si salta, uno con lo stesso nome ma diverso entra come copia."""
         vault = self._vault_open()
         if vault is None:
             return
-        from .vault_dialogs import VaultUnlockDialog, run_busy
+        from ..vault import PackageVault
+        from .vault_dialogs import VaultUnlockDialog, ask_package_password, run_busy
         owner = self.vault_panel if self.vault_panel is not None and self.vault_panel.isVisible() else self
-        folder = QFileDialog.getExistingDirectory(owner, tr("Quale vault importo?"), str(Path.home()))
-        if not folder:
+        kind = self._ask_import_kind(owner)
+        if kind == "file":
+            path, _ = QFileDialog.getOpenFileName(owner, tr("Quale progetto importo?"), str(Path.home()),
+                                                  tr("Progetto di Helpix (*.zip);;Tutti i file (*)"))
+        elif kind == "folder":
+            path = QFileDialog.getExistingDirectory(owner, tr("Quale vault importo?"), str(Path.home()))
+        else:
+            return
+        if not path:
             return
         try:
-            src = Vault.open_source(folder)
-        except VaultError:
-            QMessageBox.warning(owner, tr("Importa nel vault"),
-                                tr("In questa cartella non c'è un vault di Helpix. Scegli la cartella creata da "
-                                   "«Esporta in chiaro» oppure la cartella di un altro vault (quella con "
-                                   "helpix-vault.json o con la cartella «progetti»)."))
+            src = Vault.open_source(path)
+        except VaultError as exc:
+            if Path(path).is_file():
+                QMessageBox.warning(owner, tr("Importa nel vault"),
+                                    tr("Questo file non è un progetto esportato da Helpix ({exc}).").format(exc=exc))
+            else:
+                QMessageBox.warning(owner, tr("Importa nel vault"),
+                                    tr("In questa cartella non c'è un vault di Helpix. Scegli la cartella creata da "
+                                       "«Esporta in chiaro» oppure la cartella di un altro vault (quella con "
+                                       "helpix-vault.json o con la cartella «progetti»)."))
             return
         if src.encrypted and not src.is_open:
-            dlg = VaultUnlockDialog(src, owner)
-            if dlg.exec() != QDialog.DialogCode.Accepted or not src.is_open:
-                return
+            if isinstance(src, PackageVault):
+                while not src.is_open:
+                    pw = ask_package_password(owner, path)
+                    if pw is None:
+                        return
+                    try:
+                        run_busy(owner, src.unlock, "password", pw)
+                    except WrongSecret:
+                        QMessageBox.warning(owner, tr("Importa nel vault"), tr("Password sbagliata."))
+                    except VaultError as exc:
+                        QMessageBox.warning(owner, tr("Importa nel vault"),
+                                            tr("Importazione non riuscita: {exc}").format(exc=exc))
+                        return
+            else:
+                dlg = VaultUnlockDialog(src, owner)
+                if dlg.exec() != QDialog.DialogCode.Accepted or not src.is_open:
+                    return
         try:
             plan = vault.import_plan(src)
             if not plan:
@@ -778,7 +820,7 @@ class ProjectsMixin:
                 QMessageBox.information(owner, tr("Importa nel vault"),
                                         tr("Questi progetti ci sono già, uguali:") + "\n\n" + "\n".join(lines))
                 return
-            extra = [tr("Niente di questo vault viene sovrascritto; la cartella di origine resta com'è.")]
+            extra = [tr("Niente di questo vault viene sovrascritto; il file o la cartella di origine restano come sono.")]
             if vault.encrypted:
                 extra.append(tr("I progetti importati vengono cifrati con la chiave di questo vault."))
             elif src.encrypted:

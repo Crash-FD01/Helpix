@@ -6,13 +6,13 @@ from __future__ import annotations
 
 import html
 import re
-
 import time
+from pathlib import Path
 
 from PySide6.QtCore import QEvent, QPointF, QRectF, QSize, Qt, QUrl, Signal
 from PySide6.QtGui import QColor, QCursor, QDesktopServices, QFont, QPainter, QPainterPath, QPen, QPolygonF
 from PySide6.QtWidgets import (
-    QButtonGroup, QDialog, QFrame, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMenu,
+    QButtonGroup, QDialog, QFileDialog, QFrame, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMenu,
     QMessageBox,
     QPlainTextEdit, QProgressBar, QPushButton, QSizePolicy, QStackedWidget, QStyle, QStyledItemDelegate, QStyleOptionViewItem,
     QTextBrowser, QToolButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
@@ -22,7 +22,7 @@ from .. import project as pj, theme
 from ..i18n import tr
 from ..icons import icon
 from ..theme import C, mono_font
-from ..vault import FILES, INDEX_FILE, NOTES, PROJECT_FILE, SESSIONS, VERSIONS, Vault, VaultError
+from ..vault import FILES, INDEX_FILE, NOTES, PROJECT_FILE, SESSIONS, VERSIONS, Vault, VaultError, slugify
 from .controls import WindowControls
 from .frameless import FramelessHelper, RoundedCentral
 from .vault_graph import GraphPage
@@ -467,7 +467,7 @@ class VaultPanel(QDialog):
         self.btn_more = QToolButton()
         self.btn_more.setIcon(icon("more", C["text"], 18))
         self.btn_more.setIconSize(QSize(18, 18))
-        self.btn_more.setToolTip(tr("Altre azioni: rinomina, elimina…"))
+        self.btn_more.setToolTip(tr("Altre azioni: rinomina, esporta, elimina…"))
         self.btn_more.setAccessibleName(tr("Altre azioni"))
         self.btn_more.setObjectName("iconBtn")
         self.btn_more.setFixedSize(34, 34)
@@ -850,6 +850,7 @@ class VaultPanel(QDialog):
         name = rel.rsplit("/", 1)[-1]
         project_level = kind == "project" or name in (PROJECT_FILE, INDEX_FILE) or f"/{VERSIONS}/" in rel
         menu.addAction(icon("file", C["text"], 16), tr("Rinomina il progetto…"), lambda: self._rename(slug))
+        menu.addAction(icon("download", C["text"], 16), tr("Esporta il progetto…"), lambda: self._export_project(slug))
         if not project_level and f"/{SESSIONS}/" not in rel:
             label = tr("Elimina la nota…") if f"/{NOTES}/" in rel else tr("Elimina il file…")
             menu.addAction(icon("trash", C["errText"], 16), label, lambda: self._delete_file(rel))
@@ -882,6 +883,37 @@ class VaultPanel(QDialog):
             return
         self.changed.emit(slug)
         self.reload()
+
+    def _export_project(self, slug: str):
+        """Un solo progetto in un file .zip (cifrato con una password sua o in chiaro), da passare a un collega."""
+        from .vault_dialogs import ExportProjectDialog, run_busy
+        try:
+            p = self.vault.project(slug)
+        except (VaultError, KeyError):
+            return
+        dlg = ExportProjectDialog(p.name, self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        password = dlg.password()
+        suggested = Path.home() / f"{slugify(p.name)}-{time.strftime('%Y%m%d')}.zip"
+        path, _ = QFileDialog.getSaveFileName(self, tr("Dove salvo il progetto esportato?"), str(suggested),
+                                              tr("Progetto di Helpix (*.zip)"))
+        if not path:
+            return
+        if not path.lower().endswith(".zip"):
+            path += ".zip"
+        try:
+            n = run_busy(self, self.vault.export_project, slug, path, password, dlg.include_drafts())
+        except (VaultError, OSError, KeyError) as exc:
+            QMessageBox.warning(self, tr("Esporta il progetto"), tr("Esportazione non riuscita: {exc}").format(exc=exc))
+            return
+        if password:
+            msg = tr("Progetto «{name}» esportato, cifrato ({n} file):\n{path}\n\nPer aprirlo serve la password che "
+                     "hai scelto: dilla al collega per un'altra strada.").format(name=p.name, n=n, path=path)
+        else:
+            msg = tr("Progetto «{name}» esportato in chiaro ({n} file):\n{path}\n\nRicordati che chi ha il file può "
+                     "leggerlo.").format(name=p.name, n=n, path=path)
+        QMessageBox.information(self, tr("Esporta il progetto"), msg)
 
     def _delete_project(self, slug: str):
         p = self.vault.project(slug)

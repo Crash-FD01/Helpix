@@ -1394,6 +1394,52 @@ EN: dict[str, str] = {
     "Salvataggio non riuscito: {exc}": "Saving failed: {exc}",
     "Esportazione non riuscita: {exc}": "Export failed: {exc}",
     "Importazione non riuscita: {exc}": "Import failed: {exc}",
+    # --- esportazione di un solo progetto (.zip) e importazione da file
+    "Esporta il progetto…": "Export the project…",
+    "Esporta il progetto": "Export the project",
+    "Esporta «{name}»": "Export “{name}”",
+    "Esporta…": "Export…",
+    "Un file .zip con questo progetto soltanto (PROJECT.md, note e file), da passare a un collega o da tenere come copia. Si apre con «Importa…» nel pannello Vault, anche in un altro vault: niente viene sovrascritto.":
+        "A .zip file with just this project (PROJECT.md, notes and files), to hand to a colleague or keep as a copy. It opens with “Import…” in the Vault panel, even in another vault: nothing gets overwritten.",
+    "Cifrato con una password (consigliato se lo passi ad altri)": "Encrypted with a password (recommended if you share it)",
+    "In chiaro: file Markdown leggibili da chiunque (anche con Obsidian)":
+        "Unencrypted: Markdown files anyone can read (Obsidian too)",
+    "Password del file (almeno {n} caratteri)": "File password (at least {n} characters)",
+    "Password del file": "File password",
+    "Vale solo per questo file, non è la password del vault. Dilla al collega per un'altra strada (non nella stessa email). Non ci sono codici di recupero: se la dimentichi, esporta di nuovo il progetto.":
+        "It only applies to this file, it isn't the vault password. Tell it to your colleague another way (not in the same email). There are no recovery codes: if you forget it, export the project again.",
+    "Includi le bozze delle sessioni e le versioni precedenti di PROJECT.md":
+        "Include session drafts and earlier versions of PROJECT.md",
+    "Le bozze contengono pezzi delle chat: di solito a un collega non servono.":
+        "Drafts contain parts of your chats: a colleague usually doesn't need them.",
+    "Dove salvo il progetto esportato?": "Where should I save the exported project?",
+    "Progetto di Helpix (*.zip)": "Helpix project (*.zip)",
+    "Progetto «{name}» esportato, cifrato ({n} file):\n{path}\n\nPer aprirlo serve la password che hai scelto: dilla al collega per un'altra strada.":
+        "Project “{name}” exported, encrypted ({n} files):\n{path}\n\nOpening it needs the password you chose: tell it to your colleague another way.",
+    "Progetto «{name}» esportato in chiaro ({n} file):\n{path}\n\nRicordati che chi ha il file può leggerlo.":
+        "Project “{name}” exported unencrypted ({n} files):\n{path}\n\nRemember that anyone who has the file can read it.",
+    "Progetto cifrato": "Encrypted project",
+    "«{file}» è cifrato. Scrivi la password che ti ha dato chi l'ha esportato:":
+        "“{file}” is encrypted. Enter the password given to you by whoever exported it:",
+    "Cosa importo?": "What should I import?",
+    "Un progetto esportato (file .zip, anche cifrato) oppure la cartella di un'esportazione o di un altro vault. Niente viene sovrascritto.":
+        "An exported project (.zip file, encrypted or not) or the folder of an export or of another vault. Nothing gets overwritten.",
+    "Un file .zip…": "A .zip file…",
+    "Una cartella…": "A folder…",
+    "Quale progetto importo?": "Which project should I import?",
+    "Progetto di Helpix (*.zip);;Tutti i file (*)": "Helpix project (*.zip);;All files (*)",
+    "Questo file non è un progetto esportato da Helpix ({exc}).": "This file isn't a project exported from Helpix ({exc}).",
+    "Progetto esportato da Helpix {version} il {date}, cifrato con una password (AES-256-GCM).":
+        "Project exported from Helpix {version} on {date}, encrypted with a password (AES-256-GCM).",
+    "In Helpix: pannello Vault › Importa… › Un file .zip, scegli questo file e scrivi la password. Niente viene sovrascritto.":
+        "In Helpix: Vault panel › Import… › A .zip file, choose this file and enter the password. Nothing gets overwritten.",
+    "Senza Helpix: estrai l'archivio e usa vault_crypto.py (https://github.com/Crash-FD01/Helpix, cartella helpix): python3 vault_crypto.py decrypt <cartella estratta> <cartella di destinazione>":
+        "Without Helpix: extract the archive and use vault_crypto.py (https://github.com/Crash-FD01/Helpix, helpix folder): python3 vault_crypto.py decrypt <extracted folder> <destination folder>",
+    "Progetto «{name}» esportato da Helpix {version} il {date}.": "Project “{name}” exported from Helpix {version} on {date}.",
+    "In Helpix: pannello Vault › Importa… › Un file .zip e scegli questo file. Niente viene sovrascritto.":
+        "In Helpix: Vault panel › Import… › A .zip file and choose this file. Nothing gets overwritten.",
+    "Senza Helpix: i file Markdown sono nella cartella «progetti» (si aprono anche con Obsidian); PROJECT.md è lo stato attuale del progetto.":
+        "Without Helpix: the Markdown files are in the “progetti” folder (Obsidian opens them too); PROJECT.md is the project's current state.",
     "Quale vault importo?": "Which vault should I import?",
     "Importa nel vault": "Import into the vault",
     "Importa…": "Import…",
@@ -1409,8 +1455,8 @@ EN: dict[str, str] = {
         "• “{name}”: there's already a project with this name, imported as “{name} ({label})”",
     "importato": "imported",
     "Questi progetti ci sono già, uguali:": "These projects are already here, identical:",
-    "Niente di questo vault viene sovrascritto; la cartella di origine resta com'è.":
-        "Nothing in this vault is overwritten; the source folder stays as it is.",
+    "Niente di questo vault viene sovrascritto; il file o la cartella di origine restano come sono.":
+        "Nothing in this vault is overwritten; the source file or folder stays as it is.",
     "I progetti importati vengono cifrati con la chiave di questo vault.":
         "Imported projects are encrypted with this vault's key.",
     "Attenzione: questo vault non è cifrato, quindi i progetti importati saranno leggibili sul disco.":
@@ -1660,7 +1706,7 @@ EN: dict[str, str] = {
     "Elimina il progetto…": "Delete the project…",
     "Altre azioni": "More actions",
     "Rinomina il progetto, elimina una nota, un file o l'intero progetto (anche con il tasto destro nell'albero). Quello che elimini va nel Cestino in fondo all'albero: da lì lo ripristini o lo elimini definitivamente.": "Rename the project, delete a note, a file or the whole project (also with right-click in the tree). Whatever you delete goes to the Bin at the bottom of the tree: from there you restore it or delete it for good.",
-    "Altre azioni: rinomina, elimina…": "More actions: rename, delete…",
+    "Altre azioni: rinomina, esporta, elimina…": "More actions: rename, export, delete…",
     "Ripristina": "Restore",
     "Elimina definitivamente": "Delete for good",
     "Nel cestino": "In the bin",

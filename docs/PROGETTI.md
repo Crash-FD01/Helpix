@@ -263,15 +263,29 @@ Fatta da Helpix, senza filesystem montati né driver: funziona uguale su Linux, 
 ### Uscire dal formato
 
 - *Esporta in chiaro* copia il vault decifrato in una cartella a scelta.
+- *Esporta il progetto…* (menu ⋯ del progetto o clic destro nell'elenco) mette **un solo progetto** in un file `.zip`,
+  da passare a un collega o da tenere come copia:
+  - *cifrato* (scelta predefinita) con una password solo sua, diversa da quella del vault: stesso formato del vault
+    cifrato (AES-256-GCM, scrypt), uno slot *password* e nient'altro (niente codici né file di recupero: se la
+    password si perde, si riesporta). Nel file non c'è niente in chiaro, nemmeno il nome del progetto;
+  - *in chiaro*: `progetti/<nome>/…` in Markdown, si legge anche con Obsidian.
+
+  Contiene `PROJECT.md`, `INDEX.md`, note e file; bozze delle sessioni e versioni precedenti solo se si spunta la
+  casella (le bozze contengono pezzi delle chat). C'è anche un `LEGGIMI.txt` che spiega come aprirlo. Il file si
+  scrive con un nome temporaneo, si rilegge (con la password, se cifrato) e solo allora prende il nome scelto; mai
+  dentro il vault.
 - *Importa…* (striscia *Beta* del pannello, o *Impostazioni dei progetti › Importa un vault…*) porta nel vault aperto
-  i progetti di un'altra cartella: un'esportazione, un altro vault in chiaro, un vault cifrato (si sblocca solo per
+  i progetti di un progetto esportato (*Un file .zip…*: chiede la password se è cifrato; il file si legge in memoria,
+  senza estrarlo sul disco; anche lo zip fatto a mano di una cartella esportata) o di un'altra cartella
+  (*Una cartella…*): un'esportazione, un altro vault in chiaro, un vault cifrato (si sblocca solo per
   l'importazione, poi si richiude) o una cartella con `progetti/<nome>/PROJECT.md`. Ogni progetto entra intero (note,
   file, bozze, versioni), cifrato se il vault di destinazione è cifrato. **Non sovrascrive mai**: un progetto con lo
   stesso nome di cartella e lo stesso contenuto si salta, uno diverso entra come copia *«nome (importato)»*. Prima
   mostra cosa farà e chiede conferma; ogni file si rilegge dopo averlo scritto e, se un progetto non entra tutto, i
   suoi file già scritti si tolgono. Non si importa da questo vault né da una cartella che lo contiene.
 - `helpix/vault_crypto.py` funziona anche da solo, senza Helpix (serve solo `cryptography`):
-  `python3 vault_crypto.py decrypt <vault> <cartella>` chiede password, codice o file di recupero.
+  `python3 vault_crypto.py decrypt <vault> <cartella>` chiede password, codice o file di recupero. Vale anche per un
+  progetto esportato cifrato, dopo averlo estratto dallo `.zip`.
 
 ### Passare da chiaro a cifrato
 
