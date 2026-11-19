@@ -319,11 +319,35 @@ def test_esporta_un_progetto_dalle_finestre():
     win.open_vault_panel()
     panel = win.vault_panel
     panel.select(f"progetti/{p.slug}/PROJECT.md")
+    from PySide6.QtCore import QPoint
     from PySide6.QtWidgets import QMenu
+
+    def texts(menu):
+        return [a.text() for a in menu.actions() if not a.isSeparator()]
+    # menu del progetto: prima le azioni sul progetto, poi quelle sull'elenco, in fondo l'eliminazione
     menu = QMenu()
     panel._fill_menu(menu, panel.current)
-    assert "Esporta il progetto…" in [a.text() for a in menu.actions()]
+    assert texts(menu) == ["Rinomina il progetto…", "Esporta il progetto…", "Nuovo progetto…", "Importa un progetto…",
+                           "Elimina il progetto…"], texts(menu)
     assert "esporta" in panel.btn_more.toolTip()
+    # clic destro nel vuoto dell'elenco: solo le azioni sull'elenco; «Importa un progetto…» va dritto al .zip
+    QApplication.processEvents()
+    empty = QPoint(8, panel.tree.viewport().height() - 4)
+    assert panel.tree.itemAt(empty) is None
+    menu = panel._context_menu(empty)
+    assert texts(menu) == ["Nuovo progetto…", "Importa un progetto…"], texts(menu)
+    kinds = []
+    win.import_vault = lambda kind=None: kinds.append(kind)
+    next(a for a in menu.actions() if a.text() == "Importa un progetto…").trigger()
+    assert kinds == ["file"]
+    del win.import_vault
+    # menu Progetto della finestra principale: importa sempre, esporta col progetto aperto
+    win._build_project_menu()
+    assert "Importa un progetto…" in texts(win.project_menu) and "Esporta il progetto…" not in texts(win.project_menu)
+    win._set_project(vault.project(p.slug), announce=False)
+    win._build_project_menu()
+    assert "Esporta il progetto…" in texts(win.project_menu)
+    win._set_project(None, announce=False)
 
     # la finestra: cifrato di default, «Esporta…» attivo solo con una password valida e ripetuta
     dlg = vault_dialogs.ExportProjectDialog(p.name, panel)
@@ -367,20 +391,21 @@ def test_esporta_un_progetto_dalle_finestre():
         # un altro Helpix (il collega): importa il file, la prima password è sbagliata
         win2 = make_window(vault_dir=os.path.join(_tmp, "vault-collega"))
         other = win2._get_vault()
-        win2._ask_import_kind = lambda _owner: "file"
+        win2._ask_import_kind = lambda _owner: (_ for _ in ()).throw(AssertionError("domanda inutile"))
         QFileDialog.getOpenFileName = staticmethod(lambda *a_, **k: (zpath, ""))
         answers = iter([("sbagliata davvero", True), ("frase lunga per il collega", True)])
         QInputDialog.getText = staticmethod(lambda *a_, **k: next(answers))
         asked = []
         QMessageBox.question = staticmethod(lambda _p, _t, text, *a_, **k: (asked.append(text),
                                                                            QMessageBox.StandardButton.Yes)[1])
-        win2.import_vault()
+        win2.import_vault(kind="file")   # menu Progetto › «Importa un progetto…»: niente domanda file/cartella
         assert "Password sbagliata." in said, said
         assert "«Cliente Bianchi — VPN»: nuovo" in asked[-1], asked
         assert [i.name for i in other.projects()] == ["Cliente Bianchi — VPN"]
         # annullare la password non importa niente
         QInputDialog.getText = staticmethod(lambda *a_, **k: ("", False))
         n = len(asked)
+        win2._ask_import_kind = lambda _owner: "file"
         win2.import_vault()
         assert len(asked) == n
         # un file qualsiasi: avviso, niente importato

@@ -4,6 +4,7 @@
 recupero della password, impostazioni."""
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 from PySide6.QtCore import QEventLoop, Qt, Signal
@@ -17,7 +18,7 @@ from .. import passwords, project as pj
 from ..i18n import tr
 from ..system import IS_WINDOWS
 from ..theme import C, mono_font
-from ..vault import Vault, VaultError, WrongSecret, in_onedrive, keyring_available
+from ..vault import Vault, VaultError, WrongSecret, in_onedrive, keyring_available, slugify
 from .workers import FuncWorker
 
 
@@ -823,6 +824,39 @@ class ExportProjectDialog(QDialog):
 
     def include_drafts(self) -> bool:
         return self.drafts.isChecked()
+
+
+def export_project_flow(parent, vault: Vault, slug: str) -> str | None:
+    """Esporta un solo progetto in un file .zip (cifrato con una password sua o in chiaro): finestra delle scelte,
+    dove salvarlo, esportazione verificata, esito. Dal pannello Vault e dal menu Progetto. Restituisce il percorso."""
+    try:
+        p = vault.project(slug)
+    except (VaultError, KeyError):
+        return None
+    dlg = ExportProjectDialog(p.name, parent)
+    if dlg.exec() != QDialog.DialogCode.Accepted:
+        return None
+    password = dlg.password()
+    suggested = Path.home() / f"{slugify(p.name)}-{time.strftime('%Y%m%d')}.zip"
+    path, _ = QFileDialog.getSaveFileName(parent, tr("Dove salvo il progetto esportato?"), str(suggested),
+                                          tr("Progetto di Helpix (*.zip)"))
+    if not path:
+        return None
+    if not path.lower().endswith(".zip"):
+        path += ".zip"
+    try:
+        n = run_busy(parent, vault.export_project, slug, path, password, dlg.include_drafts())
+    except (VaultError, OSError, KeyError) as exc:
+        QMessageBox.warning(parent, tr("Esporta il progetto"), tr("Esportazione non riuscita: {exc}").format(exc=exc))
+        return None
+    if password:
+        msg = tr("Progetto «{name}» esportato, cifrato ({n} file):\n{path}\n\nPer aprirlo serve la password che "
+                 "hai scelto: dilla al collega per un'altra strada.").format(name=p.name, n=n, path=path)
+    else:
+        msg = tr("Progetto «{name}» esportato in chiaro ({n} file):\n{path}\n\nRicordati che chi ha il file può "
+                 "leggerlo.").format(name=p.name, n=n, path=path)
+    QMessageBox.information(parent, tr("Esporta il progetto"), msg)
+    return path
 
 
 def ask_package_password(parent, path: str) -> str | None:
