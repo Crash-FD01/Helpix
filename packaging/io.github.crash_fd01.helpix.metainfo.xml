@@ -69,6 +69,17 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.20.0" date="2026-11-27">
+      <description>
+        <p>Projects (beta): Helpix now always starts with no project open, also after unlocking an encrypted vault;
+          you open one from the Project selector when you need it.</p>
+        <p>In the main chat (integrated web chat and API engine, not the terminal agents) you can type for example
+          “we're done, save what we did to the project test”: the message doesn't go to the AI, Helpix finds the
+          project, opens it in the same chat if needed and saves it as with “Save project”, with the preview.
+          Helpix only looks at short messages you send that mention both saving and a project; it can be turned off
+          in the project settings.</p>
+      </description>
+    </release>
     <release version="0.19.10" date="2026-11-19">
       <description>
         <p>Projects (beta): “Import a project…” and “Export the project…” are now also in the Project menu of the main
