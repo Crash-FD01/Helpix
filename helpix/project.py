@@ -494,6 +494,77 @@ def note_paste(title: str, text: str) -> str:
     return tr("Ecco la nota «{title}» del progetto:\n\n{text}").format(title=title, text=text.strip()) + "\n"
 
 
+# ------------------------------------------------------------------ «salva nel progetto X» scritto in chat
+SAVE_COMMAND_MAX = 300      # oltre è un messaggio per l'IA, non una richiesta a Helpix
+_SAVE_VERB = (r"(?:salva(?:lo|la|li|le|re|mi|melo|telo)?|salviamo|salvatelo|aggiorna(?:lo|la|re|mi)?|aggiorniamo"
+              r"|save|update)")
+_SAVE_CMD = re.compile(r"(?<![\w-])" + _SAVE_VERB + r"(?![\w-])(?P<mid>.{0,160}?)(?<![\w-])(?:progetto|project)"
+                       r"(?![\w-])(?P<rest>.*)$", re.I)
+_QUESTION_START = re.compile(r"^\W*(?:come|perch[eé]|cosa|dove|quando|quale|why|how|what|where|when|which)\b", re.I)
+_CURRENT_WORDS = {"attivo", "attuale", "corrente", "aperto", "questo", "current", "active", "open", "this"}
+# la parola subito prima di «progetto»: «salva nel progetto», «aggiorna il progetto», «save to the project»; non
+# «salva una copia del file del progetto», che è una richiesta per l'IA
+_INTO_WORDS = {"nel", "nello", "nella", "sul", "sullo", "sulla", "su", "al", "allo", "alla", "il", "lo", "in", "into",
+               "to", "the", "my", "mio", "our", "nostro"} | _CURRENT_WORDS
+_NAME_LEAD = re.compile(r"^(?:(?:che\s+si\s+)?chiamato|denominato|di\s+nome|named|called)\s+", re.I)
+_QUOTED = re.compile(r"^[«\"“'`]([^»\"”'`]+)[»\"”'`]")
+
+
+def parse_save_command(text: str) -> str | None:
+    """Richiesta di salvataggio scritta nella chat principale, per Helpix e non per l'IA.
+
+    «ok abbiamo finito, salva quello che abbiamo fatto nel progetto test» → "test" (quello che segue «progetto»: il
+    nome si cerca con match_project, che toglie le parole in più); "" = il progetto aperto («salva nel progetto»,
+    «aggiorna questo progetto»). None se non è una richiesta di salvataggio (anche le domande: «come salvo…»)."""
+    t = " ".join((text or "").split())
+    if not t or len(t) > SAVE_COMMAND_MAX or PROJECT_MARKER in t.upper() or _QUESTION_START.match(t):
+        return None
+    m = _SAVE_CMD.search(t)
+    if not m:
+        return None
+    before = re.findall(r"\w+", m.group("mid").lower())   # «questo progetto», «the current project»
+    if before and before[-1] not in _INTO_WORDS:
+        return None
+    rest = m.group("rest").strip(" \t:;,.!?")
+    rest = _NAME_LEAD.sub("", rest)
+    quoted = _QUOTED.match(rest)
+    if quoted:
+        return quoted.group(1).strip()[:120]
+    rest = rest.strip("«»\"'`“” ").strip(" .,;:!?")
+    first = rest.split()[0].lower().strip(".,;:!?") if rest else ""
+    if not rest or first in _CURRENT_WORDS or (before and before[-1] in _CURRENT_WORDS):
+        return ""
+    return rest[:120]
+
+
+def match_project(name: str, projects):
+    """Il progetto (oggetto con .slug e .name) indicato all'inizio di `name`, o None.
+
+    «test con le ultime modifiche» → il progetto «Test»: si prova la frase intera, poi una parola in meno alla volta;
+    prima il nome esatto (maiuscole e accenti non contano, anche lo slug), poi l'inizio del nome se è uno solo."""
+    def words_of(text: str) -> list[str]:   # «Test 2.» → test, 2 (il punto della frase non fa parte del nome)
+        return [w for w in (w.strip(".-+") for w in re.findall(r"[\w.+-]+", _norm(text))) if w]
+
+    words = words_of(name)[:10]
+    if not words:
+        return None
+    projects = list(projects)
+    names = [(p, " ".join(words_of(p.name))) for p in projects]
+    for n in range(len(words), 0, -1):
+        cand = " ".join(words[:n])
+        hits = [p for p, nm in names if nm == cand or p.slug.lower() == cand.replace(" ", "-")]
+        if len(hits) == 1:
+            return hits[0]
+    for n in range(len(words), 0, -1):
+        cand = " ".join(words[:n])
+        if len(cand) < 3:
+            continue
+        hits = [p for p, nm in names if nm.startswith(cand)]
+        if len(hits) == 1:
+            return hits[0]
+    return None
+
+
 # ------------------------------------------------------------------ bozza della sessione
 def session_markdown(session) -> str:
     """Bozza della sessione: quello che è passato da Helpix (comandi, output, diagnosi, riepiloghi, note)."""

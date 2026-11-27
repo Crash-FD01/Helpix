@@ -81,6 +81,7 @@ class ProjectsMixin:
         self.web.project_copied.connect(self._project_update_received)
         self.web.project_failed.connect(self._project_update_failed)
         self.web.note_requested.connect(self._note_requested)
+        self.web.chat_command.connect(self._web_chat_command)
         self._draft_timer = QTimer(self)
         self._draft_timer.timeout.connect(self._write_draft)
         self._apply_project_settings(initial=True)
@@ -92,6 +93,7 @@ class ProjectsMixin:
     def _apply_project_settings(self, initial: bool = False):
         on = self.projects_enabled
         self.project_btn.setVisible(on)
+        self.web.set_chat_commands(self.chat_commands_enabled)
         self._schedule_toolbar_fit()
         if hasattr(self, "act_projects_beta"):
             self.act_projects_beta.setChecked(on)
@@ -117,13 +119,8 @@ class ProjectsMixin:
             if self.project is not None:
                 self._set_project(None, announce=False)
         if initial:
-            slug = self.settings.get("active_project")
-            vault = self._get_vault(create=False)
-            if slug and vault and vault.is_open:
-                try:
-                    self._set_project(vault.project(slug), announce=False)
-                except KeyError:
-                    pass
+            # Helpix parte sempre senza progetto: lo apri tu dal menu Progetto quando serve
+            self.settings.set("active_project", None)
         self._update_project_button()
 
     def _get_vault(self, create: bool = True) -> Vault | None:
@@ -167,12 +164,6 @@ class ProjectsMixin:
         if info.get("used_code") and info.get("codes_left", 0) < 3:
             self.notify(tr("Restano {n} codici di recupero: rigenerali da Impostazioni › Progetti e vault.").format(
                 n=info.get("codes_left", 0)), 9000)
-        slug = self.settings.get("active_project")
-        if self.project is None and slug:
-            try:
-                self._set_project(self.vault.project(slug), announce=False)
-            except KeyError:
-                pass
         self._update_project_button()
 
     def _vault_system_unlock(self, dlg):
@@ -419,6 +410,70 @@ class ProjectsMixin:
         w.failed.connect(lambda exc: self._project_update_failed(tr("Errore dall'IA: {exc}").format(exc=exc)))
         self._start(w)
         self.notify(tr("Chiedo l'aggiornamento del progetto a {name}…").format(name=prov["label"]), 6000)
+
+    # ------------------------------------------------------------ «salva nel progetto X» scritto in chat
+    @property
+    def chat_commands_enabled(self) -> bool:
+        return self.projects_enabled and bool(self.settings.get("project_chat_commands", True))
+
+    def _chat_command_target(self, text: str):
+        """Chat principale (web o API, non gli agenti): «salva quello che abbiamo fatto nel progetto test» lo esegue
+        Helpix invece di mandarlo all'IA. Restituisce lo slug del progetto in cui salvare; False se è una richiesta
+        di salvataggio ma il progetto non si trova (avviso, il messaggio resta nella casella da correggere); None se
+        è un messaggio per l'IA. Lo stesso messaggio inviato di nuovo dopo un «non trovato» va all'IA così com'è."""
+        if not self.chat_commands_enabled:
+            return None
+        name = pj.parse_save_command(text)
+        if name is None:
+            return None
+        key = " ".join(text.split())
+        if getattr(self, "_chat_command_skip", None) == key:
+            self._chat_command_skip = None
+            return None
+        self._chat_command_skip = None
+        if name == "" and self.project is not None:
+            return self.project.slug
+        vault = self._vault_open()
+        if vault is None:
+            return False   # sblocco annullato: il messaggio resta nella casella
+        try:
+            projects = vault.projects()
+        except VaultError:
+            projects = []
+        found = pj.match_project(name, projects) if name else None
+        if found is not None:
+            return found.slug
+        self._chat_command_skip = key
+        names = ", ".join(f"«{p.name}»" for p in projects[:8]) or tr("nessuno")
+        what = tr("Progetto «{name}» non trovato.").format(name=name) if name else \
+            tr("Quale progetto? Nessun progetto è aperto.")
+        self.notify(what + " " + tr("Progetti: {names}. Correggi il nome, oppure invia di nuovo lo stesso messaggio "
+                                    "per mandarlo all'IA così com'è.").format(names=names), 12000)
+        return False
+
+    def _save_into(self, slug: str):
+        """Salva la conversazione attuale nel progetto `slug`: se non è quello aperto lo apre, nella stessa chat."""
+        if self.project is None or self.project.slug != slug:
+            vault = self._vault_open()
+            if vault is None:
+                return
+            try:
+                project = vault.project(slug)
+            except KeyError:
+                self.notify(tr("Progetto non trovato."))
+                return
+            self._set_project(project, announce=False)
+            self._project_saved_at = 0   # la conversazione di adesso va nel progetto appena scelto
+        self.save_project()
+
+    def _web_chat_command(self, text: str):
+        """Il messaggio inviato nel browser integrato somiglia a «salva nel progetto…» e la pagina l'ha trattenuto.
+        Se è davvero per Helpix si svuota la casella e si salva; altrimenti parte verso l'IA come sempre."""
+        target = self._chat_command_target(text) if self.engine == "web" else None
+        if target is None:
+            self.web.release_send()
+        elif target:
+            self.web.clear_composer(lambda: self._save_into(target))
 
     def _project_update_failed(self, message: str):
         self.notify(message, 12000)

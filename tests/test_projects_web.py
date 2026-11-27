@@ -1,7 +1,8 @@
 # SPDX-FileCopyrightText: 2026 Crash
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Progetti (beta) nella chat web: aggiornamento HELPIX-PROJECT letto dalla risposta, blocco e HELPIX-NOTA copiati
-(python tests/test_projects_web.py). Browser integrato vero con la pagina di chat finta."""
+"""Progetti (beta) nella chat web: aggiornamento HELPIX-PROJECT letto dalla risposta, blocco e HELPIX-NOTA copiati,
+«salva nel progetto…» scritto nella chat (python tests/test_projects_web.py). Browser integrato vero con la pagina di chat finta."""
+import json
 import os
 import sys
 import tempfile
@@ -100,7 +101,69 @@ def test_aggiornamento_letto_dalla_risposta():
         QGuiApplication.clipboard().setText(text)
         panel._process_clipboard()
     assert got and got[0].title == "A mano" and notes == ["Driver stampante"]
+    _salva_nel_progetto_trattenuto(panel, page)
     panel.shutdown()
+
+
+_ENTER_SENDS_JS = r"""
+document.getElementById('prompt-textarea').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); document.getElementById('send').click(); }
+});
+'true';
+"""
+
+
+def _type_and_enter(panel, page, text):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    js(page, "(() => { const b = document.getElementById('prompt-textarea'); b.textContent = %s; b.focus(); "
+             "return 'ok'; })()"
+       % json.dumps(text))
+    panel.view.setFocus()
+    pump(100)
+    QTest.keyClick(panel.view.focusProxy() or panel.view, Qt.Key.Key_Return)  # evento vero, come la tastiera
+    pump(600)
+
+
+def _salva_nel_progetto_trattenuto(panel, page):
+    """«salva nel progetto…» inviato nella chat: trattenuto e passato a Helpix (stessa pagina del test sopra: il motore
+    web non si riavvia nello stesso processo). Attivato a pagina già aperta: lo script entra anche lì."""
+    panel.set_chat_commands(True)
+    pump(300)
+    assert js(page, _ENTER_SENDS_JS) == "true"
+    held = []
+    panel.chat_command.connect(held.append)
+    # un messaggio qualsiasi parte subito, senza passare da Helpix
+    base = js(page, "window.sent.length")
+    _type_and_enter(panel, page, "ciao, come stai?")
+    assert js(page, "window.sent.length") == base + 1 and not held
+    # «salva … nel progetto …»: trattenuto e passato a Helpix, non parte
+    cmd = "ok abbiamo finito, salva quello che abbiamo fatto nel progetto test"
+    _type_and_enter(panel, page, cmd)
+    assert held == [cmd], held
+    assert js(page, "window.sent.length") == base + 1
+    # non era per Helpix: release_send lo manda (l'invio di Helpix non viene trattenuto di nuovo)
+    panel.release_send()
+    pump(500)
+    assert js(page, "window.sent[window.sent.length - 1]") == cmd and len(held) == 1
+    # era per Helpix: la casella si svuota prima di incollare la richiesta
+    _type_and_enter(panel, page, "salva nel progetto test")
+    assert len(held) == 2
+    cleared = []
+    panel.clear_composer(lambda: cleared.append(js(page, "document.getElementById('prompt-textarea').textContent")))
+    end = time.monotonic() + 5
+    while not cleared and time.monotonic() < end:
+        pump(50)
+    assert cleared == [""], cleared
+    # la pagina non può fingere un comando: senza il prefisso casuale la console non conta
+    js(page, "console.log('helpix-cmd-0000:\"salva nel progetto test\"'); 'ok'")
+    pump(200)
+    assert len(held) == 2
+    # funzione spenta: anche «salva nel progetto» parte subito
+    panel.set_chat_commands(False)
+    pump(200)
+    _type_and_enter(panel, page, "salva nel progetto test")
+    assert len(held) == 2 and js(page, "window.sent[window.sent.length - 1]") == "salva nel progetto test"
 
 
 if __name__ == "__main__":

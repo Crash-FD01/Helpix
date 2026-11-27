@@ -256,11 +256,19 @@ piccolo (circa 1000 token) invece di una cronologia che cresce. Specifica comple
 - **Selettore *Progetto*** nella barra: scegli un progetto o *Nuovo progetto…* (puoi incollare un riepilogo fatto da
   un'altra IA; *Copia la richiesta per un'altra IA* te lo fa preparare nel formato giusto). Aprendolo, Helpix avvia un
   task nuovo con il contesto: lo incolla nella chat web (tu premi Invio), lo mette nel messaggio di sistema del motore
-  API o nelle istruzioni degli agenti nel terminale.
+  API o nelle istruzioni degli agenti nel terminale. Quando apri Helpix si parte sempre **senza progetto**: lo apri tu
+  dal selettore quando serve.
 - **Salva progetto**: Helpix chiede all'IA solo le modifiche a `PROJECT.md` e una nota della sessione (blocco
   `HELPIX-PROJECT`), le applica e ti mostra l'anteprima modificabile; si salva solo quando premi *Salva*. In
   alternativa *Automatico con annullamento* (Impostazioni dei progetti). *Compatta il progetto* lo riscrive più corto
   quando supera il limite. Le versioni precedenti restano (le ultime 20) e si ripristinano dal pannello Vault.
+- **Salvare scrivendolo nella chat**: nella chat principale (web o API, non negli agenti nel terminale) puoi scrivere
+  per esempio «ok abbiamo finito, salva quello che abbiamo fatto nel progetto test». Il messaggio non va all'IA:
+  Helpix riconosce il progetto (maiuscole, accenti e parole in più non contano), lo apre nella stessa chat se non è
+  quello aperto e fa come *Salva progetto*, anteprima compresa. «Salva nel progetto» senza nome usa quello aperto.
+  Se il nome non corrisponde a nessun progetto, Helpix te lo dice e il messaggio resta nella casella: correggilo,
+  oppure invialo di nuovo così com'è per mandarlo all'IA. Si spegne da *Impostazioni dei progetti*. Helpix guarda solo
+  il messaggio che invii, e solo se è corto e contiene sia «salva/aggiorna» sia «progetto».
 - **Note**: le note vecchie non vanno all'IA. Se gliene serve una scrive `HELPIX-NOTA: titolo`: copia la riga e
   compare la barra *L'IA chiede la nota… — Incolla nella chat*. Gli agenti la leggono da soli con
   `helpix vault cat "titolo"` e `helpix vault search "parole"` (Helpix aperto).

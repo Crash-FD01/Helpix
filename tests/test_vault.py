@@ -161,6 +161,37 @@ def test_richiesta_nota():
     assert pj.parse_note_request("niente da vedere") is None
 
 
+def test_salva_nel_progetto_riconosciuto():
+    """«salva … nel progetto X» scritto nella chat: nome del progetto, "" = quello aperto, None = messaggio per l'IA."""
+    parse = pj.parse_save_command
+    assert parse("ok abbiamo finito salva quello che abbiamo fatto nel progetto test") == "test"
+    assert parse("Salvalo nel progetto «Cliente Rossi — VPN», grazie") == "Cliente Rossi — VPN"
+    assert parse("aggiorna il progetto test con le ultime modifiche") == "test con le ultime modifiche"
+    assert parse("puoi salvare nel progetto helpix?") == "helpix"
+    assert parse("save this to the project Helpix") == "Helpix"
+    for current in ("salva nel progetto", "salva nel progetto attivo", "aggiorna questo progetto.",
+                    "update the current project"):
+        assert parse(current) == "", current
+    for other in ("come salvo un file nel progetto django?", "il salvataggio nel progetto non funziona",
+                  "salva il file", "salva una copia del file del progetto", "perché non aggiorna il progetto?",
+                  "salva nel progetto " + "x" * 300, "HELPIX-PROJECT\nsalva nel progetto test", ""):
+        assert parse(other) is None, other
+
+    class P:
+        def __init__(self, slug, name):
+            self.slug, self.name = slug, name
+    projects = [P("test", "Test"), P("test-2", "Test 2"), P("cliente-rossi-vpn", "Cliente Rossi — VPN"),
+                P("citta", "Città")]
+    match = pj.match_project
+    assert match("test con le ultime modifiche", projects).slug == "test"
+    assert match("TEST 2.", projects).slug == "test-2"
+    assert match("cliente rossi", projects).slug == "cliente-rossi-vpn"   # inizio del nome, uno solo
+    assert match("citta", projects).slug == "citta"                        # accenti
+    assert match("cliente-rossi-vpn", projects).slug == "cliente-rossi-vpn"
+    assert match("dependencies", projects) is None and match("", projects) is None
+    assert match("te", projects) is None   # troppo corto per l'inizio del nome
+
+
 def test_bozza_della_sessione():
     s = Session("anthropic", "m", "/tmp")
     s.messages.append(Message("user", "", kind="output", meta={"cmd": "ip a", "rc": 0, "output": "eth0 up"}))
