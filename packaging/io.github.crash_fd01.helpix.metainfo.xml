@@ -69,6 +69,15 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.20.1" date="2026-11-27">
+      <description>
+        <p>Projects (beta), integrated web chat: saving the project a second time in the same chat could read the
+          block of the previous save, say it was already saved and stop, so the preview of the new answer never
+          appeared. Now only blocks written after the request count; the same fix applies to the task summary.</p>
+        <p>Long answers: the wait grows while the AI is still writing (up to 15 minutes); a block that stays
+          unchanged is read even if a Stop button remains visible; a block written as plain text is found too.</p>
+      </description>
+    </release>
     <release version="0.20.0" date="2026-11-27">
       <description>
         <p>Projects (beta): Helpix now always starts with no project open, also after unlocking an encrypted vault;
