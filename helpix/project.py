@@ -537,6 +537,52 @@ def parse_save_command(text: str) -> str | None:
     return rest[:120]
 
 
+# «crea progetto tommaso e salvalo»: il verbo, al massimo un articolo o «nuovo», poi «progetto» e il nome
+_CREATE_CMD = re.compile(r"(?<![\w-])(?:crea(?:mi|re|te|lo)?|creiamo|create|make)(?![\w-])(?P<mid>(?:\s+\w+){0,2}?)\s+"
+                         r"(?:progetto|project)(?![\w-])(?P<rest>.*)$", re.I)
+_CREATE_START = re.compile(r"^\W*(?:nuovo|new)\s+(?:progetto|project)(?![\w-])(?P<rest>.*)$", re.I)
+_CREATE_MID = {"un", "uno", "il", "lo", "nuovo", "a", "new", "the", "me", "mi", "ci"}
+_SAVE_WORD = re.compile(r"(?<![\w-])(?:salva\w*|salviamo|save)(?![\w-])", re.I)
+# dove finisce il nome: «tommaso e salvalo», «tommaso dentro helpix», «test con le ultime modifiche», punteggiatura
+_NAME_END = re.compile(r"\s+(?:e|ed|and|dentro|in|su|sul|sulla|nel|nella|on|into|con|with|per|for|che|that)\s.*$"
+                       r"|\s+(?:e|and)$|[,;:!?(].*$|\.(?:\s.*)?$", re.I)
+
+
+def project_name_from(rest: str) -> str:
+    """Il nome del progetto da una frase: «tommaso e salvalo» → «Tommaso», «"casa al mare"» → «casa al mare».
+    Da confermare nella finestra (dove si può correggere)."""
+    rest = _NAME_LEAD.sub("", (rest or "").strip(" \t:;,."))
+    quoted = _QUOTED.match(rest)
+    if quoted:   # tra virgolette: esattamente come scritto
+        return " ".join(quoted.group(1).split())[:80]
+    name = _NAME_END.sub("", rest.strip("«»\"'`“” ")).strip(" .,;:!?«»\"'`“”")
+    name = " ".join(name.split())[:80]
+    return name[:1].upper() + name[1:] if name and name == name.lower() else name
+
+
+def parse_create_command(text: str):
+    """«crea progetto tommaso e salvalo», «nuovo progetto Casa»: (nome, anche salvare la conversazione), o None.
+
+    Il nome può essere "" («crea un nuovo progetto»). Anche «crea un progetto Django con login» passa di qui: la
+    finestra di conferma offre «Invia all'IA», perché spesso è una richiesta per l'IA."""
+    t = " ".join((text or "").split())
+    if not t or len(t) > SAVE_COMMAND_MAX or PROJECT_MARKER in t.upper() or _QUESTION_START.match(t):
+        return None
+    m = _CREATE_START.match(t)
+    if not m:
+        m = _CREATE_CMD.search(t)
+        if not m or any(w not in _CREATE_MID for w in m.group("mid").lower().split()):
+            return None
+    return project_name_from(m.group("rest")), bool(_SAVE_WORD.search(t))
+
+
+def same_name(a: str, b: str) -> bool:
+    """Lo stesso nome di progetto, a parte maiuscole, accenti, spazi e punteggiatura («Città» = «citta.»)."""
+    def key(text):
+        return " ".join(w for w in (w.strip(".-+") for w in re.findall(r"[\w.+-]+", _norm(text))) if w)
+    return bool(key(a)) and key(a) == key(b)
+
+
 def match_project(name: str, projects):
     """Il progetto (oggetto con .slug e .name) indicato all'inizio di `name`, o None.
 

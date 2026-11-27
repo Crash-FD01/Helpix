@@ -266,9 +266,14 @@ piccolo (circa 1000 token) invece di una cronologia che cresce. Specifica comple
   per esempio «ok abbiamo finito, salva quello che abbiamo fatto nel progetto test». Il messaggio non va all'IA:
   Helpix riconosce il progetto (maiuscole, accenti e parole in più non contano), lo apre nella stessa chat se non è
   quello aperto e fa come *Salva progetto*, anteprima compresa. «Salva nel progetto» senza nome usa quello aperto.
-  Se il nome non corrisponde a nessun progetto, Helpix te lo dice e il messaggio resta nella casella: correggilo,
-  oppure invialo di nuovo così com'è per mandarlo all'IA. Si spegne da *Impostazioni dei progetti*. Helpix guarda solo
-  il messaggio che invii, e solo se è corto e contiene sia «salva/aggiorna» sia «progetto».
+  Se il nome non corrisponde a nessun progetto, Helpix chiede se crearlo (*Crea e salva la conversazione*), se
+  mandare il messaggio all'IA così com'è o se annullare.
+- **Creare un progetto scrivendolo nella chat**: «crea progetto tommaso e salvalo» o «nuovo progetto Casa». Helpix
+  non crea niente da solo: apre una finestra con il nome (correggibile) e i pulsanti *Crea e salva la conversazione*,
+  *Crea*, *Invia all'IA* (per le richieste che erano per l'IA, come «crea un progetto Django con login») e *Annulla*.
+  Se un progetto con quel nome esiste già, propone di usare quello.
+- Le due funzioni si spengono da *Impostazioni dei progetti*. Helpix guarda solo il messaggio che invii, e solo se è
+  corto e contiene sia «salva/aggiorna/crea/nuovo» sia «progetto».
 - **Note**: le note vecchie non vanno all'IA. Se gliene serve una scrive `HELPIX-NOTA: titolo`: copia la riga e
   compare la barra *L'IA chiede la nota… — Incolla nella chat*. Gli agenti la leggono da soli con
   `helpix vault cat "titolo"` e `helpix vault search "parole"` (Helpix aperto).

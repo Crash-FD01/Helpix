@@ -1460,12 +1460,12 @@ class MainWindow(ProjectsMixin, QMainWindow):
         images = self.attachments.paths()
         if not text and not images:
             return
-        target = self._chat_command_target(text) if not images else None  # «salva nel progetto test» (beta)
-        if target is False:
+        action = self._chat_command(text) if not images else None  # «salva nel progetto test», «crea progetto…»
+        if action is False:
             return
-        if target:
+        if action:
             self.prompt.clear()
-            self._save_into(target)
+            action()
             return
         text = self._private(text)  # motore API: tutto passa da Helpix, anche quello che scrivi a mano
         msg = Message("user", text or tr("Ecco uno screenshot del problema."), images=images)

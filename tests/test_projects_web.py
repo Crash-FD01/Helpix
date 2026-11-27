@@ -194,15 +194,20 @@ def _salva_nel_progetto_trattenuto(panel, page):
     while not cleared and time.monotonic() < end:
         pump(50)
     assert cleared == [""], cleared
+    # anche «crea progetto…» è trattenuto (la finestra di Helpix decide se crearlo o mandarlo all'IA)
+    _type_and_enter(panel, page, "crea progetto tommaso e salvalo")
+    assert held[-1] == "crea progetto tommaso e salvalo" and len(held) == 3
+    panel.clear_composer()
+    pump(300)
     # la pagina non può fingere un comando: senza il prefisso casuale la console non conta
     js(page, "console.log('helpix-cmd-0000:\"salva nel progetto test\"'); 'ok'")
     pump(200)
-    assert len(held) == 2
+    assert len(held) == 3
     # funzione spenta: anche «salva nel progetto» parte subito
     panel.set_chat_commands(False)
     pump(200)
     _type_and_enter(panel, page, "salva nel progetto test")
-    assert len(held) == 2 and js(page, "window.sent[window.sent.length - 1]") == "salva nel progetto test"
+    assert len(held) == 3 and js(page, "window.sent[window.sent.length - 1]") == "salva nel progetto test"
 
 
 if __name__ == "__main__":
