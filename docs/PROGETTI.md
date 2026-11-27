@@ -113,6 +113,12 @@ MODIFICHE:
 - Come arriva il blocco: chat web → Helpix lo invia e legge la risposta (lo stesso meccanismo del riepilogo del
   task); motore API → una chiamata separata che non tocca la conversazione; agenti → l'agente lo scrive nel file
   `HELPIX-PROJECT.md`, che Helpix legge. In ogni caso funziona anche copiando il blocco a mano.
+- Lettura della risposta nella chat web: contano solo i blocchi comparsi **dopo** la richiesta (quelli dei
+  salvataggi precedenti nella stessa chat si ignorano); il blocco si cerca nei blocchi di codice e, se l'IA l'ha
+  scritto come testo normale, nella risposta dal marcatore in poi. È finito quando resta uguale per due controlli
+  senza pulsante Stop, oppure per ~10 secondi anche con un pulsante «Stop» sempre visibile. Il tempo massimo (4
+  minuti) si allunga finché l'IA scrive, fino a 15 minuti. Ogni passaggio va in `helpix.log` («riepilogo/progetto:
+  …»), anche quando non trova niente.
 - **Compatta il progetto**: stessa strada, ma l'IA restituisce `PROJECT.md` intero e più corto (blocco con
   `COMPLETO` sulla seconda riga). *Solo per me* resta quella di prima.
 
