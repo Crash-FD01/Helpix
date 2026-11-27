@@ -363,13 +363,14 @@ _ANSWER_JS = r"""
 # «salva nel progetto…» scritto nella chat (progetti, beta). Gira nel mondo isolato fin dalla creazione della pagina:
 # all'invio fatto da te (Invio o pulsante di invio, solo eventi veri: gli invii di Helpix passano), se il messaggio è
 # corto e contiene sia «salva/aggiorna/save/update» sia «progetto/project» lo trattiene e lo passa a Helpix con una
-# riga della console che la pagina non può imitare (prefisso casuale). Gli altri messaggi non li legge nessuno.
+# riga della console che la pagina non può imitare (prefisso casuale). Lo stesso per «crea/nuovo … progetto».
+# Gli altri messaggi non li legge nessuno.
 _CMD_SCRIPT = "helpix-chat-command"
 _CMD_JS = r"""
 (function (prefix) {
   if (window.__helpixCmd) { window.__helpixCmd.on = true; return; }
   const st = window.__helpixCmd = { on: true };
-  const verb = /(^|[^\w-])(salva\w*|salviamo|aggiorn\w*|save|update)([^\w-]|$)/i;
+  const verb = /(^|[^\w-])(salva\w*|salviamo|aggiorn\w*|save|update|crea\w*|create|make|nuovo|new)([^\w-]|$)/i;
   const noun = /(^|[^\w-])(progett\w*|project)([^\w-]|$)/i;
   const visible = e => e && e.isConnected && e.getClientRects().length > 0;
   const editable = e => e && (e.isContentEditable || e.tagName === 'TEXTAREA');

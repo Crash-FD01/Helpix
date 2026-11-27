@@ -345,6 +345,96 @@ class NewProjectDialog(QDialog):
         return pj.template(name, self.goal.text(), pasted)
 
 
+class ChatProjectDialog(QDialog):
+    """«crea progetto tommaso e salvalo» o «salva nel progetto X» con X che non esiste, scritto nella chat.
+
+    Il messaggio è trattenuto: si conferma il nome (correggibile) e si sceglie se creare il progetto, crearlo e
+    salvarci la conversazione, oppure mandare il messaggio all'IA così com'è. choice: "save", "create", "open"
+    (esiste già un progetto con quel nome), "ai", "cancel"."""
+
+    def __init__(self, name: str, save: bool, missing: str | None = None, existing: str | None = None,
+                 can_save: bool = True, parent=None):
+        super().__init__(parent)
+        self.choice = "cancel"
+        self._can_save = can_save   # motore API senza messaggi: non c'è niente da salvare
+        self._save = save and can_save
+        heading = tr("Progetto non trovato") if missing else tr("Nuovo progetto")
+        self.setWindowTitle(heading)
+        self.setMinimumWidth(480)
+        v = QVBoxLayout(self)
+        v.setContentsMargins(22, 18, 22, 16)
+        v.setSpacing(10)
+        v.addWidget(_title(heading))
+        if missing:
+            intro = tr("Nel vault non c'è un progetto «{name}». Vuoi crearlo?").format(name=missing)
+        else:
+            intro = tr("Vuoi creare un progetto nel vault di Helpix?")
+        v.addWidget(_wrap(intro + " " + tr("Il messaggio non è ancora stato mandato all'IA.")))
+        self.name = QLineEdit(name)
+        self.name.setPlaceholderText(tr("Nome del progetto"))
+        self.name.setAccessibleName(tr("Nome del progetto"))
+        v.addWidget(self.name)
+        self.hint = QLabel()
+        self.hint.setWordWrap(True)
+        self.hint.setStyleSheet(f"color: {C['secondary']};")
+        v.addWidget(self.hint)
+        row = QHBoxLayout()
+        cancel = QPushButton(tr("Annulla"))
+        cancel.clicked.connect(self.reject)
+        row.addWidget(cancel)
+        ai = QPushButton(tr("Invia all'IA"))
+        ai.setToolTip(tr("Era una richiesta per l'IA: il messaggio parte così com'è"))
+        ai.clicked.connect(lambda: self._done("ai"))
+        row.addWidget(ai)
+        row.addStretch(1)
+        self.create = QPushButton()
+        self.create.clicked.connect(lambda: self._done("open" if self._existing() else "create"))
+        row.addWidget(self.create)
+        self.save = QPushButton()
+        self.save.setToolTip(tr("Crea il progetto e chiede subito all'IA il PROJECT.md con quello che avete fatto in "
+                                "questa chat, con l'anteprima"))
+        self.save.clicked.connect(lambda: self._done("open" if self._existing() else "save"))
+        row.addWidget(self.save)
+        v.addLayout(row)
+        self._existing_name = existing
+        primary = self.save if self._save else self.create
+        primary.setObjectName("primary")
+        primary.setDefault(True)
+        self.name.textChanged.connect(self._update)
+        self._update()
+
+    def _existing(self) -> bool:
+        return bool(self._existing_name) and pj.same_name(self.name.text(), self._existing_name)
+
+    def _update(self):
+        ok = bool(self.name.text().strip())
+        if self._existing():
+            self.hint.setText(tr("Il progetto «{name}» esiste già: lo uso invece di crearne un altro.").format(
+                name=self._existing_name))
+            self.create.setText(tr("Apri «{name}»").format(name=self._existing_name))
+            self.save.setText(tr("Salva in «{name}»").format(name=self._existing_name))
+            self.create.setVisible(not self._save)
+            self.save.setVisible(self._save)
+        else:
+            self.hint.setText("" if ok else tr("Scrivi il nome del progetto."))
+            self.create.setText(tr("Crea"))
+            self.save.setText(tr("Crea e salva la conversazione"))
+            self.create.setVisible(True)
+            self.save.setVisible(self._can_save)
+        self.create.setEnabled(ok)
+        self.save.setEnabled(ok)
+        self.hint.setVisible(bool(self.hint.text()))
+
+    def _done(self, choice: str):
+        if choice != "ai" and not self.name.text().strip():
+            return
+        self.choice = choice
+        self.accept()
+
+    def project_name(self) -> str:
+        return " ".join(self.name.text().split())
+
+
 # ------------------------------------------------------------------ salvataggio con anteprima
 class ProjectSaveDialog(QDialog):
     """Anteprima dell'aggiornamento: PROJECT.md risultante e nota, modificabili, e l'elenco delle modifiche."""
@@ -962,11 +1052,13 @@ class ProjectSettingsDialog(QDialog):
         self.reminder.toggled.connect(lambda on: self._set("project_reminder", on))
         grid.addWidget(self.reminder, r, 0, 1, 3)
         r += 1
-        self.chat_cmd = QCheckBox(tr("Capisci «salva nel progetto…» scritto nella chat (web e API, non gli agenti)"))
+        self.chat_cmd = QCheckBox(tr("Capisci «salva nel progetto…» e «crea progetto…» scritti nella chat (web e API, "
+                                     "non gli agenti)"))
         self.chat_cmd.setChecked(bool(settings.get("project_chat_commands", True)))
-        self.chat_cmd.setToolTip(tr("Per esempio «abbiamo finito, salva quello che abbiamo fatto nel progetto test»: "
-                                    "il messaggio non va all'IA, Helpix apre il progetto e chiede l'aggiornamento. "
-                                    "Helpix guarda solo il messaggio che invii, e solo se somiglia a questa richiesta."))
+        self.chat_cmd.setToolTip(tr("Per esempio «abbiamo finito, salva quello che abbiamo fatto nel progetto test» o "
+                                    "«crea progetto tommaso e salvalo»: il messaggio non va all'IA, Helpix apre o crea "
+                                    "il progetto (chiedendo conferma per crearlo) e chiede l'aggiornamento. Helpix "
+                                    "guarda solo il messaggio che invii, e solo se somiglia a queste richieste."))
         self.chat_cmd.toggled.connect(lambda on: self._set("project_chat_commands", on))
         grid.addWidget(self.chat_cmd, r, 0, 1, 3)
         v.addLayout(grid)

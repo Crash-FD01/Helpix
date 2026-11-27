@@ -416,23 +416,26 @@ class ProjectsMixin:
     def chat_commands_enabled(self) -> bool:
         return self.projects_enabled and bool(self.settings.get("project_chat_commands", True))
 
-    def _chat_command_target(self, text: str):
-        """Chat principale (web o API, non gli agenti): «salva quello che abbiamo fatto nel progetto test» lo esegue
-        Helpix invece di mandarlo all'IA. Restituisce lo slug del progetto in cui salvare; False se è una richiesta
-        di salvataggio ma il progetto non si trova (avviso, il messaggio resta nella casella da correggere); None se
-        è un messaggio per l'IA. Lo stesso messaggio inviato di nuovo dopo un «non trovato» va all'IA così com'è."""
+    def _chat_command(self, text: str):
+        """Chat principale (web o API, non gli agenti): richieste per Helpix scritte nella chat.
+
+        «salva quello che abbiamo fatto nel progetto test» → salva lì; «crea progetto tommaso e salvalo» → finestra
+        di conferma (nome correggibile) che crea il progetto e, se chiesto, ci salva la conversazione. Un progetto
+        nominato che non esiste → la stessa finestra, con «Crealo e salva». Restituisce: None = messaggio per l'IA
+        (si invia come sempre); False = niente da fare, il messaggio resta nella casella; altrimenti la funzione da
+        eseguire dopo aver svuotato la casella."""
         if not self.chat_commands_enabled:
             return None
+        create = pj.parse_create_command(text)
+        if create is not None:
+            name, save = create
+            return self._confirm_new_project(name, save)
         name = pj.parse_save_command(text)
         if name is None:
             return None
-        key = " ".join(text.split())
-        if getattr(self, "_chat_command_skip", None) == key:
-            self._chat_command_skip = None
-            return None
-        self._chat_command_skip = None
         if name == "" and self.project is not None:
-            return self.project.slug
+            slug = self.project.slug
+            return lambda: self._save_into(slug)
         vault = self._vault_open()
         if vault is None:
             return False   # sblocco annullato: il messaggio resta nella casella
@@ -442,14 +445,53 @@ class ProjectsMixin:
             projects = []
         found = pj.match_project(name, projects) if name else None
         if found is not None:
-            return found.slug
-        self._chat_command_skip = key
-        names = ", ".join(f"«{p.name}»" for p in projects[:8]) or tr("nessuno")
-        what = tr("Progetto «{name}» non trovato.").format(name=name) if name else \
-            tr("Quale progetto? Nessun progetto è aperto.")
-        self.notify(what + " " + tr("Progetti: {names}. Correggi il nome, oppure invia di nuovo lo stesso messaggio "
-                                    "per mandarlo all'IA così com'è.").format(names=names), 12000)
-        return False
+            return lambda: self._save_into(found.slug)
+        return self._confirm_new_project(pj.project_name_from(name), True, missing=name or None)
+
+    def _ask_new_project(self, name: str, save: bool, missing: str | None, existing: str | None):
+        """La finestra di conferma: (scelta, nome). Scelte: "create", "save", "open", "ai", "cancel"."""
+        from .vault_dialogs import ChatProjectDialog
+        dlg = ChatProjectDialog(name, save, missing=missing, existing=existing,
+                                can_save=self.engine == "web" or bool(self.session.messages), parent=self)
+        dlg.exec()
+        return dlg.choice, dlg.project_name()
+
+    def _confirm_new_project(self, name: str, save: bool, missing: str | None = None):
+        vault = self._vault_open()
+        if vault is None:
+            return False
+        try:
+            projects = vault.projects()
+        except VaultError:
+            projects = []
+        same = next((p for p in projects if pj.same_name(p.name, name)), None)
+        choice, name = self._ask_new_project(name, save, missing, same.name if same else None)
+        if choice == "ai":
+            return None
+        if choice == "cancel" or not name:
+            return False
+        if choice == "open" and same is not None:   # esiste già con quel nome: lo si usa
+            return (lambda: self._save_into(same.slug)) if save else (lambda: self._open_here(same.slug))
+        try:
+            p = vault.create_project(name, pj.template(name))
+        except (VaultError, OSError) as exc:
+            QMessageBox.warning(self, tr("Progetto"), tr("Non riesco a creare il progetto: {exc}").format(exc=exc))
+            return False
+        if self.vault_panel is not None:
+            self.vault_panel.reload(keep=p.rel(PROJECT_FILE))
+        if choice == "save":
+            return lambda: self._save_into(p.slug)
+        return lambda: self._open_here(p.slug)
+
+    def _open_here(self, slug: str):
+        """Apre il progetto nella chat di adesso, senza task nuovo (progetto appena creato dalla chat)."""
+        vault = self._vault_open()
+        if vault is None:
+            return
+        try:
+            self._set_project(vault.project(slug))
+        except KeyError:
+            self.notify(tr("Progetto non trovato."))
 
     def _save_into(self, slug: str):
         """Salva la conversazione attuale nel progetto `slug`: se non è quello aperto lo apre, nella stessa chat."""
@@ -467,13 +509,13 @@ class ProjectsMixin:
         self.save_project()
 
     def _web_chat_command(self, text: str):
-        """Il messaggio inviato nel browser integrato somiglia a «salva nel progetto…» e la pagina l'ha trattenuto.
-        Se è davvero per Helpix si svuota la casella e si salva; altrimenti parte verso l'IA come sempre."""
-        target = self._chat_command_target(text) if self.engine == "web" else None
-        if target is None:
+        """Il messaggio inviato nel browser integrato somiglia a una richiesta per Helpix e la pagina l'ha trattenuto.
+        Se lo è davvero si svuota la casella e si esegue; altrimenti parte verso l'IA come sempre."""
+        action = self._chat_command(text) if self.engine == "web" else None
+        if action is None:
             self.web.release_send()
-        elif target:
-            self.web.clear_composer(lambda: self._save_into(target))
+        elif action:
+            self.web.clear_composer(action)
 
     def _project_update_failed(self, message: str):
         self.notify(message, 12000)

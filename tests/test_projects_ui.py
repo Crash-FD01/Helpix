@@ -24,7 +24,7 @@ os.environ["HELPIX_NO_UPDATE_CHECK"] = "1"
 import PySide6.QtWebEngineWidgets  # noqa: F401,E402
 from PySide6.QtCore import QEventLoop, Qt, QTimer  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
-from PySide6.QtWidgets import QApplication, QDialog, QMessageBox  # noqa: E402
+from PySide6.QtWidgets import QApplication, QDialog, QLabel, QMessageBox  # noqa: E402
 
 app = QApplication.instance() or QApplication([])
 from helpix import project as pj, vault_crypto as vc  # noqa: E402
@@ -676,23 +676,27 @@ def test_avvio_senza_progetto():
 
 def test_salva_nel_progetto_scritto_in_chat():
     """«ok abbiamo finito, salva quello che abbiamo fatto nel progetto X» nella chat principale (API e web): lo esegue
-    Helpix, non va all'IA. Progetto sbagliato: avviso e il messaggio resta; ripetuto, va all'IA così com'è."""
+    Helpix, non va all'IA. Progetto che non c'è: finestra «Crealo e salva · Invia all'IA · Annulla»."""
     win = make_window()
     vault = win._get_vault()
     target = vault.create_project("Prova comandi", pj.template("Prova comandi", "Prova"))
     other = vault.create_project("Altro lavoro", pj.template("Altro lavoro", "Prova"))
-    saved, sent, notices = [], [], []
+    saved, sent, asked = [], [], []
+    answer = {"choice": "cancel", "name": None}
     win.save_project = lambda compact=False: saved.append(win.project.slug if win.project else None)
     win.request_ai = lambda: sent.append(win.session.messages[-1].text)
-    real_notify = win.notify
-    win.notify = lambda msg, *a: notices.append(msg)
+
+    def ask(name, save, missing, existing):
+        asked.append((name, save, missing, existing))
+        return answer["choice"], answer["name"] or name
+    win._ask_new_project = ask
     try:
         # motore API, nessun progetto aperto: apre «Prova comandi» nella stessa chat e salva
         win.session.add(Message("user", "configurato il tunnel"))
         n_msgs = len(win.session.messages)
         win.prompt.setPlainText("ok abbiamo finito, salva quello che abbiamo fatto nel progetto prova comandi")
         win.send_message()
-        assert saved == [target.slug] and win.project.slug == target.slug and not sent
+        assert saved == [target.slug] and win.project.slug == target.slug and not sent and not asked
         assert win.prompt.toPlainText() == "" and len(win.session.messages) == n_msgs
         assert win._project_saved_at == 0   # la conversazione fatta finora va nel progetto
         # «salva nel progetto» senza nome: il progetto aperto
@@ -703,22 +707,32 @@ def test_salva_nel_progetto_scritto_in_chat():
         win.prompt.setPlainText("aggiorna il progetto altro lavoro con le ultime modifiche")
         win.send_message()
         assert saved[-1] == other.slug and win.project.slug == other.slug
-        # progetto che non c'è: avviso, il messaggio resta nella casella e non parte
+        # progetto che non c'è: finestra; Annulla → il messaggio resta nella casella e non parte
+        win.prompt.setPlainText("salva nel progetto inesistente con le modifiche")
+        win.send_message()
+        assert asked[-1] == ("Inesistente", True, "inesistente con le modifiche", None)
+        assert len(saved) == 3 and not sent and win.prompt.toPlainText().startswith("salva nel progetto inesistente")
+        # Invia all'IA → parte così com'è
+        answer["choice"] = "ai"
+        win.send_message()
+        assert sent == ["salva nel progetto inesistente con le modifiche"] and len(saved) == 3
+        # Crealo e salva → progetto nuovo, aperto nella stessa chat, salvataggio chiesto
+        answer["choice"] = "save"
         win.prompt.setPlainText("salva nel progetto inesistente")
         win.send_message()
-        assert len(saved) == 3 and not sent and win.prompt.toPlainText() == "salva nel progetto inesistente"
-        assert "non trovato" in notices[-1] and "Prova comandi" in notices[-1]
-        win.send_message()   # inviato di nuovo: va all'IA così com'è
-        assert sent == ["salva nel progetto inesistente"] and len(saved) == 3
+        created = [p for p in vault.projects() if p.name == "Inesistente"]
+        assert created and win.project.slug == created[0].slug and saved[-1] == created[0].slug
+        assert win.prompt.toPlainText() == "" and len(sent) == 1
         # una domanda all'IA non è un comando
+        n_asked = len(asked)
         win.prompt.setPlainText("come salvo un file nel progetto django?")
         win.send_message()
-        assert sent[-1] == "come salvo un file nel progetto django?" and len(saved) == 3
+        assert sent[-1] == "come salvo un file nel progetto django?" and len(asked) == n_asked
         # funzione spenta dalle impostazioni: tutto va all'IA
         win.settings.set("project_chat_commands", False)
         win.prompt.setPlainText("salva nel progetto prova comandi")
         win.send_message()
-        assert sent[-1] == "salva nel progetto prova comandi" and len(saved) == 3
+        assert sent[-1] == "salva nel progetto prova comandi" and len(saved) == 4
         win.settings.set("project_chat_commands", True)
 
         # motore web: il messaggio trattenuto dalla pagina
@@ -728,20 +742,95 @@ def test_salva_nel_progetto_scritto_in_chat():
         win.engine = "web"
         win._web_chat_command("ok salva tutto nel progetto prova comandi")
         assert cleared and saved[-1] == target.slug and not released
-        win._web_chat_command("update the project dependencies in package.json")  # non è un progetto: avviso
-        assert not released and len(saved) == 4
-        win._web_chat_command("update the project dependencies in package.json")  # ripetuto: parte verso l'IA
-        assert released == [True]
-        win._web_chat_command("salva una copia del file del progetto")   # richiesta per l'IA: parte
-        assert len(released) == 2 and len(saved) == 4
+        answer["choice"] = "ai"   # «update the project dependencies»: finestra, l'utente sceglie Invia all'IA
+        win._web_chat_command("update the project dependencies in package.json")
+        assert released == [True] and len(saved) == 5
+        win._web_chat_command("salva una copia del file del progetto")   # richiesta per l'IA: parte senza finestra
+        assert len(released) == 2 and len(saved) == 5
         win.settings.set("projects_beta", False)
         win._apply_project_settings()
         win._web_chat_command("salva nel progetto prova comandi")   # progetti spenti: parte e basta
-        assert len(released) == 3 and len(saved) == 4
+        assert len(released) == 3 and len(saved) == 5
     finally:
         win.engine = "api"
-        win.notify = real_notify
         win.close()
+
+
+def test_crea_progetto_scritto_in_chat():
+    """«crea progetto tommaso e salvalo» nella chat principale: finestra di conferma (nome correggibile) che crea il
+    progetto nel vault e, se chiesto, ci salva la conversazione; «Invia all'IA» per «crea un progetto Django»."""
+    win = make_window()
+    vault = win._get_vault()
+    saved, sent, asked = [], [], []
+    answer = {"choice": "save", "name": None}
+    win.save_project = lambda compact=False: saved.append(win.project.slug if win.project else None)
+    win.request_ai = lambda: sent.append(win.session.messages[-1].text)
+
+    def ask(name, save, missing, existing):
+        asked.append((name, save, missing, existing))
+        return answer["choice"], answer["name"] or name
+    win._ask_new_project = ask
+    try:
+        win.session.add(Message("user", "parliamo del progetto"))
+        # crea e salva: nome dalla frase («Tommaso»), progetto aperto nella stessa chat, salvataggio chiesto
+        win.prompt.setPlainText("crea progetto tommaso e salvalo")
+        win.send_message()
+        assert asked[-1] == ("Tommaso", True, None, None)
+        tommaso = [p for p in vault.projects() if p.name == "Tommaso"]
+        assert tommaso and win.project.slug == tommaso[0].slug and saved == [tommaso[0].slug] and not sent
+        assert win.prompt.toPlainText() == ""
+        # solo crea, con il nome corretto nella finestra: aperto, nessun salvataggio
+        answer.update(choice="create", name="Casa in montagna")
+        win.prompt.setPlainText("crea un nuovo progetto casa")
+        win.send_message()
+        assert asked[-1][:2] == ("Casa", False)
+        assert win.project.name == "Casa in montagna" and len(saved) == 1
+        # esiste già con quel nome: «Salva in "Tommaso"», nessun doppione
+        answer.update(choice="open", name=None)
+        win.prompt.setPlainText("crea il progetto Tommaso e salva")
+        win.send_message()
+        assert asked[-1][3] == "Tommaso" and saved[-1] == tommaso[0].slug
+        assert len([p for p in vault.projects() if p.name == "Tommaso"]) == 1
+        # una richiesta per l'IA: Invia all'IA
+        answer.update(choice="ai")
+        win.prompt.setPlainText("crea un progetto Django con login")
+        win.send_message()
+        assert sent == ["crea un progetto Django con login"] and not [p for p in vault.projects() if p.name == "Django"]
+        # Annulla: niente creato, il messaggio resta
+        answer.update(choice="cancel")
+        win.prompt.setPlainText("nuovo progetto Prova annullata")
+        win.send_message()
+        assert win.prompt.toPlainText() == "nuovo progetto Prova annullata"
+        assert not [p for p in vault.projects() if p.name.startswith("Prova annullata")]
+        # «creami un file nel progetto X» non è una richiesta di creare un progetto
+        n = len(asked)
+        win.prompt.setPlainText("creami un file di configurazione")
+        win.send_message()
+        assert len(asked) == n and sent[-1] == "creami un file di configurazione"
+    finally:
+        win.close()
+
+
+def test_finestra_crea_progetto():
+    """La finestra di conferma: pulsante giusto in evidenza, nome vuoto non accettato, progetto che esiste già."""
+    from helpix.ui.vault_dialogs import ChatProjectDialog
+    dlg = ChatProjectDialog("Tommaso", True)
+    assert dlg.save.isDefault() and dlg.create.isVisibleTo(dlg) and dlg.save.isVisibleTo(dlg)
+    dlg.name.setText("  ")
+    assert not dlg.save.isEnabled()
+    dlg._done("save")
+    assert dlg.choice == "cancel"
+    dlg.name.setText("Tommaso   bis")
+    dlg.save.click()
+    assert dlg.choice == "save" and dlg.project_name() == "Tommaso bis"
+    dlg = ChatProjectDialog("tommaso", False, existing="Tommaso")
+    assert "esiste già" in dlg.hint.text() and dlg.create.text() == "Apri «Tommaso»"
+    dlg.create.click()
+    assert dlg.choice == "open"
+    dlg = ChatProjectDialog("Nuovo", True, can_save=False)   # motore API senza messaggi: niente da salvare
+    assert not dlg.save.isVisibleTo(dlg) and dlg.create.isDefault()
+    dlg = ChatProjectDialog("X", True, missing="x y")
+    assert any("«x y»" in w.text() for w in dlg.findChildren(QLabel)) and dlg.windowTitle() == "Progetto non trovato"
 
 
 def test_file_dell_agente_in_codifiche_windows():

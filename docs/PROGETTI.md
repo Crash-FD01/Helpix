@@ -126,7 +126,7 @@ Modalità di aggiornamento (*Progetto › Impostazioni dei progetti…*):
 - *Chiedi sempre* (predefinita): anteprima e conferma;
 - *Automatico con annullamento*: salva subito e mostra «Progetto aggiornato» con *Annulla*.
 
-### «Salva nel progetto…» scritto nella chat
+### «Salva nel progetto…» e «crea progetto…» scritti nella chat
 
 Nella chat principale (web integrata e motore API; non gli agenti nel terminale, che hanno già i loro comandi) una
 frase come «ok abbiamo finito, salva quello che abbiamo fatto nel progetto test» è una richiesta per Helpix, non per
@@ -139,15 +139,30 @@ l'IA (`project.parse_save_command` e `match_project`):
   inizio di un solo nome; senza nome (o *attivo/questo/current*) vale il progetto aperto;
 - trovato il progetto, se non è quello aperto Helpix lo apre **nella stessa chat** (niente task nuovo: si salva la
   conversazione fatta finora) e procede come *Salva progetto*, con anteprima secondo la modalità scelta;
-- progetto non trovato: avviso con l'elenco dei progetti, il messaggio resta nella casella; lo stesso messaggio
-  inviato di nuovo va all'IA così com'è.
+- progetto non trovato: finestra *Progetto non trovato* con il nome proposto (correggibile: «inesistente con le
+  modifiche» → *Inesistente*) e *Crea e salva la conversazione · Crea · Invia all'IA · Annulla*. Con *Annulla* il
+  messaggio resta nella casella.
+
+«Crea progetto X» (`project.parse_create_command`): *crea/creami/create/make* seguito al massimo da un articolo o
+*nuovo/new* e da *progetto/project*, oppure un messaggio che comincia con *nuovo progetto/new project*. Il nome è
+quello che segue, fino a *e/dentro/in/con/…* o alla punteggiatura («crea progetto tommaso e salvalo» → *Tommaso*;
+tra virgolette resta com'è scritto). Helpix non crea mai da solo: apre sempre la finestra *Nuovo progetto*, con il
+nome correggibile e
+- *Crea e salva la conversazione* (in evidenza se la frase contiene *salva/salvalo/save*): crea il progetto, lo apre
+  nella stessa chat e chiede subito l'aggiornamento con l'anteprima; non c'è nel motore API senza messaggi;
+- *Crea*: crea il progetto e lo apre nella stessa chat, vuoto;
+- *Invia all'IA*: era una richiesta per l'IA («crea un progetto Django con login»), il messaggio parte così com'è;
+- se esiste già un progetto con quel nome (maiuscole e accenti non contano) i pulsanti diventano *Apri «X»* o
+  *Salva in «X»*: niente doppioni.
+«Creami un file nel progetto X» o «come creo un progetto…?» non passano di qui.
 
 Chat web: uno script nel mondo isolato della pagina (la pagina non lo vede), attivo solo con progetti e opzione
 accesi, guarda il messaggio solo al momento dell'invio fatto dall'utente (Invio o pulsante, eventi veri: gli invii di
-Helpix passano) e solo se contiene sia *salva/aggiorna/save/update* sia *progetto/project*. In quel caso trattiene
+Helpix passano) e solo se contiene sia *salva/aggiorna/save/update/crea/create/nuovo/new* sia *progetto/project*. In
+quel caso trattiene
 l'invio e passa il testo a Helpix con una riga della console con un prefisso casuale, che la pagina non può imitare;
 se non è una richiesta per Helpix, Helpix lo invia come sempre. Gli altri messaggi non vengono letti. Opzione:
-*Impostazioni dei progetti › Capisci «salva nel progetto…» scritto nella chat* (accesa di default).
+*Impostazioni dei progetti › Capisci «salva nel progetto…» e «crea progetto…» scritti nella chat* (accesa di default).
 
 ### Ripescare una nota: HELPIX-NOTA
 

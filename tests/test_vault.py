@@ -192,6 +192,25 @@ def test_salva_nel_progetto_riconosciuto():
     assert match("te", projects) is None   # troppo corto per l'inizio del nome
 
 
+def test_crea_progetto_riconosciuto():
+    """«crea progetto tommaso e salvalo» scritto nella chat: (nome, anche salvare), None = messaggio per l'IA."""
+    parse = pj.parse_create_command
+    assert parse("crea progetto tommaso e salvalo") == ("Tommaso", True)
+    assert parse("crea progetto tommaso dentro helpix") == ("Tommaso", False)
+    assert parse("crea il progetto «Casa in montagna» e salva") == ("Casa in montagna", True)
+    assert parse("nuovo progetto Cliente Rossi — VPN") == ("Cliente Rossi — VPN", False)
+    assert parse("make a new project called Foo") == ("Foo", False)
+    assert parse("crea un nuovo progetto") == ("", False)
+    assert parse("crea un progetto Django con login") == ("Django", False)   # la finestra offre «Invia all'IA»
+    for other in ("creami un file di configurazione nel progetto test", "come creo un progetto django?",
+                  "crea una VM", "salva nel progetto test", "crea progetto " + "x" * 300, ""):
+        assert parse(other) is None, other
+    name = pj.project_name_from
+    assert name("test con le ultime modifiche") == "Test" and name("cliente rossi, poi salvalo") == "Cliente rossi"
+    assert name("«casa al mare» e salva") == "casa al mare" and name("") == ""
+    assert pj.same_name("Città.", "citta") and not pj.same_name("Test", "Test 2") and not pj.same_name("", "")
+
+
 def test_bozza_della_sessione():
     s = Session("anthropic", "m", "/tmp")
     s.messages.append(Message("user", "", kind="output", meta={"cmd": "ip a", "rc": 0, "output": "eth0 up"}))
