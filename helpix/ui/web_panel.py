@@ -185,21 +185,48 @@ _COMPOSER_JS = r"""
 # scrivendo (pulsante «Stop» visibile).
 _SUMMARY_JS = r"""
 (function (marker) {
-  const texts = [...document.querySelectorAll('pre, code')].map(e => (e.innerText || e.textContent || '').trim())
-      .filter(t => t.startsWith(marker));
-  let found = '';
-  for (let i = texts.length - 1; i >= 0; i--) {
-    // compilato = c'è testo oltre alle etichette («Problema:» vuote nella richiesta), sulla stessa riga
-    // («Problema: testo») o a capo («Problema:» e il testo sotto, come scrive spesso Claude)
-    const lines = texts[i].split('\n').slice(1).map(l => l.trim()).filter(l => l);
-    const filled = lines.filter(l => !/^[^:]{2,80}:$/.test(l)).length;
-    if (filled >= 2) { found = texts[i]; break; }
+  // tutti i blocchi compilati presenti nella pagina, in ordine: Helpix tiene solo quelli nuovi (comparsi dopo la
+  // richiesta), altrimenti rileggerebbe il blocco di un salvataggio precedente nella stessa chat
+  // compilato = c'è testo oltre alle etichette («Problema:» vuote nella richiesta), sulla stessa riga
+  // («Problema: testo») o a capo («Problema:» e il testo sotto, come scrive spesso Claude)
+  const filled = t => t.split('\n').slice(1).map(l => l.trim()).filter(l => l && !/^[^:]{2,80}:$/.test(l)).length >= 2;
+  const own = t => (t.innerText || t.textContent || '').trim();
+  const blocks = [];
+  const add = t => { if (filled(t) && blocks[blocks.length - 1] !== t) blocks.push(t); };
+  const isCode = e => own(e).startsWith(marker);
+  for (const e of document.querySelectorAll('pre, code')) if (isCode(e) && !e.closest('pre code, pre pre')) add(own(e));
+  // senza blocco di codice (l'IA l'ha scritto come testo normale): dal marcatore, su una riga da solo, alla fine
+  // della risposta. Solo nelle risposte dell'assistente che non hanno già il blocco di codice.
+  const ANSWER = '[data-message-author-role="assistant"], [class*="markdown" i], .prose, .font-claude-response, ' +
+                 '[data-testid="assistant-message"], model-response, .ds-markdown';
+  for (const e of document.querySelectorAll(ANSWER)) {
+    if (e.parentElement && e.parentElement.closest(ANSWER)) continue;          // solo il contenitore esterno
+    if ([...e.querySelectorAll('pre, code')].some(isCode)) continue;
+    const lines = own(e).split('\n');
+    const i = lines.findIndex(l => l.trim().replace(/^`+|`+$/g, '').trim() === marker);
+    if (i >= 0) add(lines.slice(i).join('\n').trim());
   }
   const busy = !!document.querySelector('[data-testid="stop-button"], button[aria-label*="Stop" i], ' +
                                          'button[aria-label*="Interrompi" i]');
-  return JSON.stringify({ text: found, busy: busy });
+  return JSON.stringify({ blocks: blocks, busy: busy });
 })(%s);
 """
+
+SUMMARY_HARD_LIMIT = 900.0   # secondi: oltre, anche se l'IA sembra ancora al lavoro, si rinuncia
+SUMMARY_GRACE = 120.0        # mentre l'IA scrive, il tempo massimo si sposta almeno così avanti
+SUMMARY_STABLE_BUSY = 5      # controlli di fila (~10 s) con il blocco fermo: finito, anche se «Stop» resta visibile
+
+
+def _summary_blocks(result) -> tuple[list[str], bool]:
+    """Risultato di _SUMMARY_JS: (blocchi compilati nella pagina, in ordine; l'IA sta scrivendo)."""
+    try:
+        data = json.loads(result or "{}")
+    except (TypeError, ValueError):
+        data = {}
+    blocks = data.get("blocks") if isinstance(data, dict) else None
+    blocks = [b for b in blocks if isinstance(b, str)] if isinstance(blocks, list) else []
+    return blocks, bool(isinstance(data, dict) and data.get("busy"))
+
 
 # Ultima risposta dell'assistente nella pagina (per la finestra rapida): quante risposte ci sono,
 # il testo dell'ultima e se sta ancora scrivendo.
@@ -932,6 +959,8 @@ class WebPanel(QWidget):
 
         Il riepilogo arriva con summary_copied (come se l'utente l'avesse copiato); se non arriva
         entro il tempo massimo, summary_failed e resta la copia a mano con il pulsante Copia.
+        Il tempo massimo si allunga finché l'IA sta scrivendo (fino a SUMMARY_HARD_LIMIT): le risposte
+        lunghe e i modelli che «ragionano» possono metterci parecchi minuti.
         """
         from ..task import SUMMARY_MARKER
         marker = marker or SUMMARY_MARKER
@@ -939,8 +968,19 @@ class WebPanel(QWidget):
             (self.summary_failed if marker == SUMMARY_MARKER else self.project_failed).emit(
                 tr("Browser non disponibile."))
             return
-        self._summary_job = {"site": self.site, "until": time.monotonic() + timeout, "last": "", "stable": 0,
-                             "marker": marker}
+        now = time.monotonic()
+        job = self._summary_job = {"site": self.site, "until": now + timeout,
+                                   "hard": now + max(timeout, SUMMARY_HARD_LIMIT), "last": "", "stable": 0,
+                                   "marker": marker, "old": None, "polls": 0, "sent": None}
+        tab = self._tabs.get(self.site)
+
+        def baseline(result):   # i blocchi già nella pagina (salvataggi precedenti in questa chat) non contano
+            job["old"] = _summary_blocks(result)[0]
+            log.info("riepilogo/progetto: richiesta su %s, blocchi già presenti: %d", job["site"], len(job["old"]))
+
+        if tab and tab[1] is not None:
+            tab[1].runJavaScript(_SUMMARY_JS % json.dumps(marker), QWebEngineScript.ScriptWorldId.ApplicationWorld,
+                                 baseline)
         self._set_clipboard(text=text)
         self._paste(None, {"kind": "text", "text": text})
         QTimer.singleShot(1200, self._summary_send)
@@ -961,8 +1001,13 @@ class WebPanel(QWidget):
         job, tab = self._summary_tab()
         if not tab:
             return
-        tab[1].runJavaScript(_SEND_JS, QWebEngineScript.ScriptWorldId.ApplicationWorld,
-                             lambda _r: QTimer.singleShot(3000, self._summary_poll))
+
+        def sent(result):
+            job["sent"] = result
+            log.info("riepilogo/progetto: invio %s", result)
+            QTimer.singleShot(3000, self._summary_poll)
+
+        tab[1].runJavaScript(_SEND_JS, QWebEngineScript.ScriptWorldId.ApplicationWorld, sent)
 
     def _summary_poll(self):
         job, tab = self._summary_tab()
@@ -972,15 +1017,19 @@ class WebPanel(QWidget):
         def got(result):
             if getattr(self, "_summary_job", None) is not job:
                 return
-            try:
-                data = json.loads(result or "{}")
-            except ValueError:
-                data = {}
-            text, busy = data.get("text", ""), data.get("busy", False)
-            if text and not busy and text == job["last"]:
+            blocks, busy = _summary_blocks(result)
+            job["polls"] += 1
+            old = job["old"] or []
+            # solo un blocco comparso dopo la richiesta: oltre quelli che c'erano, o con un testo che non c'era
+            fresh = [t for i, t in enumerate(blocks) if i >= len(old) or t not in old]
+            text = fresh[-1] if fresh else ""
+            now = time.monotonic()
+            if text and text == job["last"]:
                 job["stable"] += 1
             else:
                 job["stable"] = 0
+            if busy or text != job["last"]:   # l'IA sta ancora scrivendo: si aspetta di più
+                job["until"] = min(job["hard"], max(job["until"], now + SUMMARY_GRACE))
             job["last"] = text
             from ..task import SUMMARY_MARKER, parse_summary
             is_summary = job["marker"] == SUMMARY_MARKER
@@ -989,19 +1038,26 @@ class WebPanel(QWidget):
             else:
                 from ..project import parse_update
                 result = parse_update(text) if text else None
-            if result and job["stable"] >= 1:  # testo uguale per due controlli di fila: l'IA ha finito
+            # finito: testo uguale per due controlli di fila e nessun pulsante Stop; oppure fermo da ~10 secondi
+            # anche se un pulsante «Stop» resta visibile (dettatura, modalità vocale…)
+            if result and ((job["stable"] >= 1 and not busy) or job["stable"] >= SUMMARY_STABLE_BUSY):
                 self._summary_job = None
+                log.info("riepilogo/progetto: blocco letto dopo %d controlli%s", job["polls"],
+                         " (pulsante Stop ancora visibile)" if busy else "")
                 (self.summary_copied if is_summary else self.project_copied).emit(result)
-            elif time.monotonic() < job["until"]:
+            elif now < job["until"]:
                 QTimer.singleShot(2000, self._summary_poll)
-            elif is_summary:
-                self._summary_job = None
-                self.summary_failed.emit(tr("Non ho trovato il riepilogo nella risposta: copialo tu con il pulsante "
-                                            "Copia del blocco di codice."))
             else:
                 self._summary_job = None
-                self.project_failed.emit(tr("Non ho trovato l'aggiornamento del progetto nella risposta: copialo tu "
-                                            "con il pulsante Copia del blocco di codice."))
+                log.warning("riepilogo/progetto: nessun blocco letto (controlli %d, blocchi nella pagina %d, nuovi %d, "
+                            "Stop visibile %s, invio %s, testo %d caratteri, leggibile %s)", job["polls"], len(blocks),
+                            len(fresh), busy, job["sent"], len(text), bool(result))
+                if is_summary:
+                    self.summary_failed.emit(tr("Non ho trovato il riepilogo nella risposta: copialo tu con il "
+                                                "pulsante Copia del blocco di codice."))
+                else:
+                    self.project_failed.emit(tr("Non ho trovato l'aggiornamento del progetto nella risposta: copialo "
+                                                "tu con il pulsante Copia del blocco di codice."))
 
         tab[1].runJavaScript(_SUMMARY_JS % json.dumps(job["marker"]), QWebEngineScript.ScriptWorldId.ApplicationWorld,
                              got)

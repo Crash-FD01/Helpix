@@ -37,16 +37,26 @@ _ANSWER_JS = r"""
 document.getElementById('send').addEventListener('click', () => {
   const text = window.sent[window.sent.length - 1] || '';
   if (!text.includes('HELPIX-PROJECT')) return;
+  const n = window.answers = (window.answers || 0) + 1;
+  const title = n === 1 ? 'Driver stampante' : 'Sessione ' + n;
+  const block = 'HELPIX-PROJECT\nNOTA: ' + title + '\nInstallato il driver giusto.\nMODIFICHE:\n' +
+                '+ Decisioni in vigore: Driver HP ufficiale\n= Stato: Stampa di prova riuscita.';
   setTimeout(() => {
-    const pre = document.createElement('pre'); const code = document.createElement('code');
-    code.textContent = 'HELPIX-PROJECT\nNOTA: Driver stampante\nInstallato il driver giusto.\nMODIFICHE:\n' +
-                       '+ Decisioni in vigore: Driver HP ufficiale\n= Stato: Stampa di prova riuscita.';
-    pre.appendChild(code); document.getElementById('thread').appendChild(pre);
-  }, 700);
+    if (window.answerAs === 'text') {   // senza blocco di codice: paragrafi in una risposta «markdown»
+      const div = document.createElement('div'); div.className = 'markdown prose';
+      div.setAttribute('data-message-author-role', 'assistant');
+      for (const line of ('Ecco il riepilogo.\n' + block).split('\n')) {
+        const para = document.createElement('p'); para.textContent = line; div.appendChild(para);
+      }
+      document.getElementById('thread').appendChild(div);
+    } else {
+      const pre = document.createElement('pre'); const code = document.createElement('code');
+      code.textContent = block; pre.appendChild(code); document.getElementById('thread').appendChild(pre);
+    }
+  }, window.answerDelay || 700);
 });
 'true';
 """
-
 
 def pump(ms):
     loop = QEventLoop()
@@ -101,8 +111,37 @@ def test_aggiornamento_letto_dalla_risposta():
         QGuiApplication.clipboard().setText(text)
         panel._process_clipboard()
     assert got and got[0].title == "A mano" and notes == ["Driver stampante"]
+    _salvataggi_successivi_nella_stessa_chat(panel, page, got, failed)
     _salva_nel_progetto_trattenuto(panel, page)
     panel.shutdown()
+
+
+def _wait_update(panel, page, got, failed, request, limit=60):
+    got.clear()
+    failed.clear()
+    panel.request_summary(request, timeout=40, marker=pj.PROJECT_MARKER)
+    end = time.monotonic() + limit
+    while not got and not failed and time.monotonic() < end:
+        pump(200)
+    return got[0].title if got else (failed[0] if failed else None)
+
+
+def _salvataggi_successivi_nella_stessa_chat(panel, page, got, failed):
+    """Secondo salvataggio nella stessa chat: nella pagina c'è già il blocco del primo. Prima veniva riletto quello
+    (l'IA che «pensa» non mostra ancora il pulsante Stop), Helpix diceva «già salvato» e non leggeva più la risposta
+    nuova: il riepilogo compariva nella chat ma l'anteprima no."""
+    request = pj.update_request(pj.template("Stampante", "Stampare"))
+    js(page, "window.answerDelay = 9000; 'ok'")   # l'IA ci mette un po' a cominciare
+    assert _wait_update(panel, page, got, failed, request) == "Sessione 2"
+    # pulsante «Stop» che resta sempre visibile (dettatura, modalità vocale): il blocco finito si legge lo stesso
+    js(page, "(() => { const b = document.createElement('button'); b.setAttribute('aria-label', 'Stop dictation');"
+             " b.textContent = 'mic'; document.body.appendChild(b); window.answerDelay = 700; return 'ok'; })()")
+    assert _wait_update(panel, page, got, failed, request) == "Sessione 3"
+    js(page, "document.querySelector('button[aria-label=\"Stop dictation\"]').remove(); 'ok'")
+    # risposta senza blocco di codice: il blocco si cerca anche nel testo della risposta
+    js(page, "window.answerAs = 'text'; 'ok'")
+    assert _wait_update(panel, page, got, failed, request) == "Sessione 4"
+    js(page, "window.answerAs = ''; window.answerDelay = 700; 'ok'")
 
 
 _ENTER_SENDS_JS = r"""
