@@ -87,6 +87,9 @@ Selettore *Progetto* nella barra. Scegliendo un progetto Helpix apre un task nuo
 
 Il filtro privacy, se acceso, si applica a tutto quello che esce.
 
+All'avvio Helpix parte sempre **senza progetto** (anche se alla chiusura ce n'era uno aperto): un progetto si apre
+solo quando lo sceglie l'utente.
+
 ### Salva progetto
 
 Il pulsante chiede all'IA un blocco con **solo le modifiche** e la nota della sessione:
@@ -116,6 +119,29 @@ MODIFICHE:
 Modalità di aggiornamento (*Progetto › Impostazioni dei progetti…*):
 - *Chiedi sempre* (predefinita): anteprima e conferma;
 - *Automatico con annullamento*: salva subito e mostra «Progetto aggiornato» con *Annulla*.
+
+### «Salva nel progetto…» scritto nella chat
+
+Nella chat principale (web integrata e motore API; non gli agenti nel terminale, che hanno già i loro comandi) una
+frase come «ok abbiamo finito, salva quello che abbiamo fatto nel progetto test» è una richiesta per Helpix, non per
+l'IA (`project.parse_save_command` e `match_project`):
+- è una richiesta se il messaggio è corto (≤ 300 caratteri), contiene un verbo come *salva/salvalo/aggiorna/save/
+  update* seguito da *progetto/project*, la parola prima di *progetto* è del tipo *nel/il/sul/to/the/questo* e non
+  comincia come una domanda (*come…*, *perché…*, *how…*): «come salvo un file nel progetto django?» va all'IA;
+- il nome è quello che segue *progetto*: si prova la frase intera, poi una parola in meno alla volta («test con le
+  ultime modifiche» → *Test*), prima come nome esatto (maiuscole e accenti non contano, anche lo slug), poi come
+  inizio di un solo nome; senza nome (o *attivo/questo/current*) vale il progetto aperto;
+- trovato il progetto, se non è quello aperto Helpix lo apre **nella stessa chat** (niente task nuovo: si salva la
+  conversazione fatta finora) e procede come *Salva progetto*, con anteprima secondo la modalità scelta;
+- progetto non trovato: avviso con l'elenco dei progetti, il messaggio resta nella casella; lo stesso messaggio
+  inviato di nuovo va all'IA così com'è.
+
+Chat web: uno script nel mondo isolato della pagina (la pagina non lo vede), attivo solo con progetti e opzione
+accesi, guarda il messaggio solo al momento dell'invio fatto dall'utente (Invio o pulsante, eventi veri: gli invii di
+Helpix passano) e solo se contiene sia *salva/aggiorna/save/update* sia *progetto/project*. In quel caso trattiene
+l'invio e passa il testo a Helpix con una riga della console con un prefisso casuale, che la pagina non può imitare;
+se non è una richiesta per Helpix, Helpix lo invia come sempre. Gli altri messaggi non vengono letti. Opzione:
+*Impostazioni dei progetti › Capisci «salva nel progetto…» scritto nella chat* (accesa di default).
 
 ### Ripescare una nota: HELPIX-NOTA
 

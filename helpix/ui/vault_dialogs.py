@@ -961,6 +961,14 @@ class ProjectSettingsDialog(QDialog):
         self.reminder.setChecked(bool(settings.get("project_reminder", True)))
         self.reminder.toggled.connect(lambda on: self._set("project_reminder", on))
         grid.addWidget(self.reminder, r, 0, 1, 3)
+        r += 1
+        self.chat_cmd = QCheckBox(tr("Capisci «salva nel progetto…» scritto nella chat (web e API, non gli agenti)"))
+        self.chat_cmd.setChecked(bool(settings.get("project_chat_commands", True)))
+        self.chat_cmd.setToolTip(tr("Per esempio «abbiamo finito, salva quello che abbiamo fatto nel progetto test»: "
+                                    "il messaggio non va all'IA, Helpix apre il progetto e chiede l'aggiornamento. "
+                                    "Helpix guarda solo il messaggio che invii, e solo se somiglia a questa richiesta."))
+        self.chat_cmd.toggled.connect(lambda on: self._set("project_chat_commands", on))
+        grid.addWidget(self.chat_cmd, r, 0, 1, 3)
         v.addLayout(grid)
 
         sec = QFrame()

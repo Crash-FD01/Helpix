@@ -67,10 +67,11 @@ DEFAULT_SETTINGS = {
     # progetti e vault (beta, spenti di default): docs/PROGETTI.md
     "projects_beta": False,
     "vault_dir": None,              # None = cartella dati di Helpix / vault
-    "active_project": None,         # ultimo progetto aperto
+    "active_project": None,         # progetto aperto adesso (all'avvio si riparte sempre senza)
     "project_autosave_min": 10,     # bozza della sessione nel progetto (0 = spento)
     "project_update_mode": "ask",   # ask (anteprima) | auto (salva subito, con annullamento)
     "project_reminder": True,       # «Salvare nel progetto?» nei momenti naturali
+    "project_chat_commands": True,  # «salva nel progetto test» scritto nella chat lo esegue Helpix (web e API)
     "project_versions": 20,         # versioni di PROJECT.md da conservare
     "projects_tour_done": False,    # giro a nuvolette dei progetti già visto
     "vault_tour_done": False,       # giro a nuvolette del pannello Vault già visto

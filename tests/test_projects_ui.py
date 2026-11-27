@@ -659,6 +659,91 @@ def test_tetto_regolabile():
         win.close()
 
 
+def test_avvio_senza_progetto():
+    """Riaprendo Helpix non si riapre l'ultimo progetto: si parte senza, lo scegli tu dal menu Progetto."""
+    win = make_window()
+    p = win._get_vault().create_project("Avvio pulito", pj.template("Avvio pulito", "Prova"))
+    win._open_project(p.slug)
+    assert win.settings.get("active_project") == p.slug
+    win.close()
+    win = make_window(active_project=p.slug)   # come le impostazioni salvate alla chiusura
+    try:
+        assert win.project is None and win.settings.get("active_project") is None
+        assert win.project_btn.text() == "Nessun progetto" and "PROGETTO ATTIVO" not in win._system_prompt()
+    finally:
+        win.close()
+
+
+def test_salva_nel_progetto_scritto_in_chat():
+    """«ok abbiamo finito, salva quello che abbiamo fatto nel progetto X» nella chat principale (API e web): lo esegue
+    Helpix, non va all'IA. Progetto sbagliato: avviso e il messaggio resta; ripetuto, va all'IA così com'è."""
+    win = make_window()
+    vault = win._get_vault()
+    target = vault.create_project("Prova comandi", pj.template("Prova comandi", "Prova"))
+    other = vault.create_project("Altro lavoro", pj.template("Altro lavoro", "Prova"))
+    saved, sent, notices = [], [], []
+    win.save_project = lambda compact=False: saved.append(win.project.slug if win.project else None)
+    win.request_ai = lambda: sent.append(win.session.messages[-1].text)
+    real_notify = win.notify
+    win.notify = lambda msg, *a: notices.append(msg)
+    try:
+        # motore API, nessun progetto aperto: apre «Prova comandi» nella stessa chat e salva
+        win.session.add(Message("user", "configurato il tunnel"))
+        n_msgs = len(win.session.messages)
+        win.prompt.setPlainText("ok abbiamo finito, salva quello che abbiamo fatto nel progetto prova comandi")
+        win.send_message()
+        assert saved == [target.slug] and win.project.slug == target.slug and not sent
+        assert win.prompt.toPlainText() == "" and len(win.session.messages) == n_msgs
+        assert win._project_saved_at == 0   # la conversazione fatta finora va nel progetto
+        # «salva nel progetto» senza nome: il progetto aperto
+        win.prompt.setPlainText("salva nel progetto")
+        win.send_message()
+        assert saved[-1] == target.slug
+        # nome con parole in più e un altro progetto: passa a quello
+        win.prompt.setPlainText("aggiorna il progetto altro lavoro con le ultime modifiche")
+        win.send_message()
+        assert saved[-1] == other.slug and win.project.slug == other.slug
+        # progetto che non c'è: avviso, il messaggio resta nella casella e non parte
+        win.prompt.setPlainText("salva nel progetto inesistente")
+        win.send_message()
+        assert len(saved) == 3 and not sent and win.prompt.toPlainText() == "salva nel progetto inesistente"
+        assert "non trovato" in notices[-1] and "Prova comandi" in notices[-1]
+        win.send_message()   # inviato di nuovo: va all'IA così com'è
+        assert sent == ["salva nel progetto inesistente"] and len(saved) == 3
+        # una domanda all'IA non è un comando
+        win.prompt.setPlainText("come salvo un file nel progetto django?")
+        win.send_message()
+        assert sent[-1] == "come salvo un file nel progetto django?" and len(saved) == 3
+        # funzione spenta dalle impostazioni: tutto va all'IA
+        win.settings.set("project_chat_commands", False)
+        win.prompt.setPlainText("salva nel progetto prova comandi")
+        win.send_message()
+        assert sent[-1] == "salva nel progetto prova comandi" and len(saved) == 3
+        win.settings.set("project_chat_commands", True)
+
+        # motore web: il messaggio trattenuto dalla pagina
+        released, cleared = [], []
+        win.web.release_send = lambda: released.append(True)
+        win.web.clear_composer = lambda cb=None: (cleared.append(True), cb and cb())
+        win.engine = "web"
+        win._web_chat_command("ok salva tutto nel progetto prova comandi")
+        assert cleared and saved[-1] == target.slug and not released
+        win._web_chat_command("update the project dependencies in package.json")  # non è un progetto: avviso
+        assert not released and len(saved) == 4
+        win._web_chat_command("update the project dependencies in package.json")  # ripetuto: parte verso l'IA
+        assert released == [True]
+        win._web_chat_command("salva una copia del file del progetto")   # richiesta per l'IA: parte
+        assert len(released) == 2 and len(saved) == 4
+        win.settings.set("projects_beta", False)
+        win._apply_project_settings()
+        win._web_chat_command("salva nel progetto prova comandi")   # progetti spenti: parte e basta
+        assert len(released) == 3 and len(saved) == 4
+    finally:
+        win.engine = "api"
+        win.notify = real_notify
+        win.close()
+
+
 def test_file_dell_agente_in_codifiche_windows():
     """HELPIX-PROJECT.md scritto su Windows (BOM, UTF-16, ANSI con accenti, CRLF): Helpix lo legge lo stesso, e un
     file illeggibile non ferma il controllo lasciando Helpix «in attesa» senza dire niente."""

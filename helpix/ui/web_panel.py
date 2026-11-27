@@ -7,6 +7,9 @@ Helpix agisce solo quando premi un pulsante:
 - si accorge quando copi un comando (dagli appunti) e ti propone di eseguirlo;
 - «Chiedi il riepilogo» (unica eccezione al non inviare e non leggere): invia quel messaggio e
   legge dalla risposta solo il blocco del riepilogo HELPIX-TASK.
+- Progetti (beta, con «Capisci "salva nel progetto…"» attivo): quando invii un messaggio corto che somiglia a
+  «salva … nel progetto …», la pagina lo trattiene e lo passa a Helpix, che salva nel progetto; se non è una
+  richiesta per Helpix, parte verso l'IA come sempre. Gli altri messaggi non vengono letti.
 """
 from __future__ import annotations
 
@@ -14,6 +17,7 @@ import base64
 import json
 import logging
 import re
+import secrets
 import time
 from pathlib import Path
 
@@ -329,6 +333,65 @@ _ANSWER_JS = r"""
 })(__SENT__);
 """
 
+# «salva nel progetto…» scritto nella chat (progetti, beta). Gira nel mondo isolato fin dalla creazione della pagina:
+# all'invio fatto da te (Invio o pulsante di invio, solo eventi veri: gli invii di Helpix passano), se il messaggio è
+# corto e contiene sia «salva/aggiorna/save/update» sia «progetto/project» lo trattiene e lo passa a Helpix con una
+# riga della console che la pagina non può imitare (prefisso casuale). Gli altri messaggi non li legge nessuno.
+_CMD_SCRIPT = "helpix-chat-command"
+_CMD_JS = r"""
+(function (prefix) {
+  if (window.__helpixCmd) { window.__helpixCmd.on = true; return; }
+  const st = window.__helpixCmd = { on: true };
+  const verb = /(^|[^\w-])(salva\w*|salviamo|aggiorn\w*|save|update)([^\w-]|$)/i;
+  const noun = /(^|[^\w-])(progett\w*|project)([^\w-]|$)/i;
+  const visible = e => e && e.isConnected && e.getClientRects().length > 0;
+  const editable = e => e && (e.isContentEditable || e.tagName === 'TEXTAREA');
+  const textOf = box => ((box.tagName === 'TEXTAREA' ? box.value : box.innerText) || '').trim();
+  const looks = t => t && t.length <= 300 && verb.test(t) && noun.test(t);
+  function hold(e, text) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    console.log(prefix + JSON.stringify(text));
+  }
+  window.addEventListener('keydown', e => {
+    if (!st.on || !e.isTrusted || e.key !== 'Enter' || e.shiftKey || e.altKey || e.isComposing ||
+        e.keyCode === 229) return;
+    const t = e.target;
+    const box = editable(t) ? t : (t && t.closest ? t.closest('[contenteditable="true"], [contenteditable=""]') : null);
+    if (!box) return;
+    const text = textOf(box);
+    if (looks(text)) hold(e, text);
+  }, true);
+  const send = 'button[data-testid="send-button"], #composer-submit-button, button[aria-label*="Send" i], ' +
+               'button[aria-label*="Invia" i], button[aria-label*="Submit" i], button.send-button';
+  window.addEventListener('click', e => {
+    if (!st.on || !e.isTrusted || !(e.target && e.target.closest && e.target.closest(send))) return;
+    const box = [document.activeElement,
+                 ...document.querySelectorAll('#prompt-textarea, div[contenteditable="true"], textarea')]
+        .find(x => editable(x) && visible(x));
+    if (!box) return;
+    const text = textOf(box);
+    if (looks(text)) hold(e, text);
+  }, true);
+})(%s);
+"""
+
+# Svuota la casella della chat (dopo un «salva nel progetto…» trattenuto, prima di incollare la richiesta di Helpix).
+_CLEAR_JS = r"""
+(function () {
+  const visible = e => e && e.isConnected && e.getClientRects().length > 0;
+  const editable = e => e && (e.isContentEditable || e.tagName === 'TEXTAREA');
+  const box = [document.activeElement,
+               ...document.querySelectorAll('#prompt-textarea, div[contenteditable="true"], textarea')]
+      .find(e => editable(e) && visible(e));
+  if (!box) return 'none';
+  box.focus();
+  document.execCommand('selectAll', false);
+  document.execCommand('delete', false);
+  return 'ok';
+})();
+"""
+
 # Come _FOCUS_JS, ma solo a pagina caricata: serve per incollare dopo un cambio di sito.
 _READY_JS = "document.readyState === 'complete' ? " + _FOCUS_JS.strip().rstrip(";") + " : 'none'"
 
@@ -341,12 +404,25 @@ if WEBENGINE:
             self.popups: list[QDialog] = []
             self.google_hook = google_hook
             self.paste_hook = None  # scudo privacy: Incolla dal menu passa da Helpix
+            self.command_hook = None  # (prefisso, funzione): «salva nel progetto…» trattenuto dalla pagina
             self.permissionRequested.connect(self._on_permission)
             self.urlChanged.connect(self._url_changed)
             s = self.settings()
             s.setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanAccessClipboard, True)
             s.setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanPaste, True)
             s.setAttribute(QWebEngineSettings.WebAttribute.FullScreenSupportEnabled, False)
+
+        def javaScriptConsoleMessage(self, level, message, line, source):  # noqa: N802
+            hook = self.command_hook
+            if hook and message.startswith(hook[0]):
+                try:
+                    text = json.loads(message[len(hook[0]):])
+                except ValueError:
+                    return
+                if isinstance(text, str):
+                    hook[1](text)
+                return
+            super().javaScriptConsoleMessage(level, message, line, source)
 
         def triggerAction(self, action, checked=False):  # noqa: N802
             if action in (QWebEnginePage.WebAction.Paste, QWebEnginePage.WebAction.PasteAndMatchStyle) \
@@ -432,6 +508,7 @@ class WebPanel(QWidget):
     project_copied = Signal(object)  # aggiornamento del progetto (project.Update), letto o copiato (beta)
     project_failed = Signal(str)
     note_requested = Signal(str)  # l'utente ha copiato «HELPIX-NOTA: titolo» (beta)
+    chat_command = Signal(str)    # messaggio inviato che somiglia a «salva nel progetto…», trattenuto (beta)
     site_changed = Signal(str)
     google_signin = Signal(str)   # è comparsa la pagina di accesso Google nel browser integrato
     use_integrated = Signal(str)  # l'utente vuole riportare il servizio nel browser integrato
@@ -447,6 +524,8 @@ class WebPanel(QWidget):
         self._ignore_clipboard = False
         self._job = None
         self._tabs: dict[str, tuple] = {}     # servizio -> (view, page)
+        self._chat_commands = False           # «salva nel progetto…» (progetti, beta)
+        self._cmd_prefix = f"helpix-cmd-{secrets.token_hex(8)}:"
         self._loading: dict[str, bool] = {}
         v = QVBoxLayout(self)
         v.setContentsMargins(0, 0, 0, 0)
@@ -507,6 +586,9 @@ class WebPanel(QWidget):
         view = QWebEngineView(self.stack)
         page = _Page(self.profile, view, lambda s=site: self.google_signin.emit(s))
         page.paste_hook = lambda v=view, p=page: self._filtered_paste(v, p)
+        page.command_hook = (self._cmd_prefix, self._command_from_page)
+        if self._chat_commands:
+            page.scripts().insert(self._command_script())
         view.setPage(page)
         self._hook_paste_keys(view)
         view.loadStarted.connect(lambda v=view: self._hook_paste_keys(v))
@@ -790,6 +872,54 @@ class WebPanel(QWidget):
             callback(False)
 
         QTimer.singleShot(300, check)
+
+    # ------------------------------------------------------------ «salva nel progetto…» (progetti, beta)
+    def _command_script(self):
+        script = QWebEngineScript()
+        script.setName(_CMD_SCRIPT)
+        script.setSourceCode(_CMD_JS % json.dumps(self._cmd_prefix))
+        script.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
+        script.setWorldId(QWebEngineScript.ScriptWorldId.ApplicationWorld)
+        script.setRunsOnSubFrames(False)
+        return script
+
+    def set_chat_commands(self, on: bool):
+        """Attiva o spegne il riconoscimento di «salva nel progetto…» nelle pagine integrate (anche già aperte)."""
+        on = bool(on)
+        if not WEBENGINE or on == self._chat_commands:
+            self._chat_commands = on
+            return
+        self._chat_commands = on
+        for _view, page in self._tabs.values():
+            if page is None:
+                continue
+            for old in page.scripts().find(_CMD_SCRIPT):
+                page.scripts().remove(old)
+            if on:
+                page.scripts().insert(self._command_script())
+                page.runJavaScript(_CMD_JS % json.dumps(self._cmd_prefix), QWebEngineScript.ScriptWorldId.ApplicationWorld)
+            else:
+                page.runJavaScript("if (window.__helpixCmd) window.__helpixCmd.on = false;",
+                                   QWebEngineScript.ScriptWorldId.ApplicationWorld)
+
+    def _command_from_page(self, text: str):
+        if self._chat_commands:
+            self.chat_command.emit(text)
+        else:
+            self.release_send()
+
+    def release_send(self):
+        """Il messaggio trattenuto non era per Helpix: parte verso l'IA (l'invio di Helpix non viene trattenuto)."""
+        self.send_current()
+
+    def clear_composer(self, callback=None):
+        """Svuota la casella della chat, poi callback()."""
+        if not (self.view and self.page):
+            if callback:
+                callback()
+            return
+        self.page.runJavaScript(_CLEAR_JS, QWebEngineScript.ScriptWorldId.ApplicationWorld,
+                                lambda _r: callback and QTimer.singleShot(150, callback))
 
     def send_current(self):
         """Invia il messaggio presente nella casella della chat (pulsante di invio del sito)."""
